@@ -1289,6 +1289,25 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::MetaType:
 			// No code to generate.
 			break;
+        case FunctionType::Kind::Freeze:
+        {
+            _functionCall.expression().accept(*this);
+            for (unsigned i = 0; i < arguments.size(); ++i){
+                acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+            }
+            m_context << Instruction::NATIVEFREEZE;
+            break;
+		}
+        case FunctionType::Kind::Unfreeze:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i)
+			{
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEUNFREEZE;
+			break;
+		}
 		default:
 		    solAssert(false, "unsupported member function of Kind");
         }
@@ -1550,15 +1569,6 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			);
 			m_context << Instruction::BALANCE;
 		}
-		else if (member == "rewardbalance")
-		{
-			utils().convertType(
-				*_memberAccess.expression().annotation().type,
-				*TypeProvider::address(),
-				true
-			);
-			m_context << Instruction::REWARDBALANCE;
-		}
 		else if (member == "isContract")
 		{
 			utils().convertType(
@@ -1567,15 +1577,6 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				true
 			);
 			m_context << Instruction::ISCONTRACT;
-		}
-		else if (member == "isSRCandidate")
-		{
-			utils().convertType(
-				*_memberAccess.expression().annotation().type,
-				*TypeProvider::address(),
-				true
-			);
-			m_context << Instruction::ISSRCANDIDATE;
 		}
 		else if ((set<string>{"send", "transfer", "transferToken"}).count(member))
 		{
@@ -1586,24 +1587,6 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				true
 			);
 		}
-        // else if ((set<string>{"withdrawreward"}).count(member))
-        // {
-        //     solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
-        //     utils().convertType(
-        //             *_memberAccess.expression().annotation().type,
-        //             AddressType(StateMutability::Payable),
-        //             true
-        //     );
-        // }
-//		else if ((set<string>{"freeze", "unfreeze", "withdrawreward"}).count(member))
-//		{
-//            solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
-//            utils().convertType(
-//                    *_memberAccess.expression().annotation().type,
-//                    AddressType(StateMutability::Payable),
-//                    true
-//            );
-//		}
 		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall"}).count(member))
 			utils().convertType(
 				*_memberAccess.expression().annotation().type,

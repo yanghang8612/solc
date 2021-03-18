@@ -62,14 +62,6 @@ private:
     void addVerifyTransferProofMethod();
     void addVerifyMintProofMethod();
     void addPedersenHashMethod();
-//	void addFreezeMethod();
-//	void addUnfreezeMethod();
-//    void addStakeMethod();
-//  void addUnStakeMethod();
-//	void addVoteMethod();
-//	void addWithdrawRewardMethod();
-//	void addassetissueMethod();
-//	void addupdateassetMethod();
 };
 
 }
