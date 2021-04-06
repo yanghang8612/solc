@@ -15,7 +15,7 @@
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * Translates Yul code from EVM dialect to Ewasm dialect.
+ * Translates Yul code from EVM dialect to eWasm dialect.
  */
 
 #pragma once
@@ -24,14 +24,14 @@
 #include <libyul/optimiser/ASTWalker.h>
 #include <libyul/Dialect.h>
 
-namespace solidity::yul
+namespace yul
 {
 struct Object;
 
-class EVMToEwasmTranslator: public ASTModifier
+class EVMToEWasmTranslator: public ASTModifier
 {
 public:
-	EVMToEwasmTranslator(Dialect const& _evmDialect): m_dialect(_evmDialect) {}
+	EVMToEWasmTranslator(Dialect const& _evmDialect): m_dialect(_evmDialect) {}
 	Object run(Object const& _object);
 
 private:
