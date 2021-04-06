@@ -20,28 +20,25 @@
 
 #include <test/libsolidity/SolidityExecutionFramework.h>
 #include <liblangutil/EVMVersion.h>
-#include <libdevcore/IpfsHash.h>
+#include <libsolutil/IpfsHash.h>
 #include <libevmasm/GasMeter.h>
 
 #include <cmath>
 
 using namespace std;
-using namespace langutil;
-using namespace dev::eth;
-using namespace dev::solidity;
-using namespace dev::test;
+using namespace solidity::langutil;
+using namespace solidity::langutil;
+using namespace solidity::evmasm;
+using namespace solidity::frontend;
+using namespace solidity::test;
 
-namespace dev
-{
-namespace solidity
-{
-namespace test
+namespace solidity::frontend::test
 {
 
 #define CHECK_DEPLOY_GAS(_gasNoOpt, _gasOpt, _evmVersion) \
 	do \
 	{ \
-		u256 ipfsCost = GasMeter::dataGas(dev::ipfsHash(m_compiler.metadata(m_compiler.lastContractName())), true, _evmVersion); \
+		u256 ipfsCost = GasMeter::dataGas(util::ipfsHash(m_compiler.metadata(m_compiler.lastContractName())), true, _evmVersion); \
 		u256 gasOpt{_gasOpt}; \
 		u256 gasNoOpt{_gasNoOpt}; \
 		u256 gas = m_optimiserSettings == OptimiserSettings::minimal() ? gasNoOpt : gasOpt; \
@@ -96,10 +93,10 @@ BOOST_AUTO_TEST_CASE(string_storage)
 	m_compiler.overwriteReleaseFlag(true);
 	compileAndRun(sourceCode);
 
-	auto evmVersion = dev::test::Options::get().evmVersion();
+	auto evmVersion = solidity::test::Options::get().evmVersion();
 
 	if (evmVersion <= EVMVersion::byzantium())
-		CHECK_DEPLOY_GAS(134145, 130831, evmVersion);
+		CHECK_DEPLOY_GAS(134209, 130895, evmVersion);
 	// This is only correct on >=Constantinople.
 	else if (Options::get().useABIEncoderV2)
 	{
@@ -107,22 +104,22 @@ BOOST_AUTO_TEST_CASE(string_storage)
 		{
 			// Costs with 0 are cases which cannot be triggered in tests.
 			if (evmVersion < EVMVersion::istanbul())
-				CHECK_DEPLOY_GAS(0, 123969, evmVersion);
+				CHECK_DEPLOY_GAS(0, 124033, evmVersion);
 			else
-				CHECK_DEPLOY_GAS(0, 110969, evmVersion);
+				CHECK_DEPLOY_GAS(0, 110981, evmVersion);
 		}
 		else
 		{
 			if (evmVersion < EVMVersion::istanbul())
-				CHECK_DEPLOY_GAS(147771, 131687, evmVersion);
+				CHECK_DEPLOY_GAS(147835, 131687, evmVersion);
 			else
-				CHECK_DEPLOY_GAS(131859, 117231, evmVersion);
+				CHECK_DEPLOY_GAS(131871, 117231, evmVersion);
 		}
 	}
 	else if (evmVersion < EVMVersion::istanbul())
-		CHECK_DEPLOY_GAS(126929, 119659, evmVersion);
+		CHECK_DEPLOY_GAS(126993, 119723, evmVersion);
 	else
-		CHECK_DEPLOY_GAS(114345, 107335, evmVersion);
+		CHECK_DEPLOY_GAS(114357, 107347, evmVersion);
 
 	if (evmVersion >= EVMVersion::byzantium())
 	{
@@ -199,6 +196,4 @@ BOOST_AUTO_TEST_CASE(single_callvaluecheck)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}
-}
 }

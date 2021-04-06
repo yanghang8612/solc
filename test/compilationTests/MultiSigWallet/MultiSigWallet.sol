@@ -88,7 +88,7 @@ contract MultiSigWallet {
         _;
     }
 
-    /// @dev Receive function allows to deposit trx.
+    /// @dev Receive function allows to deposit ether.
     receive()
         external
         payable

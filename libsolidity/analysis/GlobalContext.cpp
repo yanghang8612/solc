@@ -30,16 +30,54 @@
 
 using namespace std;
 
-namespace dev
+namespace solidity::frontend
 {
-    namespace solidity
-    {
 
-        inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariables()
-        {
-            static auto const magicVarDecl = [](string const& _name, Type const* _type) {
-                return make_shared<MagicVariableDeclaration>(_name, _type);
-            };
+/// Magic variables get negative ids for easy differentiation
+int magicVariableToID(std::string const& _name)
+{
+	if (_name == "abi") return -1;
+	else if (_name == "addmod") return -2;
+	else if (_name == "assert") return -3;
+	else if (_name == "block") return -4;
+	else if (_name == "blockhash") return -5;
+	else if (_name == "ecrecover") return -6;
+	else if (_name == "gasleft") return -7;
+	else if (_name == "keccak256") return -8;
+	else if (_name == "log0") return -10;
+	else if (_name == "log1") return -11;
+	else if (_name == "log2") return -12;
+	else if (_name == "log3") return -13;
+	else if (_name == "log4") return -14;
+	else if (_name == "msg") return -15;
+	else if (_name == "mulmod") return -16;
+	else if (_name == "now") return -17;
+	else if (_name == "require") return -18;
+	else if (_name == "revert") return -19;
+	else if (_name == "ripemd160") return -20;
+	else if (_name == "selfdestruct") return -21;
+	else if (_name == "sha256") return -22;
+	else if (_name == "sha3") return -23;
+	else if (_name == "suicide") return -24;
+	else if (_name == "super") return -25;
+	else if (_name == "tx") return -26;
+	else if (_name == "type") return -27;
+	else if (_name == "this") return -28;
+    else if (_name == "verifyMintProof") return -29;
+    else if (_name == "verifyBurnProof") return -30;
+    else if (_name == "verifyTransferProof") return -31;
+    else if (_name == "pedersenHash") return -32;
+    else if (_name == "batchvalidatesign") return -33;
+    else if (_name == "validatemultisign") return -34;
+	else
+		solAssert(false, "Unknown magic variable: \"" + _name + "\".");
+}
+
+inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariables()
+{
+	static auto const magicVarDecl = [](string const& _name, Type const* _type) {
+		return make_shared<MagicVariableDeclaration>(magicVariableToID(_name), _name, _type);
+	};
 
             return {
                     magicVarDecl("abi", TypeProvider::magic(MagicType::Kind::ABI)),
@@ -303,7 +341,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyMintProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyMintProof"), "verifyMintProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -346,7 +384,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyBurnProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyBurnProof"), "verifyBurnProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -403,7 +441,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyTransferProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyTransferProof"), "verifyTransferProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -440,7 +478,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("pedersenHash", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("pedersenHash"), "pedersenHash", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -473,7 +511,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("ok");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("batchvalidatesign", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("batchvalidatesign"), "batchvalidatesign", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -508,7 +546,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("ok");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("validatemultisign", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("validatemultisign"), "validatemultisign", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -538,20 +576,19 @@ namespace dev
             return declarations;
         }
 
-        MagicVariableDeclaration const* GlobalContext::currentThis() const
-        {
-            if (!m_thisPointer[m_currentContract])
-                m_thisPointer[m_currentContract] = make_shared<MagicVariableDeclaration>("this", TypeProvider::contract(*m_currentContract));
-            return m_thisPointer[m_currentContract].get();
+MagicVariableDeclaration const* GlobalContext::currentThis() const
+{
+	if (!m_thisPointer[m_currentContract])
+		m_thisPointer[m_currentContract] = make_shared<MagicVariableDeclaration>(magicVariableToID("this"), "this", TypeProvider::contract(*m_currentContract));
+	return m_thisPointer[m_currentContract].get();
 
-        }
+}
 
-        MagicVariableDeclaration const* GlobalContext::currentSuper() const
-        {
-            if (!m_superPointer[m_currentContract])
-                m_superPointer[m_currentContract] = make_shared<MagicVariableDeclaration>("super", TypeProvider::contract(*m_currentContract, true));
-            return m_superPointer[m_currentContract].get();
-        }
+MagicVariableDeclaration const* GlobalContext::currentSuper() const
+{
+	if (!m_superPointer[m_currentContract])
+		m_superPointer[m_currentContract] = make_shared<MagicVariableDeclaration>(magicVariableToID("super"), "super", TypeProvider::contract(*m_currentContract, true));
+	return m_superPointer[m_currentContract].get();
+}
 
-    }
 }
