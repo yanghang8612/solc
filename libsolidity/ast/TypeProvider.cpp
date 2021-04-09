@@ -463,6 +463,7 @@ FunctionType const* TypeProvider::function(
 	Declaration const* _declaration,
 	bool _gasSet,
 	bool _valueSet,
+    bool _tokenSet,
 	bool _bound,
 	bool _saltSet
 )
@@ -478,6 +479,7 @@ FunctionType const* TypeProvider::function(
 		_declaration,
 		_gasSet,
 		_valueSet,
+        _tokenSet,
 		_bound,
 		_saltSet
 	);

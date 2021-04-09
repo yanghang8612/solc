@@ -2283,7 +2283,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// contract address
 
 	unsigned selfSize = _functionType.bound() ? _functionType.selfType()->sizeOnStack() : 0;
-	unsigned tokenSize = _functionType.saltSet() ? 1: 0;
+	unsigned tokenSize = _functionType.tokenSet() ? 1: 0;
 	unsigned gasValueSize = (_functionType.gasSet() ? 1 : 0) + (_functionType.valueSet() ? 1 : 0) + tokenSize;
 
 	unsigned contractStackPos = m_context.currentToBaseStackOffset(1 + gasValueSize + selfSize + (_functionType.isBareCall() ? 0 : 1));
@@ -2302,7 +2302,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	solAssert(funKind != FunctionType::Kind::BareCallCode, "Callcode has been removed.");
 
 	bool returnSuccessConditionAndReturndata = funKind == FunctionType::Kind::BareCall || funKind == FunctionType::Kind::BareDelegateCall || funKind == FunctionType::Kind::BareStaticCall;
-	bool isTokenCall = _functionType.saltSet();
+	bool isTokenCall = _functionType.tokenSet();
 	bool isDelegateCall = funKind == FunctionType::Kind::BareDelegateCall || funKind == FunctionType::Kind::DelegateCall;
 	bool useStaticCall = funKind == FunctionType::Kind::BareStaticCall || (_functionType.stateMutability() <= StateMutability::View && m_context.evmVersion().hasStaticCall());
 
@@ -2452,7 +2452,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	else if (useStaticCall)
 		solAssert(!_functionType.valueSet(), "Value set for staticcall");
 	else if (_functionType.valueSet()){
-		if (_functionType.saltSet())
+		if (_functionType.tokenSet())
 			m_context << dupInstruction(m_context.baseToCurrentStackOffset(tokenStackPos));
 		m_context << dupInstruction(m_context.baseToCurrentStackOffset(valueStackPos));
 	}
@@ -2498,6 +2498,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 
 	unsigned remainsSize =
 		2 + // contract address, input_memory_end
+	    (_functionType.tokenSet() ? 1 : 0) +
 		(_functionType.valueSet() ? 1 : 0) +
 		(_functionType.gasSet() ? 1 : 0) +
 		(!_functionType.isBareCall() ? 1 : 0);

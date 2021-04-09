@@ -2239,6 +2239,7 @@ bool TypeChecker::visit(FunctionCallOptions const& _functionCallOptions)
 
 	bool setSalt = false;
 	bool setValue = false;
+	bool setToken = false;
 	bool setGas = false;
 
 	FunctionType::Kind kind = expressionFunctionType->kind();
@@ -2338,7 +2339,7 @@ bool TypeChecker::visit(FunctionCallOptions const& _functionCallOptions)
 			"Unsupported call option \"salt\" (requires Constantinople-compatible VMs)."
 		);
 
-	_functionCallOptions.annotation().type = expressionFunctionType->copyAndSetCallOptions(setGas, setValue, setSalt);
+	_functionCallOptions.annotation().type = expressionFunctionType->copyAndSetCallOptions(setGas, setValue, setToken, setSalt);
 	return false;
 }
 

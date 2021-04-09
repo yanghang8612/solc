@@ -3043,7 +3043,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const* _sco
 					"value",
 					TypeProvider::function(
 						parseElementaryTypeVector({"uint"}),
-						TypePointers{copyAndSetCallOptions(false, true, false)},
+						TypePointers{copyAndSetCallOptions(false, true, false, false)},
 						strings(1, ""),
 						strings(1, ""),
 						Kind::SetValue,
@@ -3052,6 +3052,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const* _sco
 						nullptr,
 						m_gasSet,
 						m_valueSet,
+                        m_tokenSet,
 						m_saltSet
 					)
 				);
@@ -3061,7 +3062,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const* _sco
 				"gas",
 				TypeProvider::function(
 					parseElementaryTypeVector({"uint"}),
-					TypePointers{copyAndSetCallOptions(true, false, false)},
+					TypePointers{copyAndSetCallOptions(true, false, false, false)},
 					strings(1, ""),
 					strings(1, ""),
 					Kind::SetGas,
@@ -3070,6 +3071,7 @@ MemberList::MemberMap FunctionType::nativeMembers(ContractDefinition const* _sco
 					nullptr,
 					m_gasSet,
 					m_valueSet,
+                    m_tokenSet,
 					m_saltSet
 				)
 			);
@@ -3306,7 +3308,7 @@ TypePointers FunctionType::parseElementaryTypeVector(strings const& _types)
 	return pointers;
 }
 
-TypePointer FunctionType::copyAndSetCallOptions(bool _setGas, bool _setValue, bool _setSalt) const
+TypePointer FunctionType::copyAndSetCallOptions(bool _setGas, bool _setValue, bool _setToken, bool _setSalt) const
 {
 	solAssert(m_kind != Kind::Declaration, "");
 	return TypeProvider::function(
@@ -3320,6 +3322,7 @@ TypePointer FunctionType::copyAndSetCallOptions(bool _setGas, bool _setValue, bo
 		m_declaration,
 		m_gasSet || _setGas,
 		m_valueSet || _setValue,
+        m_tokenSet || _setToken,
 		m_saltSet || _setSalt,
 		m_bound
 	);
@@ -3361,6 +3364,7 @@ FunctionTypePointer FunctionType::asCallableFunction(bool _inLibrary, bool _boun
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+        m_tokenSet,
 		m_saltSet,
 		_bound
 	);

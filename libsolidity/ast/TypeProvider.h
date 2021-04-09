@@ -157,6 +157,7 @@ public:
 		Declaration const* _declaration = nullptr,
 		bool _gasSet = false,
 		bool _valueSet = false,
+        bool _tokenSet = false,
 		bool _bound = false,
 		bool _saltSet = false
 	);

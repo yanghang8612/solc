@@ -1111,6 +1111,7 @@ public:
 		Declaration const* _declaration = nullptr,
 		bool _gasSet = false,
 		bool _valueSet = false,
+        bool _tokenSet = false,
 		bool _saltSet = false,
 		bool _bound = false
 	):
@@ -1123,6 +1124,7 @@ public:
 		m_arbitraryParameters(_arbitraryParameters),
 		m_gasSet(_gasSet),
 		m_valueSet(_valueSet),
+        m_tokenSet(_tokenSet),
 		m_bound(_bound),
 		m_declaration(_declaration),
 		m_saltSet(_saltSet)
@@ -1251,11 +1253,12 @@ public:
 	bool gasSet() const { return m_gasSet; }
 	bool valueSet() const { return m_valueSet; }
 	bool saltSet() const { return m_saltSet; }
+    bool tokenSet() const {return m_tokenSet;}
 	bool bound() const { return m_bound; }
 
 	/// @returns a copy of this type, where gas or value are set manually. This will never set one
 	/// of the parameters to false.
-	TypePointer copyAndSetCallOptions(bool _setGas, bool _setValue, bool _setSalt) const;
+	TypePointer copyAndSetCallOptions(bool _setGas, bool _setValue, bool _setToken, bool _setSalt) const;
 
 	/// @returns a copy of this function type where the location of reference types is changed
 	/// from CallData to Memory. This is the type that would be used when the function is
@@ -1278,6 +1281,7 @@ private:
 	bool const m_arbitraryParameters = false;
 	bool const m_gasSet = false; ///< true iff the gas value to be used is on the stack
 	bool const m_valueSet = false; ///< true iff the value to be sent is on the stack
+    bool const m_tokenSet = false;
 	bool const m_bound = false; ///< true iff the function is called as arg1.fun(arg2, ..., argn)
 	Declaration const* m_declaration = nullptr;
 	bool m_saltSet = false; ///< true iff the salt value to be used is on the stack
