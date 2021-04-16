@@ -22,13 +22,11 @@
 #pragma once
 
 #include <libevmasm/Exceptions.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Assertions.h>
+#include <libsolutil/Common.h>
+#include <libsolutil/Assertions.h>
 #include <functional>
 
-namespace dev
-{
-namespace eth
+namespace solidity::evmasm
 {
 
 /// Virtual machine bytecode instruction.
@@ -192,17 +190,9 @@ enum class Instruction: uint8_t
 	CALLTOKENVALUE,
 	CALLTOKENID,
 	ISCONTRACT,
-    NATIVESTAKE,
-	NATIVEUNSTAKE,
-	NATIVEWITHDRAWREWARD,
-	REWARDBALANCE,
-    ISSRCANDIDATE,
-	TOKENISSUE,
-	UPDATEASSET,
-// todo freeze unfreeze vote
-//	NATIVEFREEZE,
-//	NATIVEUNFREEZE,
-//  NATIVEVOTE,
+    NATIVEFREEZE,
+    NATIVEUNFREEZE,
+    NATIVEFREEZEEXPIRETIME,
 
 	CREATE = 0xf0,		///< create a new account with associated code
 	CALL,				///< message-call into an account
@@ -334,5 +324,4 @@ void eachInstruction(bytes const& _mem, std::function<void(Instruction,u256 cons
 /// Convert from EVM code to simple EVM assembly language.
 std::string disassemble(bytes const& _mem);
 
-}
 }

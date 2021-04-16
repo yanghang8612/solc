@@ -30,16 +30,57 @@
 
 using namespace std;
 
-namespace dev
+namespace solidity::frontend
 {
-    namespace solidity
-    {
 
-        inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariables()
-        {
-            static auto const magicVarDecl = [](string const& _name, Type const* _type) {
-                return make_shared<MagicVariableDeclaration>(_name, _type);
-            };
+/// Magic variables get negative ids for easy differentiation
+int magicVariableToID(std::string const& _name)
+{
+	if (_name == "abi") return -1;
+	else if (_name == "addmod") return -2;
+	else if (_name == "assert") return -3;
+	else if (_name == "block") return -4;
+	else if (_name == "blockhash") return -5;
+	else if (_name == "ecrecover") return -6;
+	else if (_name == "gasleft") return -7;
+	else if (_name == "keccak256") return -8;
+	else if (_name == "log0") return -10;
+	else if (_name == "log1") return -11;
+	else if (_name == "log2") return -12;
+	else if (_name == "log3") return -13;
+	else if (_name == "log4") return -14;
+	else if (_name == "msg") return -15;
+	else if (_name == "mulmod") return -16;
+	else if (_name == "now") return -17;
+	else if (_name == "require") return -18;
+	else if (_name == "revert") return -19;
+	else if (_name == "ripemd160") return -20;
+	else if (_name == "selfdestruct") return -21;
+	else if (_name == "sha256") return -22;
+	else if (_name == "sha3") return -23;
+	else if (_name == "suicide") return -24;
+	else if (_name == "super") return -25;
+	else if (_name == "tx") return -26;
+	else if (_name == "type") return -27;
+	else if (_name == "this") return -28;
+    else if (_name == "verifyMintProof") return -29;
+    else if (_name == "verifyBurnProof") return -30;
+    else if (_name == "verifyTransferProof") return -31;
+    else if (_name == "pedersenHash") return -32;
+    else if (_name == "batchvalidatesign") return -33;
+    else if (_name == "validatemultisign") return -34;
+    else if (_name == "freeze") return -35;
+    else if (_name == "unfreeze") return -36;
+    else if (_name == "freezeExpireTime") return -37;
+	else
+		solAssert(false, "Unknown magic variable: \"" + _name + "\".");
+}
+
+inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariables()
+{
+	static auto const magicVarDecl = [](string const& _name, Type const* _type) {
+		return make_shared<MagicVariableDeclaration>(magicVariableToID(_name), _name, _type);
+	};
 
             return {
                     magicVarDecl("abi", TypeProvider::magic(MagicType::Kind::ABI)),
@@ -67,13 +108,9 @@ namespace dev
                     magicVarDecl("sha256", TypeProvider::function(strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::SHA256, false, StateMutability::Pure)),
                     magicVarDecl("sha3", TypeProvider::function(strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::KECCAK256, false, StateMutability::Pure)),
                     magicVarDecl("suicide", TypeProvider::function(strings{"address payable"}, strings{}, FunctionType::Kind::Selfdestruct)),
-
-                    //magicVarDecl("stake", TypeProvider::function(strings{"address", "uint256"}, strings{"bool"}, FunctionType::Kind::Stake)),
-                    //magicVarDecl("unstake", TypeProvider::function(strings{}, strings{"bool"}, FunctionType::Kind::Unstake)),
-                    //magicVarDecl("assetissue", TypeProvider::function(strings{"bytes32", "bytes32", "uint64", "uint8"}, strings{"uint"}, FunctionType::Kind::AssetIssue)),
-                    //magicVarDecl("updateasset", TypeProvider::function(strings{"trcToken", "bytes memory", "bytes memory"}, strings{"bool"}, FunctionType::Kind::UpdateAsset)),
-                    //magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
-
+                    magicVarDecl("freeze", TypeProvider::function(strings{"uint", "uint"}, strings{"bool"}, FunctionType::Kind::Freeze, false, StateMutability::NonPayable)),
+                    magicVarDecl("unfreeze", TypeProvider::function(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Unfreeze, false, StateMutability::NonPayable)),
+                    magicVarDecl("freezeExpireTime", TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, false, StateMutability::NonPayable)),
                     magicVarDecl("tx", TypeProvider::magic(MagicType::Kind::Transaction)),
                     magicVarDecl("type", TypeProvider::function(
                             strings{"address"} /* accepts any contract type, handled by the type checker */,
@@ -93,187 +130,7 @@ namespace dev
             addVerifyBurnProofMethod();
             addVerifyTransferProofMethod();
             addPedersenHashMethod();
-            //addStakeMethod();
-            //addUnStakeMethod();
-            //addVoteMethod();
-            //addassetissueMethod();
-            //addupdateassetMethod();
         }
-
-//        void GlobalContext::addupdateassetMethod() {
-//            TypePointers parameterTypes;
-//            //trcTokenId trcToken
-//            parameterTypes.push_back(TypeProvider::trcToken());
-//            //description bytes
-//            parameterTypes.push_back(TypeProvider::bytesMemory());
-//            //url bytes
-//            parameterTypes.push_back(TypeProvider::bytesMemory());
-//
-//
-//            TypePointers returnParameterTypes;
-//            returnParameterTypes.push_back(TypeProvider::boolean());
-//            strings parameterNames;
-//            parameterNames.push_back("trcTokenId");
-//            parameterNames.push_back("description");
-//            parameterNames.push_back("url");
-//
-//            strings returnParameterNames;
-//            returnParameterNames.push_back("result");
-//
-//            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("updateasset", TypeProvider::function(
-//                    parameterTypes,
-//                    returnParameterTypes,
-//                    parameterNames,
-//                    returnParameterNames,
-//                    FunctionType::Kind::UpdateAsset,
-//                    false,
-//                    StateMutability::Pure,
-//                    nullptr,
-//                    false,
-//                    false,
-//                    false,
-//                    false)
-//            ));
-//        }
-
-//        void GlobalContext::addassetissueMethod() {
-//            TypePointers parameterTypes;
-//            //name bytes32
-//            parameterTypes.push_back(TypeProvider::fixedBytes(32));
-//            //abbr bytes32
-//            parameterTypes.push_back(TypeProvider::fixedBytes(32));
-//            //totalSupply uint64
-//            parameterTypes.push_back(TypeProvider::uint(64));
-//            //precision uint32
-//            parameterTypes.push_back(TypeProvider::uint(32));
-//
-//
-//            TypePointers returnParameterTypes;
-//            returnParameterTypes.push_back(TypeProvider::trcToken());
-//            strings parameterNames;
-//            parameterNames.push_back("name");
-//            parameterNames.push_back("abbr");
-//            parameterNames.push_back("totalSupply");
-//            parameterNames.push_back("precision");
-//
-//            strings returnParameterNames;
-//            returnParameterNames.push_back("result");
-//
-//            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("assetissue", TypeProvider::function(
-//                    parameterTypes,
-//                    returnParameterTypes,
-//                    parameterNames,
-//                    returnParameterNames,
-//                    FunctionType::Kind::AssetIssue,
-//                    false,
-//                    StateMutability::Pure,
-//                    nullptr,
-//                    false,
-//                    false,
-//                    false,
-//                    false)
-//            ));
-//        }
-
-//    void GlobalContext::addStakeMethod() {
-//            TypePointers parameterTypes;
-//
-//            parameterTypes.push_back(TypeProvider::address());
-//
-//            parameterTypes.push_back(TypeProvider::uint256());
-//
-//
-//            TypePointers returnParameterTypes;
-//            returnParameterTypes.push_back(TypeProvider::boolean());
-//            strings parameterNames;
-//            parameterNames.push_back("address");
-//            parameterNames.push_back("amount");
-//
-//
-//            strings returnParameterNames;
-//            returnParameterNames.push_back("result");
-//
-//            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("stake", TypeProvider::function(
-//                    parameterTypes,
-//                    returnParameterTypes,
-//                    parameterNames,
-//                    returnParameterNames,
-//                    FunctionType::Kind::Stake,
-//                    false,
-//                    StateMutability::Pure,
-//                    nullptr,
-//                    false,
-//                    false,
-//                    false,
-//                    false)
-//            ));
-//    }
-
-//void GlobalContext::addUnStakeMethod() {
-//    TypePointers parameterTypes;
-//    parameterTypes.push_back(TypeProvider::emptyTuple());
-//
-//    TypePointers returnParameterTypes;
-//    returnParameterTypes.push_back(TypeProvider::boolean());
-//
-//    strings parameterNames;
-//    parameterNames.push_back("");
-//
-//    strings returnParameterNames;
-//    returnParameterNames.push_back("ok");
-//
-//    m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("unstake", TypeProvider::function(
-//            parameterTypes,
-//            returnParameterTypes,
-//            parameterNames,
-//            returnParameterNames,
-//            FunctionType::Kind::Unstake,
-//            false,
-//            StateMutability::Payable,
-//            nullptr,
-//            false,
-//            false,
-//            false,
-//            false)
-//    ));
-//}
-
-
-//        void GlobalContext::addVoteMethod() {
-//            // bool vote(address[] memory addresses, unit256[] tronpowerlist)
-//            TypePointers parameterTypes;
-//
-//            parameterTypes.push_back(TypeProvider::array(DataLocation::Memory, TypeProvider::address()));
-//            parameterTypes.push_back(TypeProvider::array(DataLocation::Memory, TypeProvider::uint256()));
-//            //parameterTypes.push_back(TypeProvider::uint256());
-//            //parameterTypes.push_back(TypeProvider::uint256());
-//            //parameterTypes.push_back(TypeProvider::uint256());
-//
-//            TypePointers returnParameterTypes;
-//            returnParameterTypes.push_back(TypeProvider::boolean());
-//            strings parameterNames;
-//            parameterNames.push_back("srList");
-//            parameterNames.push_back("tronpowerList");
-//            //parameterNames.push_back("datronPowerOffsety");
-//            //parameterNames.push_back("tronPowerSize");
-//            strings returnParameterNames;
-//            returnParameterNames.push_back("ok");
-//
-//            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("vote", TypeProvider::function(
-//                    parameterTypes,
-//                    returnParameterTypes,
-//                    parameterNames,
-//                    returnParameterNames,
-//                    FunctionType::Kind::Vote,
-//                    false,
-//                    StateMutability::Payable,
-//                    nullptr,
-//                    false,
-//                    false,
-//                    false,
-//                    false)
-//            ));
-//        }
 
         void GlobalContext::addVerifyMintProofMethod() {
             TypePointers parameterTypes;
@@ -303,7 +160,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyMintProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyMintProof"), "verifyMintProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -346,7 +203,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyBurnProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyBurnProof"), "verifyBurnProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -403,7 +260,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("verifyTransferProof", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyTransferProof"), "verifyTransferProof", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -440,7 +297,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("msg");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("pedersenHash", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("pedersenHash"), "pedersenHash", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -473,7 +330,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("ok");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("batchvalidatesign", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("batchvalidatesign"), "batchvalidatesign", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -508,7 +365,7 @@ namespace dev
             strings returnParameterNames;
             returnParameterNames.push_back("ok");
 
-            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>("validatemultisign", TypeProvider::function(
+            m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("validatemultisign"), "validatemultisign", TypeProvider::function(
                     parameterTypes,
                     returnParameterTypes,
                     parameterNames,
@@ -538,20 +395,19 @@ namespace dev
             return declarations;
         }
 
-        MagicVariableDeclaration const* GlobalContext::currentThis() const
-        {
-            if (!m_thisPointer[m_currentContract])
-                m_thisPointer[m_currentContract] = make_shared<MagicVariableDeclaration>("this", TypeProvider::contract(*m_currentContract));
-            return m_thisPointer[m_currentContract].get();
+MagicVariableDeclaration const* GlobalContext::currentThis() const
+{
+	if (!m_thisPointer[m_currentContract])
+		m_thisPointer[m_currentContract] = make_shared<MagicVariableDeclaration>(magicVariableToID("this"), "this", TypeProvider::contract(*m_currentContract));
+	return m_thisPointer[m_currentContract].get();
 
-        }
+}
 
-        MagicVariableDeclaration const* GlobalContext::currentSuper() const
-        {
-            if (!m_superPointer[m_currentContract])
-                m_superPointer[m_currentContract] = make_shared<MagicVariableDeclaration>("super", TypeProvider::contract(*m_currentContract, true));
-            return m_superPointer[m_currentContract].get();
-        }
+MagicVariableDeclaration const* GlobalContext::currentSuper() const
+{
+	if (!m_superPointer[m_currentContract])
+		m_superPointer[m_currentContract] = make_shared<MagicVariableDeclaration>(magicVariableToID("super"), "super", TypeProvider::contract(*m_currentContract, true));
+	return m_superPointer[m_currentContract].get();
+}
 
-    }
 }

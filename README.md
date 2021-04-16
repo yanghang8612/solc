@@ -125,6 +125,8 @@ https://github.com/juj/emsdk/tree/llvm_root
 # release soljson.js
 bash tran.sh
 
+```solidity
+pragma solidity ^0.6.0;
 ```
 
 ### Windows

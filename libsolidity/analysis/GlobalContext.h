@@ -29,9 +29,7 @@
 #include <string>
 #include <vector>
 
-namespace dev
-{
-namespace solidity
+namespace solidity::frontend
 {
 
 class Type; // forward
@@ -64,15 +62,6 @@ private:
     void addVerifyTransferProofMethod();
     void addVerifyMintProofMethod();
     void addPedersenHashMethod();
-//	void addFreezeMethod();
-//	void addUnfreezeMethod();
-//    void addStakeMethod();
-//  void addUnStakeMethod();
-//	void addVoteMethod();
-//	void addWithdrawRewardMethod();
-//	void addassetissueMethod();
-//	void addupdateassetMethod();
 };
 
-}
 }

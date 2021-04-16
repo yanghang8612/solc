@@ -21,16 +21,17 @@
 
 #include <libevmasm/Instruction.h>
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
+#include <libsolutil/Common.h>
+#include <libsolutil/CommonIO.h>
 #include <algorithm>
 #include <functional>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace solidity;
+using namespace solidity::util;
+using namespace solidity::evmasm;
 
-std::map<std::string, Instruction> const dev::eth::c_instructions =
+std::map<std::string, Instruction> const solidity::evmasm::c_instructions =
 {
 	{ "STOP", Instruction::STOP },
 	{ "ADD", Instruction::ADD },
@@ -61,19 +62,12 @@ std::map<std::string, Instruction> const dev::eth::c_instructions =
 	{ "KECCAK256", Instruction::KECCAK256 },
 	{ "ADDRESS", Instruction::ADDRESS },
 	{ "BALANCE", Instruction::BALANCE },
-	{ "REWARDBALANCE", Instruction::REWARDBALANCE },
 	{ "TOKENBALANCE", Instruction::TOKENBALANCE },
 	{ "ISCONTRACT", Instruction::ISCONTRACT },
-	{ "ISSRCANDIDATE", Instruction::ISSRCANDIDATE },
 	{ "ORIGIN", Instruction::ORIGIN },
-//	{ "NATIVEFREEZE", Instruction::NATIVEFREEZE },
-//	{ "NATIVEUNFREEZE", Instruction::NATIVEUNFREEZE },
-//  { "NATIVEVOTE", Instruction::NATIVEVOTE },
-    { "NATIVESTAKE", Instruction::NATIVESTAKE },
-    { "NATIVEUNSTAKE", Instruction::NATIVEUNSTAKE },
-	{ "NATIVEWITHDRAWREWARD", Instruction::NATIVEWITHDRAWREWARD },
-	{ "TOKENISSUE", Instruction::TOKENISSUE },
-	{ "UPDATEASSET", Instruction::UPDATEASSET },
+    { "NATIVEFREEZE", Instruction::NATIVEFREEZE },
+    { "NATIVEUNFREEZE", Instruction::NATIVEUNFREEZE },
+    { "NATIVEFREEZEEXPIRETIME", Instruction::NATIVEFREEZEEXPIRETIME },
 	{ "CALLER", Instruction::CALLER },
 	{ "CALLVALUE", Instruction::CALLVALUE },
 	{ "CALLTOKENVALUE", Instruction::CALLTOKENVALUE },
@@ -222,23 +216,15 @@ static std::map<Instruction, InstructionInfo> const c_instructionInfo =
 	{ Instruction::KECCAK256,	{ "KECCAK256",			0, 2, 1, true, Tier::Special } },
 	{ Instruction::ADDRESS,		{ "ADDRESS",		0, 0, 1, false, Tier::Base } },
 	{ Instruction::BALANCE,		{ "BALANCE",		0, 1, 1, false, Tier::Balance } },
-	{ Instruction::REWARDBALANCE,	{ "REWARDBALANCE",	0, 1, 1, false, Tier::Balance } },
-	{ Instruction::TOKENBALANCE,	{ "TOKENBALANCE",	0, 2, 1, false, Tier::Balance } },
+    { Instruction::TOKENBALANCE,	{ "TOKENBALANCE",	0, 2, 1, false, Tier::Balance } },
 	{ Instruction::ISCONTRACT,	{ "ISCONTRACT",	0, 1, 1, false, Tier::Balance } },
-	{ Instruction::ISSRCANDIDATE,	{ "ISSRCANDIDATE",	0, 1, 1, false, Tier::Balance } },
 	{ Instruction::ORIGIN,		{ "ORIGIN",			0, 0, 1, false, Tier::Base } },
-	// todo freeze unfreeze vote
-//	{ Instruction::NATIVEFREEZE,		{ "NATIVEFREEZE",			0, 4, 1, true, Tier::Ext } },
-//	{ Instruction::NATIVEUNFREEZE,		{ "NATIVEUNFREEZE",			0, 2, 1, true, Tier::Ext } },
-//	{ Instruction::NATIVEVOTE,		{ "NATIVEVOTE",			0, 4, 1, true, Tier::Ext } },
-    { Instruction::NATIVESTAKE,		{ "NATIVESTAKE",			0, 2, 1, true, Tier::Ext } },
-	{ Instruction::NATIVEUNSTAKE,		{ "NATIVEUNSTAKE",			0, 0, 1, true, Tier::Ext } },
-	{ Instruction::NATIVEWITHDRAWREWARD,		{ "NATIVEWITHDRAWREWARD",			0, 0, 1, true, Tier::Ext } },
+    { Instruction::NATIVEFREEZE,		{ "NATIVEFREEZE",			0, 3, 1, true, Tier::Ext } },
+    { Instruction::NATIVEUNFREEZE,		{ "NATIVEUNFREEZE",			0, 2, 1, true, Tier::Ext } },
+    { Instruction::NATIVEFREEZEEXPIRETIME,		{ "NATIVEFREEZEEXPIRETIME",			0, 2, 1, true, Tier::Ext } },
 	{ Instruction::CALLER,		{ "CALLER",			0, 0, 1, false, Tier::Base } },
 	{ Instruction::CALLVALUE,	{ "CALLVALUE",		0, 0, 1, false, Tier::Base } },
 	{ Instruction::CALLTOKENVALUE,	{ "CALLTOKENVALUE",		0, 0, 1, false, Tier::Base } },
-	{ Instruction::TOKENISSUE,  { "TOKENISSUE",	    0, 4, 1, true, Tier::High } },
-	{ Instruction::UPDATEASSET,  { "UPDATEASSET",	    0, 3, 1, true, Tier::High } },
 	{ Instruction::CALLTOKENID,		{ "CALLTOKENID",		0, 0, 1, false, Tier::Base } },
 	{ Instruction::CALLDATALOAD,{ "CALLDATALOAD",	0, 1, 1, false, Tier::VeryLow } },
 	{ Instruction::CALLDATASIZE,{ "CALLDATASIZE",	0, 0, 1, false, Tier::Base } },
@@ -353,7 +339,7 @@ static std::map<Instruction, InstructionInfo> const c_instructionInfo =
 	{ Instruction::SELFDESTRUCT,	{ "SELFDESTRUCT",		0, 1, 0, true, Tier::Special } }
 };
 
-void dev::eth::eachInstruction(
+void solidity::evmasm::eachInstruction(
 	bytes const& _mem,
 	function<void(Instruction,u256 const&)> const& _onInstruction
 )
@@ -382,7 +368,7 @@ void dev::eth::eachInstruction(
 	}
 }
 
-string dev::eth::disassemble(bytes const& _mem)
+string solidity::evmasm::disassemble(bytes const& _mem)
 {
 	stringstream ret;
 	eachInstruction(_mem, [&](Instruction _instr, u256 const& _data) {
@@ -399,7 +385,7 @@ string dev::eth::disassemble(bytes const& _mem)
 	return ret.str();
 }
 
-InstructionInfo dev::eth::instructionInfo(Instruction _inst)
+InstructionInfo solidity::evmasm::instructionInfo(Instruction _inst)
 {
 	try
 	{
@@ -411,7 +397,7 @@ InstructionInfo dev::eth::instructionInfo(Instruction _inst)
 	}
 }
 
-bool dev::eth::isValidInstruction(Instruction _inst)
+bool solidity::evmasm::isValidInstruction(Instruction _inst)
 {
 	return !!c_instructionInfo.count(_inst);
 }
