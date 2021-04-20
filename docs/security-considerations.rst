@@ -58,6 +58,7 @@ complete contract):
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity >=0.4.0 <0.7.0;
 
     // THIS CONTRACT CONTAINS A BUG - DO NOT USE
@@ -81,7 +82,8 @@ as it uses ``call`` which forwards all remaining gas by default:
 
 ::
 
-    pragma solidity >=0.4.0 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.6.2 <0.7.0;
 
     // THIS CONTRACT CONTAINS A BUG - DO NOT USE
     contract Fund {
@@ -100,6 +102,7 @@ outlined further below:
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity >=0.4.11 <0.7.0;
 
     contract Fund {
@@ -136,15 +139,15 @@ Sending and Receiving Trx
   to move Trx without creating a message call. One way is to simply "mine to"
   the contract address and the second way is using ``selfdestruct(x)``.
 
-- If a contract receives Trx (without a function being called),
-  either the :ref:`receive Trx <receive-ether-function>`
+- If a contract receives Ether (without a function being called),
+  either the :ref:`receive Ether <receive-ether-function>`
   or the :ref:`fallback <fallback-function>` function is executed.
   If it does not have a receive nor a fallback function, the Ether will be
   rejected (by throwing an exception). During the execution of one of these
   functions, the contract can only rely on the "gas stipend" it is passed (2300
   gas) being available to it at that time. This stipend is not enough to modify
   storage (do not take this for granted though, the stipend might change with
-  future hard forks). To be sure that your contract can receive Trx in that
+  future hard forks). To be sure that your contract can receive Ether in that
   way, check the gas requirements of the receive and fallback functions
   (for example in the "details" section in Remix).
 
@@ -159,16 +162,16 @@ Sending and Receiving Trx
 - Use the most precise units to represent the sun amount as possible, as you lose
   any that is rounded due to a lack of precision.
 
-- If you want to send Trx using ``address.transfer``, there are certain details to be aware of:
+- If you want to send Ether using ``address.transfer``, there are certain details to be aware of:
 
   1. If the recipient is a contract, it causes its receive or fallback function
      to be executed which can, in turn, call back the sending contract.
-  2. Sending Trx can fail due to the call depth going above 1024. Since the
+  2. Sending Ether can fail due to the call depth going above 1024. Since the
      caller is in total control of the call depth, they can force the
      transfer to fail; take this possibility into account or use ``send`` and
      make sure to always check its return value. Better yet, write your
-     contract using a pattern where the recipient can withdraw Trx instead.
-  3. Sending Trx can also fail because the execution of the recipient
+     contract using a pattern where the recipient can withdraw Ether instead.
+  3. Sending Ether can also fail because the execution of the recipient
      contract requires more than the allotted amount of gas (explicitly by
      using :ref:`require <assert-and-require>`, :ref:`assert <assert-and-require>`,
      :ref:`revert <assert-and-require>` or because the
@@ -197,6 +200,7 @@ Never use tx.origin for authorization. Let's say you have a wallet contract like
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity >=0.5.0 <0.7.0;
 
     // THIS CONTRACT CONTAINS A BUG - DO NOT USE
@@ -213,10 +217,11 @@ Never use tx.origin for authorization. Let's say you have a wallet contract like
         }
     }
 
-Now someone tricks you into sending Trx to the address of this attack wallet:
+Now someone tricks you into sending Ether to the address of this attack wallet:
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity ^0.6.0;
 
     interface TxUserWallet {
@@ -277,7 +282,8 @@ field of a ``struct`` that is the base type of a dynamic storage array.  The
 
 ::
 
-    pragma solidity >=0.5.0 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.6.0 <0.7.0;
 
     contract Map {
         mapping (uint => uint)[] array;
@@ -491,7 +497,8 @@ Horn clauses, where the lifecycle of the contract is represented by a loop
 that can visit every public/external function non-deterministically. This way,
 the behavior of the entire contract over an unbounded number of transactions
 is taken into account when analyzing any function. Loops are fully supported
-by this engine. Function calls are currently unsupported.
+by this engine. Internal function calls are supported, but external function
+calls are currently unsupported.
 
 The CHC engine is much more powerful than BMC in terms of what it can prove,
 and might require more computing resources.
@@ -505,10 +512,16 @@ erasing knowledge or using a non-precise type). If it determines that a
 verification target is safe, it is indeed safe, that is, there are no false
 negatives (unless there is a bug in the SMTChecker).
 
-Function calls to the same contract (or base contracts) are inlined when
-possible, that is, when their implementation is available.
-Calls to functions in other contracts are not inlined even if their code is
+In the BMC engine, function calls to the same contract (or base contracts) are
+inlined when possible, that is, when their implementation is available.  Calls
+to functions in other contracts are not inlined even if their code is
 available, since we cannot guarantee that the actual deployed code is the same.
+
+The CHC engine creates nonlinear Horn clauses that use summaries of the called
+functions to support internal function calls. The same approach can and will be
+used for external function calls, but the latter requires more work regarding
+the entire state of the blockchain and is still unimplemented.
+
 Complex pure functions are abstracted by an uninterpreted function (UF) over
 the arguments.
 
@@ -519,11 +532,14 @@ the arguments.
 +-----------------------------------+--------------------------------------+
 |``require``                        |Assumption                            |
 +-----------------------------------+--------------------------------------+
-|internal                           |Inline function call                  |
+|internal                           |BMC: Inline function call             |
+|                                   |CHC: Function summaries               |
 +-----------------------------------+--------------------------------------+
-|external                           |Inline function call                  |
-|                                   |Erase knowledge about state variables |
-|                                   |and local storage references          |
+|external                           |BMC: Inline function call or          |
+|                                   |erase knowledge about state variables |
+|                                   |and local storage references.         |
+|                                   |CHC: Function summaries and erase     |
+|                                   |state knowledge.                      |
 +-----------------------------------+--------------------------------------+
 |``gasleft``, ``blockhash``,        |Abstracted with UF                    |
 |``keccak256``, ``ecrecover``       |                                      |
@@ -534,8 +550,8 @@ the arguments.
 |implementation (external or        |                                      |
 |complex)                           |                                      |
 +-----------------------------------+--------------------------------------+
-|external functions without         |Unsupported                           |
-|implementation                     |                                      |
+|external functions without         |BMC: Unsupported                      |
+|implementation                     |CHC: Nondeterministic summary         |
 +-----------------------------------+--------------------------------------+
 |others                             |Currently unsupported                 |
 +-----------------------------------+--------------------------------------+
@@ -545,8 +561,10 @@ not mean loss of proving power.
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity >=0.5.0;
     pragma experimental SMTChecker;
+    // This may report a warning if no SMT solver available.
 
     contract Recover
     {
@@ -598,9 +616,11 @@ types.
 
 ::
 
+    // SPDX-License-Identifier: GPL-3.0
     pragma solidity >=0.5.0;
     pragma experimental SMTChecker;
     // This will report a warning
+
     contract Aliasing
     {
         uint[] array;

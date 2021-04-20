@@ -20,12 +20,14 @@
  * Unit tests for the solidity compiler JSON Interface output.
  */
 
-#include <test/Options.h>
+#include <test/Common.h>
 #include <string>
 #include <libsolutil/JSON.h>
 #include <libsolidity/interface/CompilerStack.h>
 #include <liblangutil/Exceptions.h>
 #include <libsolutil/Exceptions.h>
+
+#include <boost/test/unit_test.hpp>
 
 using namespace solidity::langutil;
 
@@ -44,7 +46,7 @@ public:
 	{
 		m_compilerStack.reset();
 		m_compilerStack.setSources({{"", "pragma solidity >=0.0;\n" + _code}});
-		m_compilerStack.setEVMVersion(solidity::test::Options::get().evmVersion());
+		m_compilerStack.setEVMVersion(solidity::test::CommonOptions::get().evmVersion());
 		BOOST_REQUIRE_MESSAGE(m_compilerStack.parseAndAnalyze(), "Parsing contract failed");
 
 		Json::Value generatedDocumentation;
@@ -65,7 +67,7 @@ public:
 	{
 		m_compilerStack.reset();
 		m_compilerStack.setSources({{"", "pragma solidity >=0.0;\n" + _code}});
-		m_compilerStack.setEVMVersion(solidity::test::Options::get().evmVersion());
+		m_compilerStack.setEVMVersion(solidity::test::CommonOptions::get().evmVersion());
 		BOOST_CHECK(!m_compilerStack.parseAndAnalyze());
 		BOOST_REQUIRE(Error::containsErrorOfType(m_compilerStack.errors(), Error::Type::DocstringParsingError));
 	}
@@ -353,6 +355,27 @@ BOOST_AUTO_TEST_CASE(dev_multiple_functions)
 	checkNatspec(sourceCode, "test", natspec, false);
 }
 
+BOOST_AUTO_TEST_CASE(dev_return_no_params)
+{
+	char const* sourceCode = R"(
+		contract test {
+			/// @return d The result of the multiplication
+			function mul(uint a, uint second) public returns (uint d) { return a * 7 + second; }
+		}
+	)";
+
+	char const* natspec = R"ABCDEF(
+	{
+		"methods": {
+			"mul(uint256,uint256)": {
+				"returns": { "d": "The result of the multiplication"
+			}
+		}
+	})ABCDEF";
+
+	checkNatspec(sourceCode, "test", natspec, false);
+}
+
 BOOST_AUTO_TEST_CASE(dev_return)
 {
 	char const* sourceCode = R"(
@@ -497,6 +520,7 @@ BOOST_AUTO_TEST_CASE(dev_return_desc_multiple_unamed)
 			/// @param a Documentation for the first parameter starts here.
 			/// Since it's a really complicated parameter we need 2 lines
 			/// @param second Documentation for the second parameter
+			/// @return _cookies And cookies with nutella
 			/// @return The result of the multiplication
 			/// @return And cookies with nutella
 			function mul(uint a, uint second) public returns (uint, uint) {
