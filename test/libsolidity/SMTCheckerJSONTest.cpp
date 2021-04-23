@@ -22,6 +22,7 @@
 #include <libsolidity/interface/StandardCompiler.h>
 #include <libsolutil/CommonIO.h>
 #include <libsolutil/JSON.h>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>

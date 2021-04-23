@@ -107,7 +107,6 @@ Json::Value Natspec::devDocumentation(ContractDefinition const& _contractDef)
 
 			if (!method.empty())
 				methods[it.second->externalSignature()] = method;
-			}
 		}
 	}
 

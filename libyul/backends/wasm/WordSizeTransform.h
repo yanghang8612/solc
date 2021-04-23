@@ -100,7 +100,6 @@ private:
 	Dialect const& m_inputDialect;
 	Dialect const& m_targetDialect;
 	NameDispenser& m_nameDispenser;
-	YulString m_defaultType;
 	/// maps original u256 variable's name to corresponding u64 variables' names
 	std::map<YulString, std::array<YulString, 4>> m_variableMapping;
 };

@@ -56,9 +56,9 @@ Text representation:
 (func $main
     (local $_1 i64)
     (local.set $_1 (i64.const 0))
-    (call $mstore_internal (local.get $_1) (local.get $_1) (local.get $_1) (local.get $_1) (local.get $_1))
+    (call $mstore_internal (i64.const 0) (local.get $_1) (local.get $_1) (local.get $_1) (local.get $_1))
     (call $mstore_internal (i64.const 32) (local.get $_1) (local.get $_1) (local.get $_1) (i64.const 1))
-    (call $eth.storageStore (i32.wrap_i64 (local.get $_1)) (i32.wrap_i64 (i64.const 32)))
+    (call $eth.storageStore (i32.wrap_i64 (i64.const 0)) (i32.wrap_i64 (i64.const 32)))
 )
 
 (func $endian_swap_16

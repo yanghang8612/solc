@@ -465,7 +465,7 @@ event signature to form the topics of the log entry. Those which are not indexed
 
 In effect, a log entry using this ABI is described as:
 
-- ``address``: the address of the contract (intrinsically provided by Ethereum);
+- ``address``: the address of the contract (intrinsically provided by Tron);
 - ``topics[0]``: ``keccak(EVENT_NAME+"("+EVENT_ARGS.map(canonical_type_of).join(",")+")")`` (``canonical_type_of``
   is a function that simply returns the canonical type of a given argument, e.g. for ``uint indexed foo``, it would
   return ``uint256``). If the event is declared as ``anonymous`` the ``topics[0]`` is not generated;
@@ -508,7 +508,7 @@ A function description is a JSON object with the fields:
 - ``outputs``: an array of objects similar to ``inputs``.
 - ``stateMutability``: a string with one of the following values: ``pure`` (:ref:`specified to not read
   blockchain state <pure-functions>`), ``view`` (:ref:`specified to not modify the blockchain
-  state <view-functions>`), ``nonpayable`` (function does not accept Ether - the default) and ``payable`` (function accepts Ether).
+  state <view-functions>`), ``nonpayable`` (function does not accept Trx - the default) and ``payable`` (function accepts Trx).
 
 Constructor and fallback function never have ``name`` or ``outputs``. Fallback function doesn't have ``inputs`` either.
 

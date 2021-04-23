@@ -216,13 +216,13 @@ Members of Address Types
 ------------------------
 
 ``<address>.balance`` (``uint256``)
-    balance of the :ref:`address` in Wei
+    balance of the :ref:`address` in sun
 
 ``<address payable>.transfer(uint256 amount)``
-    send given amount of Wei to :ref:`address`, reverts on failure, forwards 2300 gas stipend, not adjustable
+    send given amount of sun to :ref:`address`, reverts on failure, forwards 2300 gas stipend, not adjustable
 
 ``<address payable>.send(uint256 amount) returns (bool)``
-    send given amount of Wei to :ref:`address`, returns ``false`` on failure, forwards 2300 gas stipend, not adjustable
+    send given amount of sun to :ref:`address`, returns ``false`` on failure, forwards 2300 gas stipend, not adjustable
 
 ``<address>.call(bytes memory) returns (bool, bytes memory)``
     issue low-level ``CALL`` with the given payload, returns success condition and return data, forwards all available gas, adjustable

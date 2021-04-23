@@ -63,6 +63,15 @@ int magicVariableToID(std::string const& _name)
 	else if (_name == "tx") return -26;
 	else if (_name == "type") return -27;
 	else if (_name == "this") return -28;
+    else if (_name == "verifyMintProof") return -29;
+    else if (_name == "verifyBurnProof") return -30;
+    else if (_name == "verifyTransferProof") return -31;
+    else if (_name == "pedersenHash") return -32;
+    else if (_name == "batchvalidatesign") return -33;
+    else if (_name == "validatemultisign") return -34;
+    else if (_name == "freeze") return -35;
+    else if (_name == "unfreeze") return -36;
+    else if (_name == "freezeExpireTime") return -37;
 	else
 		solAssert(false, "Unknown magic variable: \"" + _name + "\".");
 }

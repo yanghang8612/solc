@@ -399,11 +399,6 @@ bytes BinaryTransform::operator()(Return const&)
 	return toBytes(Opcode::Return);
 }
 
-bytes BinaryTransform::operator()(Return const&)
-{
-	return toBytes(Opcode::Return);
-}
-
 bytes BinaryTransform::operator()(Block const& _block)
 {
 	m_labels.emplace_back(_block.labelName);

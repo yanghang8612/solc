@@ -79,7 +79,6 @@ public:
 
 private:
 	OptimiserSettings const m_optimiserSettings;
-	RevertStrings const m_revertStrings;
 	CompilerContext m_runtimeContext;
 	size_t m_runtimeSub = size_t(-1); ///< Identifier of the runtime sub-assembly, if present.
 	CompilerContext m_context;

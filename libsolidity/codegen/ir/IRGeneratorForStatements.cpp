@@ -1151,47 +1151,6 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 		templ("forwardingRevert", m_utils.forwardingRevertFunction());
 		m_code << templ.render();
 
-			break;
-	}
-	case FunctionType::Kind::ArrayPop:
-	{
-		ArrayType const& arrayType = dynamic_cast<ArrayType const&>(
-			*dynamic_cast<MemberAccess const&>(_functionCall.expression()).expression().annotation().type
-		);
-		defineExpression(_functionCall) <<
-			m_utils.storageArrayPopFunction(arrayType) <<
-			"(" <<
-			m_context.variable(_functionCall.expression()) <<
-			")\n";
-		break;
-	}
-	case FunctionType::Kind::ArrayPush:
-	{
-		ArrayType const& arrayType = dynamic_cast<ArrayType const&>(
-			*dynamic_cast<MemberAccess const&>(_functionCall.expression()).expression().annotation().type
-		);
-		if (arguments.empty())
-		{
-			auto slotName = m_context.newYulVariable();
-			auto offsetName = m_context.newYulVariable();
-			m_code << "let " << slotName << ", " << offsetName << " := " <<
-				m_utils.storageArrayPushZeroFunction(arrayType) <<
-				"(" << m_context.variable(_functionCall.expression()) << ")\n";
-			setLValue(_functionCall, make_unique<IRStorageItem>(
-				m_context.utils(),
-				slotName,
-				offsetName,
-				*arrayType.baseType()
-			));
-		}
-		else
-			m_code <<
-				m_utils.storageArrayPushFunction(arrayType) <<
-				"(" <<
-				m_context.variable(_functionCall.expression()) <<
-				", " <<
-				expressionAsType(*arguments.front(), *arrayType.baseType()) <<
-				")\n";
 		break;
 	}
 	default:
@@ -1266,19 +1225,9 @@ void IRGeneratorForStatements::endVisit(MemberAccess const& _memberAccess)
 				"balance(" <<
 				expressionAsType(_memberAccess.expression(), *TypeProvider::address()) <<
 				")\n";
-		else if (member == "rewardbalance")
-			defineExpression(_memberAccess) <<
-				"rewardbalance(" <<
-				expressionAsType(_memberAccess.expression(), *TypeProvider::address()) <<
-				")\n";
 		else if (member == "isContract")
-			defineExpression(_memberAccess) <<
+			define(_memberAccess) <<
 				"isContract(" <<
-				expressionAsType(_memberAccess.expression(), *TypeProvider::address()) <<
-				")\n";
-		else if (member == "isSRCandidate")
-			defineExpression(_memberAccess) <<
-				"isSRCandidate(" <<
 				expressionAsType(_memberAccess.expression(), *TypeProvider::address()) <<
 				")\n";
 		else if (set<string>{"send", "transfer"}.count(member))
@@ -1315,10 +1264,6 @@ void IRGeneratorForStatements::endVisit(MemberAccess const& _memberAccess)
 				FunctionType::Kind::External, ""
 			);
 			define(IRVariable{_memberAccess}, IRVariable(_memberAccess.expression()).part("address"));
-		}
-		else if (member == "address")
-		{
-			solUnimplementedAssert(false, "");
 		}
 		else
 			solAssert(

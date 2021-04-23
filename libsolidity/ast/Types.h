@@ -842,6 +842,8 @@ public:
 
 	std::unique_ptr<ReferenceType> copyForLocation(DataLocation, bool) const override { solAssert(false, ""); }
 
+protected:
+	std::vector<std::tuple<std::string, TypePointer>> makeStackItems() const override;
 private:
 	ArrayType const& m_arrayType;
 };

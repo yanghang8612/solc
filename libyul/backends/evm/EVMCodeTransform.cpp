@@ -581,17 +581,6 @@ void CodeTransform::operator()(Leave const& _leaveStatement)
 	m_assembly.appendJumpTo(jump.label, appendPopUntil(jump.targetStackHeight));
 }
 
-void CodeTransform::operator()(Leave const& _leaveStatement)
-{
-	yulAssert(!m_context->functionExitPoints.empty(), "Invalid leave-statement. Requires surrounding function in code generation.");
-	m_assembly.setSourceLocation(_leaveStatement.location);
-
-	Context::JumpInfo const& jump = m_context->functionExitPoints.top();
-	m_assembly.appendJumpTo(jump.label, appendPopUntil(jump.targetStackHeight));
-
-	checkStackHeight(&_leaveStatement);
-}
-
 void CodeTransform::operator()(Block const& _block)
 {
 	Scope* originalScope = m_scope;

@@ -277,12 +277,6 @@ void ReferencesResolver::declarationError(SourceLocation const& _location, Secon
 	m_errorReporter.declarationError(3881_error, _location, _ssl, _description);
 }
 
-void ReferencesResolver::declarationError(SourceLocation const& _location, SecondarySourceLocation const& _ssl, string const& _description)
-{
-	m_errorOccurred = true;
-	m_errorReporter.declarationError(_location, _ssl, _description);
-}
-
 void ReferencesResolver::fatalDeclarationError(SourceLocation const& _location, string const& _description)
 {
 	m_errorOccurred = true;

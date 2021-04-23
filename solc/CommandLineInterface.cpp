@@ -785,12 +785,6 @@ Allowed options)").c_str(),
 			"--" + g_argCombinedJson + " " + g_strAst + "," + g_strCompactJSON).c_str()
 		)
 		(
-			g_argImportAst.c_str(),
-			"Import ASTs to be compiled, assumes input holds the AST in compact JSON format."
-			" Supported Inputs is the output of the standard-json or the one produced by --combined-json ast,compact-format"
-		)
-
-		(
 			g_argAssemble.c_str(),
 			("Switch to assembly mode, ignoring all options except "
 			"--" + g_argMachine + ", --" + g_strYulDialect + ", --" + g_argOptimize + " and --" + g_strYulOptimizations + " "

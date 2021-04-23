@@ -520,7 +520,6 @@ BOOST_AUTO_TEST_CASE(dev_return_desc_multiple_unamed)
 			/// @param a Documentation for the first parameter starts here.
 			/// Since it's a really complicated parameter we need 2 lines
 			/// @param second Documentation for the second parameter
-			/// @return _cookies And cookies with nutella
 			/// @return The result of the multiplication
 			/// @return And cookies with nutella
 			function mul(uint a, uint second) public returns (uint, uint) {
