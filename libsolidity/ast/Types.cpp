@@ -3477,6 +3477,7 @@ TypePointer FunctionType::mobileType() const
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+		m_tokenSet,
 		m_bound,
 		m_saltSet
 	);
@@ -3716,6 +3717,7 @@ FunctionTypePointer FunctionType::asBoundFunction() const
 		m_declaration,
 		m_gasSet,
 		m_valueSet,
+		m_tokenSet,
 		m_saltSet,
 		true
 	);
