@@ -1499,35 +1499,36 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 						_memberAccess.expression().accept(*this);
 						m_context << funType->externalIdentifier();
 					break;
-				case FunctionType::Kind::External:
-				case FunctionType::Kind::Creation:
-				case FunctionType::Kind::Send:
-				case FunctionType::Kind::BareCall:
-				case FunctionType::Kind::BareCallCode:
-				case FunctionType::Kind::BareDelegateCall:
-				case FunctionType::Kind::BareStaticCall:
-				case FunctionType::Kind::Transfer:
-				case FunctionType::Kind::TransferToken:
-				case FunctionType::Kind::TokenBalance:
-				case FunctionType::Kind::ECRecover:
-				case FunctionType::Kind::ValidateMultiSign:
-                case FunctionType::Kind::BatchValidateSign:
-                case FunctionType::Kind::verifyBurnProof:
-                case FunctionType::Kind::verifyTransferProof:
-                case FunctionType::Kind::verifyMintProof:
-                case FunctionType::Kind::pedersenHash:
-				case FunctionType::Kind::SHA256:
-				case FunctionType::Kind::RIPEMD160:
-				default:
-					solAssert(false, "unsupported member function");
+					case FunctionType::Kind::External:
+					case FunctionType::Kind::Creation:
+					case FunctionType::Kind::Send:
+					case FunctionType::Kind::BareCall:
+					case FunctionType::Kind::BareCallCode:
+					case FunctionType::Kind::BareDelegateCall:
+					case FunctionType::Kind::BareStaticCall:
+					case FunctionType::Kind::Transfer:
+					case FunctionType::Kind::TransferToken:
+					case FunctionType::Kind::TokenBalance:
+					case FunctionType::Kind::ECRecover:
+					case FunctionType::Kind::ValidateMultiSign:
+					case FunctionType::Kind::BatchValidateSign:
+					case FunctionType::Kind::verifyBurnProof:
+					case FunctionType::Kind::verifyTransferProof:
+					case FunctionType::Kind::verifyMintProof:
+					case FunctionType::Kind::pedersenHash:
+					case FunctionType::Kind::SHA256:
+					case FunctionType::Kind::RIPEMD160:
+					default:
+						solAssert(false, "unsupported member function");
+					}
 				}
+				else if (dynamic_cast<TypeType const*>(_memberAccess.annotation().type))
+				{
+					// no-op
+				}
+				else
+					_memberAccess.expression().accept(*this);
 			}
-			else if (dynamic_cast<TypeType const*>(_memberAccess.annotation().type))
-			{
-				// no-op
-			}
-			else
-				_memberAccess.expression().accept(*this);
 		}
 		else if (auto enumType = dynamic_cast<EnumType const*>(type->actualType()))
 		{
@@ -1642,6 +1643,15 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			);
 			m_context << Instruction::ISCONTRACT;
 		}
+		else if (member == "isContract")
+		{
+			utils().convertType(
+				*_memberAccess.expression().annotation().type,
+				*TypeProvider::address(),
+				true
+			);
+			m_context << Instruction::ISCONTRACT;
+		}
 		else if (member == "code")
 		{
 			// Stack: <address>
@@ -1686,21 +1696,21 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 		}
 		else if ((set<string>{"send", "transfer", "transferToken"}).count(member))
 		{
-			solAssert(dynamic_cast<AddressType const &>(*_memberAccess.expression().annotation().type).stateMutability()
-			              == StateMutability::Payable,
-			          "");
-			utils().convertType(*_memberAccess.expression().annotation().type,
-			                    AddressType(StateMutability::Payable),
-			                    true);
+			solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
+			utils().convertType(
+				*_memberAccess.expression().annotation().type,
+				AddressType(StateMutability::Payable),
+				true
+			);
 		}
 		else if ((set<string>{"freeze", "unfreeze"}).count(member))
 		{
-            solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
-            utils().convertType(
-                    *_memberAccess.expression().annotation().type,
-                    AddressType(StateMutability::Payable),
-                    true
-            );
+			solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
+			utils().convertType(
+				*_memberAccess.expression().annotation().type,
+				AddressType(StateMutability::Payable),
+				true
+			);
 		}
 		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall", "freezeExpireTime"}).count(member))
 			utils().convertType(

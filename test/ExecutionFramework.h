@@ -43,9 +43,9 @@ namespace solidity::test
 {
 using rational = boost::rational<bigint>;
 
-	// The various denominations; here for ease of use where needed within code.
-    static const u256 sun = 1;
-    static const u256 trx = sun * 1000000;
+// The various denominations; here for ease of use where needed within code.
+static const u256 sun = 1;
+static const u256 trx = sun * 1000000;
 
 class ExecutionFramework
 {
@@ -289,7 +289,6 @@ protected:
 	bool m_transactionSuccessful = true;
 	util::h160 m_sender = account(0);
 	util::h160 m_contractAddress;
-	u256 m_blockNumber;
 	u256 const m_gasPrice = 10000 * sun;
 	u256 const m_gas = 100000000;
 	bytes m_output;
