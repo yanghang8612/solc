@@ -1150,11 +1150,19 @@ public:
 		RIPEMD160, ///< CALL to special contract for ripemd160
         verifyBurnProof,///< CALL to special contract for verifyBurnProof which is used for shielded transaction for TRC-20
         verifyTransferProof,///< CALL to special contract for verifyTransferProof which is used for shielded transaction for TRC-20
-        verifyMintProof,//< CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
-        pedersenHash,//< CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
-        Freeze,//< CALL to freeze balance
-		Unfreeze,//< CALL to unfreeze balance
-        FreezeExpireTime,// < CALL to freeze expire time
+		verifyMintProof,/// < CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
+		pedersenHash,/// < CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
+		Freeze,/// < CALL to freeze balance
+		Unfreeze,/// < CALL to unfreeze balance
+		FreezeExpireTime,/// < CALL to freeze expire time
+		vote,///< CALL to vote witness
+		WithdrawReward,///< CALL to withdrawReward to address
+		rewardBalance, ///< get reward balance
+		isSrCandidate, ///< Judge witness whether or not
+		voteCount, ///< get vote count
+		totalVoteCount, /// get total vote count
+		receivedVoteCount, /// get total received vote count
+		usedVoteCount, /// get total used vote count
 		Event, ///< syntactic sugar for LOG*
 		Error, ///< creating an error instance in revert or require
 		SetGas, ///< modify the default gas value for the function call
