@@ -4,7 +4,7 @@ pragma experimental SMTChecker;
 contract A {
 	uint x;
 
-	function f() public view {
+	function f() public virtual view {
 		assert(x == 1);
 	}
 	function g() public view {
@@ -16,12 +16,11 @@ contract A {
 contract B is A {
 	uint y;
 
-	function f() public view {
+	function f() public view override {
 		assert(x == 1);
 	}
 }
 // ----
-// Warning: (113-127): Assertion violation happens here
-// Warning: (162-176): Assertion violation happens here
-// Warning: (269-283): Assertion violation happens here
-// Warning: (162-176): Assertion violation happens here
+// Warning 6328: (121-135): CHC: Assertion violation happens here.\nCounterexample:\nx = 0\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf()
+// Warning 6328: (170-184): CHC: Assertion violation happens here.\nCounterexample:\nx = 0\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0\ng()
+// Warning 6328: (286-300): CHC: Assertion violation happens here.\nCounterexample:\ny = 0, x = 0\n\n\n\nTransaction trace:\nconstructor()\nState: y = 0, x = 0\nf()

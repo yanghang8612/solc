@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Changes the topmost block to be a function with a specific name ("main") which has no
  * inputs nor outputs.
@@ -24,13 +25,13 @@
 #include <libyul/optimiser/NameCollector.h>
 #include <libyul/Exceptions.h>
 
-#include <libyul/AsmData.h>
+#include <libyul/AST.h>
 
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonData.h>
 
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::yul;
 
 void MainFunction::operator()(Block& _block)
 {

@@ -13,3 +13,4 @@ contract C
 		assert(z < 1000);
 	}
 }
+// ----

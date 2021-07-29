@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Lefteris <lefteris@ethdev.com>
  * @date 2015
@@ -24,6 +25,7 @@
 
 #include <libsolidity/ast/ASTAnnotations.h>
 #include <libsolidity/ast/ASTVisitor.h>
+#include <libsolidity/interface/CompilerStack.h>
 #include <liblangutil/Exceptions.h>
 
 #include <json/json.h>
@@ -34,14 +36,12 @@
 #include <stack>
 #include <vector>
 
-namespace langutil
+namespace solidity::langutil
 {
 struct SourceLocation;
 }
 
-namespace dev
-{
-namespace solidity
+namespace solidity::frontend
 {
 
 /**
@@ -51,15 +51,15 @@ class ASTJsonConverter: public ASTConstVisitor
 {
 public:
 	/// Create a converter to JSON for the given abstract syntax tree.
-	/// @a _legacy if true, use legacy format
+	/// @a _stackState state of the compiler stack to avoid outputting incomplete data
 	/// @a _sourceIndices is used to abbreviate source names in source locations.
 	explicit ASTJsonConverter(
-		bool _legacy,
+		CompilerStack::State _stackState,
 		std::map<std::string, unsigned> _sourceIndices = std::map<std::string, unsigned>()
 	);
 	/// Output the json representation of the AST to _stream.
 	void print(std::ostream& _stream, ASTNode const& _node);
-	Json::Value&& toJson(ASTNode const& _node);
+	Json::Value toJson(ASTNode const& _node);
 	template <class T>
 	Json::Value toJson(std::vector<ASTPointer<T>> const& _nodes)
 	{
@@ -75,12 +75,14 @@ public:
 	bool visit(PragmaDirective const& _node) override;
 	bool visit(ImportDirective const& _node) override;
 	bool visit(ContractDefinition const& _node) override;
+	bool visit(IdentifierPath const& _node) override;
 	bool visit(InheritanceSpecifier const& _node) override;
 	bool visit(UsingForDirective const& _node) override;
 	bool visit(StructDefinition const& _node) override;
 	bool visit(EnumDefinition const& _node) override;
 	bool visit(EnumValue const& _node) override;
 	bool visit(ParameterList const& _node) override;
+	bool visit(OverrideSpecifier const& _node) override;
 	bool visit(FunctionDefinition const& _node) override;
 	bool visit(VariableDeclaration const& _node) override;
 	bool visit(ModifierDefinition const& _node) override;
@@ -95,6 +97,8 @@ public:
 	bool visit(Block const& _node) override;
 	bool visit(PlaceholderStatement const& _node) override;
 	bool visit(IfStatement const& _node) override;
+	bool visit(TryCatchClause const& _node) override;
+	bool visit(TryStatement const& _node) override;
 	bool visit(WhileStatement const& _node) override;
 	bool visit(ForStatement const& _node) override;
 	bool visit(Continue const& _node) override;
@@ -110,12 +114,15 @@ public:
 	bool visit(UnaryOperation const& _node) override;
 	bool visit(BinaryOperation const& _node) override;
 	bool visit(FunctionCall const& _node) override;
+	bool visit(FunctionCallOptions const& _node) override;
 	bool visit(NewExpression const& _node) override;
 	bool visit(MemberAccess const& _node) override;
 	bool visit(IndexAccess const& _node) override;
+	bool visit(IndexRangeAccess const& _node) override;
 	bool visit(Identifier const& _node) override;
 	bool visit(ElementaryTypeNameExpression const& _node) override;
 	bool visit(Literal const& _node) override;
+	bool visit(StructuredDocumentation const& _node) override;
 
 	void endVisit(EventDefinition const&) override;
 
@@ -130,6 +137,7 @@ private:
 		std::string const& _nodeName,
 		std::vector<std::pair<std::string, Json::Value>>&& _attributes
 	);
+	size_t sourceIndexFromLocation(langutil::SourceLocation const& _location) const;
 	std::string sourceLocationToString(langutil::SourceLocation const& _location) const;
 	static std::string namePathToString(std::vector<ASTString> const& _namePath);
 	static Json::Value idOrNull(ASTNode const* _pt)
@@ -142,19 +150,19 @@ private:
 	}
 	Json::Value inlineAssemblyIdentifierToJson(std::pair<yul::Identifier const* , InlineAssemblyAnnotation::ExternalIdentifierInfo> _info) const;
 	static std::string location(VariableDeclaration::Location _location);
-	static std::string contractKind(ContractDefinition::ContractKind _kind);
+	static std::string contractKind(ContractKind _kind);
 	static std::string functionCallKind(FunctionCallKind _kind);
 	static std::string literalTokenKind(Token _token);
 	static std::string type(Expression const& _expression);
 	static std::string type(VariableDeclaration const& _varDecl);
-	static int nodeId(ASTNode const& _node)
+	static int64_t nodeId(ASTNode const& _node)
 	{
 		return _node.id();
 	}
 	template<class Container>
 	static Json::Value getContainerIds(Container const& _container, bool _order = false)
 	{
-		std::vector<int> tmp;
+		std::vector<int64_t> tmp;
 
 		for (auto const& element: _container)
 		{
@@ -165,7 +173,7 @@ private:
 			std::sort(tmp.begin(), tmp.end());
 		Json::Value json(Json::arrayValue);
 
-		for (int val: tmp)
+		for (int64_t val: tmp)
 			json.append(val);
 
 		return json;
@@ -182,11 +190,10 @@ private:
 		_array.append(std::move(_value));
 	}
 
-	bool m_legacy = false; ///< if true, use legacy format
+	CompilerStack::State m_stackState = CompilerStack::State::Empty; ///< Used to only access information that already exists
 	bool m_inEvent = false; ///< whether we are currently inside an event or not
 	Json::Value m_currentValue;
 	std::map<std::string, unsigned> m_sourceIndices;
 };
 
-}
 }

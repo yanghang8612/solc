@@ -34,7 +34,6 @@ contract ScalarEvent is Event {
         int _lowerBound,
         int _upperBound
     )
-        public
         Event(_collateralToken, _oracle, 2)
     {
         // Validate bounds
@@ -44,9 +43,10 @@ contract ScalarEvent is Event {
     }
 
     /// @dev Exchanges sender's winning outcome tokens for collateral tokens
-    /// @return Sender's winnings
+    /// @return winnings Sender's winnings
     function redeemWinnings()
         public
+        override
         returns (uint winnings)
     {
         // Winning outcome has to be set
@@ -61,7 +61,7 @@ contract ScalarEvent is Event {
             convertedWinningOutcome = OUTCOME_RANGE;
         // Map outcome to outcome range
         else
-            convertedWinningOutcome = uint24(OUTCOME_RANGE * (outcome - lowerBound) / (upperBound - lowerBound));
+            convertedWinningOutcome = uint24(uint(OUTCOME_RANGE * (outcome - lowerBound) / (upperBound - lowerBound)));
         uint factorShort = OUTCOME_RANGE - convertedWinningOutcome;
         uint factorLong = OUTCOME_RANGE - factorShort;
         uint shortOutcomeTokenCount = outcomeTokens[SHORT].balanceOf(msg.sender);
@@ -79,6 +79,7 @@ contract ScalarEvent is Event {
     /// @return Event hash
     function getEventHash()
         public
+        override
         view
         returns (bytes32)
     {

@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Christian <c@ethdev.com>
  * @date 2014
@@ -25,23 +26,25 @@
 #include <liblangutil/Scanner.h>
 #include <libsolidity/parsing/Parser.h>
 #include <libsolidity/analysis/NameAndTypeResolver.h>
+#include <libsolidity/analysis/Scoper.h>
+#include <libsolidity/analysis/SyntaxChecker.h>
+#include <libsolidity/analysis/DeclarationTypeChecker.h>
 #include <libsolidity/codegen/CompilerContext.h>
 #include <libsolidity/codegen/ExpressionCompiler.h>
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/ast/TypeProvider.h>
 #include <libsolidity/analysis/TypeChecker.h>
 #include <liblangutil/ErrorReporter.h>
-#include <test/Options.h>
+#include <libevmasm/LinkerObject.h>
+#include <test/Common.h>
+
+#include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev::eth;
-using namespace langutil;
+using namespace solidity::evmasm;
+using namespace solidity::langutil;
 
-namespace dev
-{
-namespace solidity
-{
-namespace test
+namespace solidity::frontend::test
 {
 
 namespace
@@ -54,15 +57,15 @@ public:
 	FirstExpressionExtractor(ASTNode& _node): m_expression(nullptr) { _node.accept(*this); }
 	Expression* expression() const { return m_expression; }
 private:
-	virtual bool visit(Assignment& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(UnaryOperation& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(BinaryOperation& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(FunctionCall& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(MemberAccess& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(IndexAccess& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(Identifier& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(ElementaryTypeNameExpression& _expression) override { return checkExpression(_expression); }
-	virtual bool visit(Literal& _expression) override { return checkExpression(_expression); }
+	bool visit(Assignment& _expression) override { return checkExpression(_expression); }
+	bool visit(UnaryOperation& _expression) override { return checkExpression(_expression); }
+	bool visit(BinaryOperation& _expression) override { return checkExpression(_expression); }
+	bool visit(FunctionCall& _expression) override { return checkExpression(_expression); }
+	bool visit(MemberAccess& _expression) override { return checkExpression(_expression); }
+	bool visit(IndexAccess& _expression) override { return checkExpression(_expression); }
+	bool visit(Identifier& _expression) override { return checkExpression(_expression); }
+	bool visit(ElementaryTypeNameExpression& _expression) override { return checkExpression(_expression); }
+	bool visit(Literal& _expression) override { return checkExpression(_expression); }
 	bool checkExpression(Expression& _expression)
 	{
 		if (m_expression == nullptr)
@@ -92,18 +95,20 @@ Declaration const& resolveDeclaration(
 }
 
 bytes compileFirstExpression(
-	const string& _sourceCode,
+	string const& _sourceCode,
 	vector<vector<string>> _functions = {},
 	vector<vector<string>> _localVariables = {}
 )
 {
+	string sourceCode = "pragma solidity >=0.0; // SPDX-License-Identifier: GPL-3\n" + _sourceCode;
+
 	ASTPointer<SourceUnit> sourceUnit;
 	try
 	{
 		ErrorList errors;
 		ErrorReporter errorReporter(errors);
-		sourceUnit = Parser(errorReporter, dev::test::Options::get().evmVersion()).parse(
-			make_shared<Scanner>(CharStream(_sourceCode, ""))
+		sourceUnit = Parser(errorReporter, solidity::test::CommonOptions::get().evmVersion()).parse(
+			make_shared<Scanner>(CharStream(sourceCode, ""))
 		);
 		if (!sourceUnit)
 			return bytes();
@@ -117,50 +122,52 @@ bytes compileFirstExpression(
 	ErrorList errors;
 	ErrorReporter errorReporter(errors);
 	GlobalContext globalContext;
-	map<ASTNode const*, shared_ptr<DeclarationContainer>> scopes;
-	NameAndTypeResolver resolver(globalContext, dev::test::Options::get().evmVersion(), scopes, errorReporter);
+	Scoper::assignScopes(*sourceUnit);
+	BOOST_REQUIRE(SyntaxChecker(errorReporter, false).checkSyntax(*sourceUnit));
+	NameAndTypeResolver resolver(globalContext, solidity::test::CommonOptions::get().evmVersion(), errorReporter);
 	resolver.registerDeclarations(*sourceUnit);
-
-	vector<ContractDefinition const*> inheritanceHierarchy;
+	BOOST_REQUIRE_MESSAGE(resolver.resolveNamesAndTypes(*sourceUnit), "Resolving names failed");
+	DeclarationTypeChecker declarationTypeChecker(errorReporter, solidity::test::CommonOptions::get().evmVersion());
 	for (ASTPointer<ASTNode> const& node: sourceUnit->nodes())
-		if (ContractDefinition* contract = dynamic_cast<ContractDefinition*>(node.get()))
-		{
-			BOOST_REQUIRE_MESSAGE(resolver.resolveNamesAndTypes(*contract), "Resolving names failed");
-			inheritanceHierarchy = vector<ContractDefinition const*>(1, contract);
-		}
-	for (ASTPointer<ASTNode> const& node: sourceUnit->nodes())
-		if (ContractDefinition* contract = dynamic_cast<ContractDefinition*>(node.get()))
-		{
-			ErrorReporter errorReporter(errors);
-			TypeChecker typeChecker(dev::test::Options::get().evmVersion(), errorReporter);
-			BOOST_REQUIRE(typeChecker.checkTypeRequirements(*contract));
-		}
+		BOOST_REQUIRE(declarationTypeChecker.check(*node));
+	TypeChecker typeChecker(solidity::test::CommonOptions::get().evmVersion(), errorReporter);
+	BOOST_REQUIRE(typeChecker.checkTypeRequirements(*sourceUnit));
 	for (ASTPointer<ASTNode> const& node: sourceUnit->nodes())
 		if (ContractDefinition* contract = dynamic_cast<ContractDefinition*>(node.get()))
 		{
 			FirstExpressionExtractor extractor(*contract);
 			BOOST_REQUIRE(extractor.expression() != nullptr);
 
-			CompilerContext context(dev::test::Options::get().evmVersion());
+			CompilerContext context(
+				solidity::test::CommonOptions::get().evmVersion(),
+				RevertStrings::Default
+			);
 			context.resetVisitedNodes(contract);
-			context.setInheritanceHierarchy(inheritanceHierarchy);
-			unsigned parametersSize = _localVariables.size(); // assume they are all one slot on the stack
-			context.adjustStackOffset(parametersSize);
+			context.setMostDerivedContract(*contract);
+			context.setArithmetic(Arithmetic::Wrapping);
+			size_t parametersSize = _localVariables.size(); // assume they are all one slot on the stack
+			context.adjustStackOffset(static_cast<int>(parametersSize));
 			for (vector<string> const& variable: _localVariables)
 				context.addVariable(
 					dynamic_cast<VariableDeclaration const&>(resolveDeclaration(*sourceUnit, variable, resolver)),
-					parametersSize--
+					static_cast<unsigned>(parametersSize--)
 				);
 
-			ExpressionCompiler(context, dev::test::Options::get().optimize).compile(*extractor.expression());
+			ExpressionCompiler(
+				context,
+				solidity::test::CommonOptions::get().optimize
+			).compile(*extractor.expression());
 
 			for (vector<string> const& function: _functions)
 				context << context.functionEntryLabel(dynamic_cast<FunctionDefinition const&>(
 					resolveDeclaration(*sourceUnit, function, resolver)
 				));
-			bytes instructions = context.assembledObject().bytecode;
+			BOOST_REQUIRE(context.assemblyPtr());
+			LinkerObject const& object = context.assemblyPtr()->assemble();
+			BOOST_REQUIRE(object.immutableReferences.empty());
+			bytes instructions = object.bytecode;
 			// debug
-			// cout << eth::disassemble(instructions) << endl;
+			// cout << evmasm::disassemble(instructions) << endl;
 			return instructions;
 		}
 	BOOST_FAIL("No contract found in source.");
@@ -188,7 +195,7 @@ BOOST_AUTO_TEST_CASE(literal_false)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() { bool x = false; }
+			function f() public { bool x = false; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -201,7 +208,7 @@ BOOST_AUTO_TEST_CASE(int_literal)
 {
 	char const* sourceCode = R"(
 		contract test {
-		  function f() { uint x = 0x12345678901234567890; }
+		  function f() public { uint x = 0x12345678901234567890; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -215,8 +222,8 @@ BOOST_AUTO_TEST_CASE(int_with_wei_ether_subdenomination)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function test () {
-				 var x = 1 sun;
+			constructor() {
+				 uint x = 1 sun;
 			}
 		}
 	)";
@@ -226,34 +233,18 @@ BOOST_AUTO_TEST_CASE(int_with_wei_ether_subdenomination)
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 
-BOOST_AUTO_TEST_CASE(int_with_szabo_ether_subdenomination)
+BOOST_AUTO_TEST_CASE(int_with_gwei_ether_subdenomination)
 {
 	char const* sourceCode = R"(
 		contract test {
 			function test () {
-				 var x = 100 sun;
+				 uint x = 100 sun;
 			}
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
 
-	bytes expectation({uint8_t(Instruction::PUSH5), 0xe8, 0xd4, 0xa5, 0x10, 0x00});
-	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
-}
-
-BOOST_AUTO_TEST_CASE(int_with_finney_ether_subdenomination)
-{
-	char const* sourceCode = R"(
-		contract test {
-			constructor()
-			{
-				 var x = 1 sun;
-			}
-		}
-	)";
-	bytes code = compileFirstExpression(sourceCode);
-
-	bytes expectation({uint8_t(Instruction::PUSH7), 0x3, 0x8d, 0x7e, 0xa4, 0xc6, 0x80, 0x00});
+	bytes expectation({uint8_t(Instruction::PUSH4), 0x3b, 0x9a, 0xca, 0x00});
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 
@@ -276,13 +267,13 @@ BOOST_AUTO_TEST_CASE(comparison)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() { bool x = (0x10aa < 0x11aa) != true; }
+			function f() public { bool x = (0x10aa < 0x11aa) != true; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
 
 	bytes expectation;
-	if (dev::test::Options::get().optimize)
+	if (solidity::test::CommonOptions::get().optimize)
 		expectation = {
 			uint8_t(Instruction::PUSH2), 0x11, 0xaa,
 			uint8_t(Instruction::PUSH2), 0x10, 0xaa,
@@ -308,7 +299,7 @@ BOOST_AUTO_TEST_CASE(short_circuiting)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() { bool x = true != (4 <= 8 + 10 || 9 != 2); }
+			function f() public { bool x = true != (4 <= 8 + 10 || 9 != 2); }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -339,14 +330,28 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f(uint y) { ((((((((y ^ 8) & 7) | 6) - 5) + 4) % 3) / 2) * 1); }
+			function f(uint y) public { unchecked { ((((((((y ^ 8) & 7) | 6) - 5) + 4) % 3) / 2) * 1); } }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode, {}, {{"test", "f", "y"}});
 
+	bytes panic =
+		bytes{uint8_t(Instruction::PUSH32)} +
+		fromHex("4E487B7100000000000000000000000000000000000000000000000000000000") +
+		bytes{
+			uint8_t(Instruction::PUSH1), 0x0,
+			uint8_t(Instruction::MSTORE),
+			uint8_t(Instruction::PUSH1), 0x12,
+			uint8_t(Instruction::PUSH1), 0x4,
+			uint8_t(Instruction::MSTORE),
+			uint8_t(Instruction::PUSH1), 0x24,
+			uint8_t(Instruction::PUSH1), 0x0,
+			uint8_t(Instruction::REVERT)
+		};
+
 	bytes expectation;
-	if (dev::test::Options::get().optimize)
-		expectation = {
+	if (solidity::test::CommonOptions::get().optimize)
+		expectation = bytes{
 			uint8_t(Instruction::PUSH1), 0x2,
 			uint8_t(Instruction::PUSH1), 0x3,
 			uint8_t(Instruction::PUSH1), 0x5,
@@ -363,24 +368,24 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x1b,
-			uint8_t(Instruction::JUMPI),
-			uint8_t(Instruction::INVALID),
+			uint8_t(Instruction::PUSH1), 0x48,
+			uint8_t(Instruction::JUMPI)
+		} + panic + bytes{
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::MOD),
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x24,
-			uint8_t(Instruction::JUMPI),
-			uint8_t(Instruction::INVALID),
+			uint8_t(Instruction::PUSH1), 0x7e,
+			uint8_t(Instruction::JUMPI)
+		} + panic + bytes{
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::DIV),
 			uint8_t(Instruction::PUSH1), 0x1,
 			uint8_t(Instruction::MUL)
 		};
 	else
-		expectation = {
+		expectation = bytes{
 			uint8_t(Instruction::PUSH1), 0x1,
 			uint8_t(Instruction::PUSH1), 0x2,
 			uint8_t(Instruction::PUSH1), 0x3,
@@ -398,21 +403,22 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x1d,
-			uint8_t(Instruction::JUMPI),
-			uint8_t(Instruction::INVALID),
+			uint8_t(Instruction::PUSH1), 0x4a,
+			uint8_t(Instruction::JUMPI)
+		} + panic + bytes{
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::MOD),
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x26,
-			uint8_t(Instruction::JUMPI),
-			uint8_t(Instruction::INVALID),
+			uint8_t(Instruction::PUSH1), 0x80,
+			uint8_t(Instruction::JUMPI)
+		} + panic + bytes{
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::DIV),
 			uint8_t(Instruction::MUL)
 		};
+
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
 
@@ -420,13 +426,13 @@ BOOST_AUTO_TEST_CASE(unary_operators)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f(int y) { !(~- y == 2); }
+			function f(int y) public { unchecked { !(~- y == 2); } }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode, {}, {{"test", "f", "y"}});
 
 	bytes expectation;
-	if (dev::test::Options::get().optimize)
+	if (solidity::test::CommonOptions::get().optimize)
 		expectation = {
 			uint8_t(Instruction::DUP1),
 			uint8_t(Instruction::PUSH1), 0x0,
@@ -453,7 +459,7 @@ BOOST_AUTO_TEST_CASE(unary_inc_dec)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f(uint a) public returns (uint x) { x = --a ^ (a-- ^ (++a ^ a++)); }
+			function f(uint a) public returns (uint x) { unchecked { x = --a ^ (a-- ^ (++a ^ a++)); } }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode, {}, {{"test", "f", "a"}, {"test", "f", "x"}});
@@ -510,14 +516,14 @@ BOOST_AUTO_TEST_CASE(assignment)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f(uint a, uint b) { (a += b) * 2; }
+			function f(uint a, uint b) public { unchecked { (a += b) * 2; } }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode, {}, {{"test", "f", "a"}, {"test", "f", "b"}});
 
 	// Stack: a, b
 	bytes expectation;
-	if (dev::test::Options::get().optimize)
+	if (solidity::test::CommonOptions::get().optimize)
 		expectation = {
 			uint8_t(Instruction::DUP1),
 			uint8_t(Instruction::DUP3),
@@ -548,7 +554,7 @@ BOOST_AUTO_TEST_CASE(negative_literals_8bits)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() { int8 x = -0x80; }
+			function f() public { int8 x = -0x80; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -561,7 +567,7 @@ BOOST_AUTO_TEST_CASE(negative_literals_16bits)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() { int64 x = ~0xabc; }
+			function f() public { int64 x = ~0xabc; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -576,7 +582,7 @@ BOOST_AUTO_TEST_CASE(intermediately_overflowing_literals)
 	// have been applied
 	char const* sourceCode = R"(
 		contract test {
-			function f() { uint8 x = (0x00ffffffffffffffffffffffffffffffffffffffff * 0xffffffffffffffffffffffffff01) & 0xbf; }
+			function f() public { uint8 x = (0x00ffffffffffffffffffffffffffffffffffffffff * 0xffffffffffffffffffffffffff01) & 0xbf; }
 		}
 	)";
 	bytes code = compileFirstExpression(sourceCode);
@@ -589,7 +595,7 @@ BOOST_AUTO_TEST_CASE(blockhash)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() {
+			function f() public {
 				blockhash(3);
 			}
 		}
@@ -621,7 +627,7 @@ BOOST_AUTO_TEST_CASE(selfbalance)
 {
 	char const* sourceCode = R"(
 		contract test {
-			function f() returns (uint) {
+			function f() public returns (uint) {
 				return address(this).balance;
 			}
 		}
@@ -629,7 +635,7 @@ BOOST_AUTO_TEST_CASE(selfbalance)
 
 	bytes code = compileFirstExpression(sourceCode, {}, {});
 
-	if (dev::test::Options::get().evmVersion() == EVMVersion::istanbul())
+	if (solidity::test::CommonOptions::get().evmVersion() == EVMVersion::istanbul())
 	{
 		bytes expectation({uint8_t(Instruction::SELFBALANCE)});
 		BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
@@ -638,6 +644,4 @@ BOOST_AUTO_TEST_CASE(selfbalance)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-}
-}
 } // end namespaces

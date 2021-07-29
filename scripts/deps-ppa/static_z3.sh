@@ -25,11 +25,9 @@ set -ev
 keyid=70D110489D66E2F6
 email=builds@ethereum.org
 packagename=libz3-static-dev
-# On the next version the git cherry-pick below should be removed and the patch suffix removed from the version string.
-version=4.8.7
-version_patchsuffix=-1
+version=4.8.9
 
-DISTRIBUTIONS="bionic disco eoan"
+DISTRIBUTIONS="focal groovy"
 
 for distribution in $DISTRIBUTIONS
 do
@@ -44,10 +42,8 @@ ppafilesurl=https://launchpad.net/~ethereum/+archive/ubuntu/${pparepo}/+files
 # Fetch source
 git clone --branch z3-${version} https://github.com/Z3Prover/z3.git
 cd z3
-# Patch build failure.
-git cherry-pick e212159f4e
 
-debversion="${version}${version_patchsuffix}"
+debversion="${version}"
 
 CMAKE_OPTIONS="-DZ3_BUILD_LIBZ3_SHARED=OFF -DCMAKE_BUILD_TYPE=Release"
 
@@ -72,11 +68,11 @@ Priority: extra
 Maintainer: Daniel Kirchner <daniel@ekpyron.org>
 Build-Depends: debhelper (>= 9.0.0),
                cmake,
-               g++,
+               g++ (>= 5.0),
                git,
                libgmp-dev,
                dh-python,
-               python
+               python3
 Standards-Version: 3.9.6
 Homepage: https://github.com/Z3Prover/z3
 Vcs-Git: git://github.com/Z3Prover/z3.git
@@ -84,7 +80,9 @@ Vcs-Browser: https://github.com/Z3Prover/z3
 
 Package: libz3-static-dev
 Section: libdevel
-Architecture: any-i386 any-amd64
+Architecture: any-amd64
+Breaks: libz3-dev
+Replaces: libz3-dev
 Multi-Arch: same
 Depends: \${shlibs:Depends}, \${misc:Depends}
 Description: theorem prover from Microsoft Research - development files (static library)
@@ -181,7 +179,7 @@ This program is free software: you can redistribute it and/or modify
  Public License version 3 can be found in "/usr/share/common-licenses/GPL-3".
 EOF
 cat <<EOF > debian/changelog
-libz3-static-dev (0.0.1-2ubuntu0) saucy; urgency=low
+libz3-static-dev (0.0.1-1ubuntu0) saucy; urgency=low
 
   * Initial release.
 
@@ -191,7 +189,7 @@ mkdir debian/source
 echo "3.0 (quilt)" > debian/source/format
 chmod +x debian/rules
 
-versionsuffix=2ubuntu0~${distribution}
+versionsuffix=1ubuntu0~${distribution}
 EMAIL="$email" dch -v 1:${debversion}-${versionsuffix} "build of ${version}"
 
 # build source package

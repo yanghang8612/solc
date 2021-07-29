@@ -1,5 +1,8 @@
-{ let a := sub(calldataload(0), calldataload(0)) }
-// ====
-// step: expressionSimplifier
+{
+    let a := sub(calldataload(0), calldataload(0))
+    sstore(0, a)
+}
 // ----
-// { let a := 0 }
+// step: expressionSimplifier
+//
+// { sstore(0, 0) }

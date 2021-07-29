@@ -5,18 +5,25 @@ contract A {
 }
 
 contract B is A {
-	constructor() public { x = 2; }
+	constructor() {
+		assert(x == 1);
+		x = 2;
+	}
 }
 
 contract C is A {
-	constructor() public { x = 3; }
+	constructor() {
+		assert(x == 1);
+		x = 3;
+	}
 }
 
 contract D is B, C {
-	constructor() public {
+	constructor() {
 		assert(x == 3);
 		assert(x == 4);
 	}
 }
 // ----
-// Warning: (235-249): Assertion violation happens here
+// Warning 6328: (167-181): CHC: Assertion violation happens here.\nCounterexample:\nx = 2\n\n\n\nTransaction trace:\nconstructor()
+// Warning 6328: (256-270): CHC: Assertion violation happens here.\nCounterexample:\nx = 3\n\n\n\nTransaction trace:\nconstructor()

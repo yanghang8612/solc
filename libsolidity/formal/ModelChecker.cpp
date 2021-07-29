@@ -14,22 +14,30 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 
 #include <libsolidity/formal/ModelChecker.h>
+#ifdef HAVE_Z3
+#include <libsmtutil/Z3Interface.h>
+#endif
 
 using namespace std;
-using namespace dev;
-using namespace langutil;
-using namespace dev::solidity;
+using namespace solidity;
+using namespace solidity::util;
+using namespace solidity::langutil;
+using namespace solidity::frontend;
 
 ModelChecker::ModelChecker(
 	ErrorReporter& _errorReporter,
 	map<h256, string> const& _smtlib2Responses,
-	smt::SMTSolverChoice _enabledSolvers
+	ModelCheckerSettings _settings,
+	ReadCallback::Callback const& _smtCallback,
+	smtutil::SMTSolverChoice _enabledSolvers
 ):
-	m_bmc(m_context, _errorReporter, _smtlib2Responses, _enabledSolvers),
-	m_chc(m_context, _errorReporter, _smtlib2Responses, _enabledSolvers),
-	m_context()
+	m_settings(_settings),
+	m_context(),
+	m_bmc(m_context, _errorReporter, _smtlib2Responses, _smtCallback, _enabledSolvers, _settings.timeout),
+	m_chc(m_context, _errorReporter, _smtlib2Responses, _smtCallback, _enabledSolvers, _settings.timeout)
 {
 }
 
@@ -38,11 +46,30 @@ void ModelChecker::analyze(SourceUnit const& _source)
 	if (!_source.annotation().experimentalFeatures.count(ExperimentalFeature::SMTChecker))
 		return;
 
-	m_chc.analyze(_source);
-	m_bmc.analyze(_source, m_chc.safeAssertions());
+	if (m_settings.engine.chc)
+		m_chc.analyze(_source);
+
+	auto solvedTargets = m_chc.safeTargets();
+	for (auto const& target: m_chc.unsafeTargets())
+		solvedTargets[target.first] += target.second;
+
+	if (m_settings.engine.bmc)
+		m_bmc.analyze(_source, solvedTargets);
 }
 
 vector<string> ModelChecker::unhandledQueries()
 {
 	return m_bmc.unhandledQueries() + m_chc.unhandledQueries();
+}
+
+solidity::smtutil::SMTSolverChoice ModelChecker::availableSolvers()
+{
+	smtutil::SMTSolverChoice available = smtutil::SMTSolverChoice::None();
+#ifdef HAVE_Z3
+	available.z3 = solidity::smtutil::Z3Interface::available();
+#endif
+#ifdef HAVE_CVC4
+	available.cvc4 = true;
+#endif
+	return available;
 }

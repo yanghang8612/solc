@@ -14,6 +14,7 @@ contract C
 	}
 }
 // ----
-// Warning: (296-309): Error trying to invoke SMT solver.
-// Warning: (176-181): Overflow (resulting value larger than 2**256 - 1) happens here
-// Warning: (296-309): Assertion violation happens here
+// Warning 4984: (176-181): CHC: Overflow (resulting value larger than 2**256 - 1) might happen here.
+// Warning 6328: (296-309): CHC: Assertion violation might happen here.
+// Warning 2661: (176-181): BMC: Overflow (resulting value larger than 2**256 - 1) happens here.
+// Warning 4661: (296-309): BMC: Assertion violation happens here.

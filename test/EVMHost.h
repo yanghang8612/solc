@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * EVM execution host, i.e. component that implements a simulated Ethereum blockchain
  * for testing purposes.
@@ -27,13 +28,13 @@
 
 #include <liblangutil/EVMVersion.h>
 
-#include <libdevcore/FixedHash.h>
+#include <libsolutil/FixedHash.h>
 
-namespace dev
+#include <boost/filesystem.hpp>
+
+namespace solidity::test
 {
-namespace test
-{
-using Address = h160;
+using Address = util::h160;
 
 class EVMHost: public evmc::MockedHost
 {
@@ -41,14 +42,19 @@ public:
 	using MockedHost::get_code_size;
 	using MockedHost::get_balance;
 
-	/// Tries to dynamically load libevmone. @returns nullptr on failure.
-	/// The path has to be provided for the first successful run and will be ignored
-	/// afterwards.
+	/// Tries to dynamically load an evmc vm supporting evm1 or ewasm and caches the loaded VM.
+	/// @returns vmc::VM(nullptr) on failure.
 	static evmc::VM& getVM(std::string const& _path = {});
 
-	explicit EVMHost(langutil::EVMVersion _evmVersion, evmc::VM& _vm = getVM());
+	/// Tries to load all defined evmc vm shared libraries.
+	/// @param _vmPaths paths to multiple evmc shared libraries.
+	/// @throw Exception if multiple evm1 or multiple ewasm evmc vms where loaded.
+	/// @returns true, if an evmc vm was supporting evm1 loaded properly.
+	static bool checkVmPaths(std::vector<boost::filesystem::path> const& _vmPaths);
 
-	void reset() { accounts.clear(); m_currentAddress = {}; }
+	explicit EVMHost(langutil::EVMVersion _evmVersion, evmc::VM& _vm);
+
+	void reset();
 	void newBlock()
 	{
 		tx_context.block_number++;
@@ -69,8 +75,14 @@ public:
 
 	static Address convertFromEVMC(evmc::address const& _addr);
 	static evmc::address convertToEVMC(Address const& _addr);
-	static h256 convertFromEVMC(evmc::bytes32 const& _data);
-	static evmc::bytes32 convertToEVMC(h256 const& _data);
+	static util::h256 convertFromEVMC(evmc::bytes32 const& _data);
+	static evmc::bytes32 convertToEVMC(util::h256 const& _data);
+
+	/// @returns true, if the evmc VM has the given capability.
+	bool hasCapability(evmc_capabilities capability) const noexcept
+	{
+		return m_vm.has_capability(capability);
+	}
 
 private:
 	evmc::address m_currentAddress = {};
@@ -96,5 +108,4 @@ private:
 };
 
 
-}
 }

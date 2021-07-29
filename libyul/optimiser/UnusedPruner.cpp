@@ -25,15 +25,13 @@
 #include <libyul/optimiser/Semantics.h>
 #include <libyul/optimiser/OptimizerUtilities.h>
 #include <libyul/Exceptions.h>
-#include <libyul/AsmData.h>
+#include <libyul/AST.h>
 #include <libyul/Dialect.h>
 #include <libyul/SideEffects.h>
 
-#include <boost/algorithm/cxx11/none_of.hpp>
-
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::yul;
 
 UnusedPruner::UnusedPruner(
 	Dialect const& _dialect,
@@ -85,25 +83,26 @@ void UnusedPruner::operator()(Block& _block)
 			// movable or it returns a single value. In the latter case, we
 			// replace `let a := f()` by `pop(f())` (in pure Yul, this will be
 			// `drop(f())`).
-			if (boost::algorithm::none_of(
-				varDecl.variables,
-				[=](TypedName const& _typedName) { return used(_typedName.name); }
+			if (std::none_of(
+				varDecl.variables.begin(),
+				varDecl.variables.end(),
+				[&](TypedName const& _typedName) { return used(_typedName.name); }
 			))
 			{
 				if (!varDecl.value)
 					statement = Block{std::move(varDecl.location), {}};
 				else if (
 					SideEffectsCollector(m_dialect, *varDecl.value, m_functionSideEffects).
-					sideEffectFree(m_allowMSizeOptimization)
+					canBeRemoved(m_allowMSizeOptimization)
 				)
 				{
 					subtractReferences(ReferencesCounter::countReferences(*varDecl.value));
 					statement = Block{std::move(varDecl.location), {}};
 				}
-				else if (varDecl.variables.size() == 1 && m_dialect.discardFunction())
+				else if (varDecl.variables.size() == 1 && m_dialect.discardFunction(varDecl.variables.front().type))
 					statement = ExpressionStatement{varDecl.location, FunctionCall{
 						varDecl.location,
-						{varDecl.location, m_dialect.discardFunction()->name},
+						{varDecl.location, m_dialect.discardFunction(varDecl.variables.front().type)->name},
 						{*std::move(varDecl.value)}
 					}};
 			}
@@ -113,7 +112,7 @@ void UnusedPruner::operator()(Block& _block)
 			ExpressionStatement& exprStmt = std::get<ExpressionStatement>(statement);
 			if (
 				SideEffectsCollector(m_dialect, exprStmt.expression, m_functionSideEffects).
-				sideEffectFree(m_allowMSizeOptimization)
+				canBeRemoved(m_allowMSizeOptimization)
 			)
 			{
 				subtractReferences(ReferencesCounter::countReferences(exprStmt.expression));

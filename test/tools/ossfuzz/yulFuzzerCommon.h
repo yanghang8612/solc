@@ -14,15 +14,13 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 #include <test/tools/yulInterpreter/Interpreter.h>
 #include <libyul/backends/evm/EVMDialect.h>
 
-namespace yul
+namespace solidity::yul::test::yul_fuzzer
 {
-namespace test
-{
-namespace yul_fuzzer
-{
+
 struct yulFuzzerUtil
 {
 	enum class TerminationReason
@@ -30,6 +28,7 @@ struct yulFuzzerUtil
 		ExplicitlyTerminated,
 		StepLimitReached,
 		TraceLimitReached,
+		ExpresionNestingLimitReached,
 		None
 	};
 
@@ -38,11 +37,12 @@ struct yulFuzzerUtil
 		std::shared_ptr<yul::Block> _ast,
 		Dialect const& _dialect,
 		size_t _maxSteps = maxSteps,
-		size_t _maxTraceSize = maxTraceSize
+		size_t _maxTraceSize = maxTraceSize,
+		size_t _maxExprNesting = maxExprNesting
 	);
 	static size_t constexpr maxSteps = 100;
 	static size_t constexpr maxTraceSize = 75;
+	static size_t constexpr maxExprNesting = 64;
 };
-}
-}
+
 }

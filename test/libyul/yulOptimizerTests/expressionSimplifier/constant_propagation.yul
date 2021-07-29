@@ -1,5 +1,8 @@
-{ let a := add(7, sub(mload(0), 7)) }
-// ====
-// step: expressionSimplifier
+{
+  let a := add(7, sub(mload(0), 7))
+  mstore(20, a)
+}
 // ----
-// { let a := mload(0) }
+// step: expressionSimplifier
+//
+// { mstore(20, mload(0)) }

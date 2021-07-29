@@ -1,4 +1,4 @@
-pragma experimental ABIEncoderV2;
+pragma abicoder               v2;
 contract C {
     struct S { uint256 x; }
     function f(S calldata s) external pure {
@@ -6,5 +6,4 @@ contract C {
     }
 }
 // ----
-// Warning: (0-33): Experimental features are turned on. Do not use experimental features on live deployments.
-// TypeError: (128-131): Calldata structs are read-only.
+// TypeError 4156: (128-131): Calldata structs are read-only.

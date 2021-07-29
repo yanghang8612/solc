@@ -5,7 +5,7 @@
 #
 # The documentation for solidity is hosted at:
 #
-#     https://solidity.readthedocs.org
+#     https://docs.soliditylang.org
 #
 # ------------------------------------------------------------------------------
 # This file is part of solidity.
@@ -31,16 +31,28 @@ set -e
 ## GLOBAL VARIABLES
 
 REPO_ROOT=$(cd $(dirname "$0")/.. && pwd)
-SOLIDITY_BUILD_DIR=${SOLIDITY_BUILD_DIR:-build}
+SOLIDITY_BUILD_DIR=${SOLIDITY_BUILD_DIR:-${REPO_ROOT}/build}
 source "${REPO_ROOT}/scripts/common.sh"
-SOLC="$REPO_ROOT/${SOLIDITY_BUILD_DIR}/solc/solc"
+source "${REPO_ROOT}/scripts/common_cmdline.sh"
+
+case "$OSTYPE" in
+    msys)
+        SOLC="${SOLIDITY_BUILD_DIR}/solc/Release/solc.exe"
+
+        # prevents msys2 path translation for a remapping test
+        export MSYS2_ARG_CONV_EXCL="="
+        ;;
+    *)
+        SOLC="${SOLIDITY_BUILD_DIR}/solc/solc"
+        ;;
+esac
+echo "${SOLC}"
+
 INTERACTIVE=true
 if ! tty -s || [ "$CI" ]
 then
     INTERACTIVE=""
 fi
-
-FULLARGS="--optimize --ignore-missing --combined-json abi,asm,ast,bin,bin-runtime,compact-format,devdoc,hashes,interface,metadata,opcodes,srcmap,srcmap-runtime,userdoc"
 
 # extend stack size in case we run via ASAN
 if [[ -n "${CIRCLECI}" ]] || [[ -n "$CI" ]]; then
@@ -49,52 +61,6 @@ if [[ -n "${CIRCLECI}" ]] || [[ -n "$CI" ]]; then
 fi
 
 ## FUNCTIONS
-
-function compileFull()
-{
-    local expected_exit_code=0
-    local expect_output=0
-    if [[ $1 = '-e' ]]
-    then
-        expected_exit_code=1
-        expect_output=1
-        shift;
-    fi
-    if [[ $1 = '-w' ]]
-    then
-        expect_output=1
-        shift;
-    fi
-
-    local files="$*"
-    local output
-
-    local stderr_path=$(mktemp)
-
-    set +e
-    "$SOLC" $FULLARGS $files >/dev/null 2>"$stderr_path"
-    local exit_code=$?
-    local errors=$(grep -v -E 'Warning: This is a pre-release compiler version|Warning: Experimental features are turned on|pragma experimental ABIEncoderV2|\^-------------------------------\^' < "$stderr_path")
-    set -e
-    rm "$stderr_path"
-
-    if [[ \
-        "$exit_code" -ne "$expected_exit_code" || \
-            ( $expect_output -eq 0 && -n "$errors" ) || \
-            ( $expect_output -ne 0 && -z "$errors" ) \
-    ]]
-    then
-        printError "Unexpected compilation result:"
-        printError "Expected failure: $expected_exit_code - Expected warning / error output: $expect_output"
-        printError "Was failure: $exit_code"
-        echo "$errors"
-        printError "While calling:"
-        echo "\"$SOLC\" $FULLARGS $files"
-        printError "Inside directory:"
-        pwd
-        false
-    fi
-}
 
 function ask_expectation_update()
 {
@@ -143,24 +109,47 @@ function test_solc_behaviour()
 
     if [[ "$solc_args" == *"--standard-json"* ]]
     then
-        sed -i -e 's/{[^{]*Warning: This is a pre-release compiler version[^}]*},\{0,1\}//' "$stdout_path"
+        sed -i.bak -e 's/{[^{]*Warning: This is a pre-release compiler version[^}]*},\{0,1\}//' "$stdout_path"
         sed -i.bak -E -e 's/ Consider adding \\"pragma solidity \^[0-9.]*;\\"//g' "$stdout_path"
-        sed -i -e 's/"errors":\[\],\{0,1\}//' "$stdout_path"
-        # Remove explicit bytecode and references to bytecode offsets
-        sed -i.bak -E -e 's/\"object\":\"[a-f0-9]+\"/\"object\":\"bytecode removed\"/g' "$stdout_path"
-        sed -i.bak -E -e 's/\"opcodes\":\"[^"]+\"/\"opcodes\":\"opcodes removed\"/g' "$stdout_path"
-        sed -i.bak -E -e 's/\"sourceMap\":\"[0-9:;-]+\"/\"sourceMap\":\"sourceMap removed\"/g' "$stdout_path"
+        sed -i.bak -e 's/"errors":\[\],\{0,1\}//' "$stdout_path"
+        sed -i.bak -E -e 's/\"opcodes\":\"[^"]+\"/\"opcodes\":\"<OPCODES REMOVED>\"/g' "$stdout_path"
+        sed -i.bak -E -e 's/\"sourceMap\":\"[0-9:;-]+\"/\"sourceMap\":\"<SOURCEMAP REMOVED>\"/g' "$stdout_path"
+
+        # Remove bytecode (but not linker references).
+        sed -i.bak -E -e 's/(\"object\":\")[0-9a-f]+([^"]*\")/\1<BYTECODE REMOVED>\2/g' "$stdout_path"
+        sed -i.bak -E -e 's/(\"object\":\"[^"]+\$__)[0-9a-f]+(\")/\1<BYTECODE REMOVED>\2/g' "$stdout_path"
+        sed -i.bak -E -e 's/([0-9a-f]{34}\$__)[0-9a-f]+(__\$[0-9a-f]{17})/\1<BYTECODE REMOVED>\2/g' "$stdout_path"
+
         # Replace escaped newlines by actual newlines for readability
         sed -i.bak -E -e 's/\\n/\'$'\n/g' "$stdout_path"
         rm "$stdout_path.bak"
     else
-        sed -i -e '/^Warning: This is a pre-release compiler version, please do not use it in production./d' "$stderr_path"
-        sed -i -e 's/ Consider adding "pragma .*$//' "$stderr_path"
+        sed -i.bak -e '/^Warning: This is a pre-release compiler version, please do not use it in production./d' "$stderr_path"
+        sed -i.bak -e '/^Warning (3805): This is a pre-release compiler version, please do not use it in production./d' "$stderr_path"
+        sed -i.bak -e 's/\(^[ ]*auxdata: \)0x[0-9a-f]*$/\1<AUXDATA REMOVED>/' "$stdout_path"
+        sed -i.bak -e 's/ Consider adding "pragma .*$//' "$stderr_path"
+        sed -i.bak -e 's/\(Unimplemented feature error.* in \).*$/\1<FILENAME REMOVED>/' "$stderr_path"
+        sed -i.bak -e 's/"version": "[^"]*"/"version": "<VERSION REMOVED>"/' "$stdout_path"
+
+        # Remove bytecode (but not linker references). Since non-JSON output is unstructured,
+        # use metadata markers for detection to have some confidence that it's actually bytecode
+        # and not some random word.
+        # 64697066735822 = hex encoding of 0x64 'i' 'p' 'f' 's' 0x58 0x22
+        # 64736f6c63     = hex encoding of 0x64 's' 'o' 'l' 'c'
+        sed -i.bak -E -e 's/[0-9a-f]*64697066735822[0-9a-f]+64736f6c63[0-9a-f]+/<BYTECODE REMOVED>/g' "$stdout_path"
+        sed -i.bak -E -e 's/([0-9a-f]{17}\$__)[0-9a-f]+(__\$[0-9a-f]{17})/\1<BYTECODE REMOVED>\2/g' "$stdout_path"
+        sed -i.bak -E -e 's/[0-9a-f]+((__\$[0-9a-f]{34}\$__)*<BYTECODE REMOVED>)/<BYTECODE REMOVED>\1/g' "$stdout_path"
+
+        # Remove trailing empty lines. Needs a line break to make OSX sed happy.
+        sed -i.bak -e '1{/^$/d
+}' "$stderr_path"
+        rm "$stderr_path.bak" "$stdout_path.bak"
     fi
     # Remove path to cpp file
-    sed -i -e 's/^\(Exception while assembling:\).*/\1/' "$stderr_path"
+    sed -i.bak -e 's/^\(Exception while assembling:\).*/\1/' "$stderr_path"
     # Remove exception class name.
-    sed -i -e 's/^\(Dynamic exception type:\).*/\1/' "$stderr_path"
+    sed -i.bak -e 's/^\(Dynamic exception type:\).*/\1/' "$stderr_path"
+    rm "$stderr_path.bak"
 
     if [[ $exitCode -ne "$exit_code_expected" ]]
     then
@@ -203,6 +192,8 @@ function test_solc_behaviour()
             exit 1
         fi
     fi
+
+    rm -f "$stdout_path" "$stderr_path"
 }
 
 
@@ -215,7 +206,7 @@ function test_solc_assembly_output()
     local expected_object="object \"object\" { code "${expected}" }"
 
     output=$(echo "${input}" | "$SOLC" - ${solc_args} 2>/dev/null)
-    empty=$(echo $output | sed -ne '/'"${expected_object}"'/p')
+    empty=$(echo "$output" | tr '\n' ' ' | tr -s ' ' | sed -ne "/${expected_object}/p")
     if [ -z "$empty" ]
     then
         printError "Incorrect assembly output. Expected: "
@@ -242,7 +233,7 @@ printTask "Testing unknown options..."
     then
         echo "Passed"
     else
-        printError "Incorrect response to unknown options: $STDERR"
+        printError "Incorrect response to unknown options: $output"
         exit 1
     fi
 )
@@ -263,15 +254,36 @@ printTask "Running general commandline tests..."
     cd "$REPO_ROOT"/test/cmdlineTests/
     for tdir in */
     do
-        if [ -e "${tdir}/input.json" ]
+        printTask " - ${tdir}"
+
+        # Strip trailing slash from $tdir.
+        tdir=$(basename "${tdir}")
+
+        inputFiles="$(ls -1 ${tdir}/input.* 2> /dev/null || true)"
+        inputCount="$(echo ${inputFiles} | wc -w)"
+        if (( ${inputCount} > 1 ))
         then
+            printError "Ambiguous input. Found input files in multiple formats:"
+            echo -e "${inputFiles}"
+            exit 1
+        fi
+
+        # Use printf to get rid of the trailing newline
+        inputFile=$(printf "%s" "${inputFiles}")
+
+        # If no files specified, assume input.sol as the default
+        if [ -z "${inputFile}" ]; then
+            inputFile="${tdir}/input.sol"
+        fi
+
+        if [ "${inputFile}" = "${tdir}/input.json" ]
+        then
+            stdin="${inputFile}"
             inputFile=""
-            stdin="${tdir}/input.json"
             stdout="$(cat ${tdir}/output.json 2>/dev/null || true)"
             stdoutExpectationFile="${tdir}/output.json"
             args="--standard-json "$(cat ${tdir}/args 2>/dev/null || true)
         else
-            inputFile="${tdir}input.sol"
             stdin=""
             stdout="$(cat ${tdir}/output 2>/dev/null || true)"
             stdoutExpectationFile="${tdir}/output"
@@ -280,7 +292,6 @@ printTask "Running general commandline tests..."
         exitCode=$(cat ${tdir}/exit 2>/dev/null || true)
         err="$(cat ${tdir}/err 2>/dev/null || true)"
         stderrExpectationFile="${tdir}/err"
-        printTask " - ${tdir}"
         test_solc_behaviour "$inputFile" \
                             "$args" \
                             "$stdin" \
@@ -331,6 +342,10 @@ SOLTMPDIR=$(mktemp -d)
         if grep "This will report a warning" "$f" >/dev/null
         then
             opts="$opts -w"
+        fi
+        if grep "This may report a warning" "$f" >/dev/null
+        then
+            opts="$opts -o"
         fi
         compileFull $opts "$SOLTMPDIR/$f"
     done
@@ -390,7 +405,9 @@ printTask "Testing assemble, yul, strict-assembly and optimize..."
     # Test yul and strict assembly output
     # Non-empty code results in non-empty binary representation with optimizations turned off,
     # while it results in empty binary representation with optimizations turned on.
-    test_solc_assembly_output "{ let x:u256 := 0:u256 }" "{ let x:u256 := 0:u256 }" "--yul"
+    test_solc_assembly_output "{ let x:u256 := 0:u256 }" "{ let x := 0 }" "--yul"
+    test_solc_assembly_output "{ let x:u256 := bitnot(7:u256) }" "{ let x := bitnot(7) }" "--yul"
+    test_solc_assembly_output "{ let t:bool := not(true) }" "{ let t:bool := not(true) }" "--yul"
     test_solc_assembly_output "{ let x := 0 }" "{ let x := 0 }" "--strict-assembly"
     test_solc_assembly_output "{ let x := 0 }" "{ { } }" "--strict-assembly --optimize"
 )
@@ -407,7 +424,7 @@ SOLTMPDIR=$(mktemp -d)
     # This should fail
     if [[ !("$output" =~ "No input files given") || ($result == 0) ]]
     then
-        printError "Incorrect response to empty input arg list: $STDERR"
+        printError "Incorrect response to empty input arg list: $output"
         exit 1
     fi
 
@@ -419,18 +436,37 @@ SOLTMPDIR=$(mktemp -d)
     # The contract should be compiled
     if [[ "$result" != 0 ]]
     then
+        printError "Failed to compile a simple contract from standard input"
         exit 1
     fi
 
     # This should not fail
     set +e
-    output=$(echo '' | "$SOLC" --ast - 2>/dev/null)
+    output=$(echo '' | "$SOLC" --ast-json - 2>/dev/null)
+    result=$?
     set -e
-    if [[ $? != 0 ]]
+    if [[ $result != 0 ]]
     then
+        printError "Incorrect response to --ast-json option with empty stdin"
         exit 1
     fi
 )
+
+printTask "Testing AST import..."
+SOLTMPDIR=$(mktemp -d)
+(
+    cd "$SOLTMPDIR"
+    $REPO_ROOT/scripts/ASTImportTest.sh
+    if [ $? -ne 0 ]
+    then
+        rm -rf "$SOLTMPDIR"
+        exit 1
+    fi
+)
+rm -rf "$SOLTMPDIR"
+
+printTask "Testing AST export with stop-after=parsing..."
+"$REPO_ROOT/test/stopAfterParseTests.sh"
 
 printTask "Testing soljson via the fuzzer..."
 SOLTMPDIR=$(mktemp -d)
@@ -440,8 +476,8 @@ SOLTMPDIR=$(mktemp -d)
     "$REPO_ROOT"/scripts/isolate_tests.py "$REPO_ROOT"/test/
     "$REPO_ROOT"/scripts/isolate_tests.py "$REPO_ROOT"/docs/ docs
 
-    echo *.sol | xargs -P 4 -n 50 "$REPO_ROOT"/${SOLIDITY_BUILD_DIR}/test/tools/solfuzzer --quiet --input-files
-    echo *.sol | xargs -P 4 -n 50 "$REPO_ROOT"/${SOLIDITY_BUILD_DIR}/test/tools/solfuzzer --without-optimizer --quiet --input-files
+    echo *.sol | xargs -P 4 -n 50 "${SOLIDITY_BUILD_DIR}/test/tools/solfuzzer" --quiet --input-files
+    echo *.sol | xargs -P 4 -n 50 "${SOLIDITY_BUILD_DIR}/test/tools/solfuzzer" --without-optimizer --quiet --input-files
 )
 rm -rf "$SOLTMPDIR"
 

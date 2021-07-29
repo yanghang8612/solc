@@ -14,8 +14,7 @@
 
 #pragma once
 
-#include <libdevcore/CommonData.h>
-#include <libsolidity/ast/Types.h>
+#include <libsolutil/CommonData.h>
 #include <liblangutil/Exceptions.h>
 #include <test/libsolidity/util/SoltestTypes.h>
 
@@ -27,11 +26,7 @@
 #include <vector>
 #include <utility>
 
-namespace dev
-{
-namespace solidity
-{
-namespace test
+namespace solidity::frontend::test
 {
 
 /**
@@ -43,11 +38,13 @@ namespace test
  * // f(uint256, uint256): 1, 1 # Signature and comma-separated list of arguments #
  * // -> 1, 1                   # Expected result value #
  * // g(), 2 ether              # (Optional) Ether to be send with the call #
+ * // g(), 1 wei                # (Optional) Wei to be sent with the call #
  * // -> 2, 3
  * // h(uint256), 1 ether: 42
  * // -> FAILURE                # If REVERT or other EVM failure was detected #
  * // ()                        # Call fallback function #
- * // (), 1 ether               # Call ether function #
+ * // (), 1 ether               # Call receive ether function #
+ * // EMPTY_STORAGE             # Check that storage is empty
  * ...
  */
 class TestFileParser
@@ -66,7 +63,6 @@ public:
 	std::vector<FunctionCall> parseFunctionCalls(std::size_t _lineOffset);
 
 private:
-	using Token = soltest::Token;
 	/**
 	 * Token scanner that is used internally to abstract away character traversal.
 	 */
@@ -83,8 +79,8 @@ private:
 		/// Reads character stream and creates token.
 		void scanNextToken();
 
-		soltest::Token currentToken() { return m_currentToken.first; }
-		std::string currentLiteral() { return m_currentToken.second; }
+		soltest::Token currentToken() { return m_currentToken; }
+		std::string currentLiteral() { return m_currentLiteral; }
 
 		std::string scanComment();
 		std::string scanIdentifierOrKeyword();
@@ -94,8 +90,6 @@ private:
 		char scanHexPart();
 
 	private:
-		using TokenDesc = std::pair<Token, std::string>;
-
 		/// Advances current position in the input stream.
 		void advance(unsigned n = 1)
 		{
@@ -123,8 +117,7 @@ private:
 		std::string::const_iterator m_char;
 
 		std::string m_currentLiteral;
-
-		TokenDesc m_currentToken;
+		soltest::Token m_currentToken = soltest::Token::Unknown;
 	};
 
 	bool accept(soltest::Token _token, bool const _expect = false);
@@ -138,7 +131,7 @@ private:
 	/// Parses the optional ether value that can be passed alongside the
 	/// function call arguments. Throws an InvalidEtherValueEncoding exception
 	/// if given value cannot be converted to `u256`.
-	u256 parseFunctionCallValue();
+	FunctionValue parseFunctionCallValue();
 
 	/// Parses a comma-separated list of arguments passed with a function call.
 	/// Does not check for a potential mismatch between the signature and the number
@@ -192,6 +185,4 @@ private:
 	size_t m_lineNumber = 0;
 };
 
-}
-}
 }

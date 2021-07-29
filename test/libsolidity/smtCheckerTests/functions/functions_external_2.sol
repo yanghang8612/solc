@@ -1,8 +1,8 @@
 pragma experimental SMTChecker;
 
-contract D
+abstract contract D
 {
-	function g(uint x) public;
+	function g(uint x) public virtual;
 }
 
 contract C
@@ -17,4 +17,5 @@ contract C
 	}
 }
 // ----
-// Warning: (280-304): Assertion violation happens here
+// Warning 6328: (297-321): CHC: Assertion violation might happen here.
+// Warning 4661: (297-321): BMC: Assertion violation happens here.

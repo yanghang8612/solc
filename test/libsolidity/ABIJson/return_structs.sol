@@ -1,4 +1,4 @@
-pragma experimental ABIEncoderV2;
+pragma abicoder               v2;
 contract C {
     struct S { uint a; T[] sub; }
     struct T { uint[2] x; }
@@ -9,7 +9,6 @@ contract C {
 //     :C
 // [
 //   {
-//     "constant": false,
 //     "inputs": [],
 //     "name": "f",
 //     "outputs":
@@ -46,7 +45,6 @@ contract C {
 //         "type": "tuple"
 //       }
 //     ],
-//     "payable": false,
 //     "stateMutability": "nonpayable",
 //     "type": "function"
 //   }

@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Christian <c@ethdev.com>
  * @date 2015
@@ -28,10 +29,11 @@
 #include <libevmasm/Instruction.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::solidity;
-using namespace langutil;
+using namespace solidity;
+using namespace solidity::evmasm;
+using namespace solidity::frontend;
+using namespace solidity::langutil;
+using namespace solidity::util;
 
 
 StackVariable::StackVariable(CompilerContext& _compilerContext, VariableDeclaration const& _declaration):
@@ -46,7 +48,7 @@ void StackVariable::retrieveValue(SourceLocation const& _location, bool) const
 	unsigned stackPos = m_context.baseToCurrentStackOffset(m_baseStackOffset);
 	if (stackPos + 1 > 16) //@todo correct this by fetching earlier or moving to memory
 		BOOST_THROW_EXCEPTION(
-			CompilerError() <<
+			StackTooDeepError() <<
 			errinfo_sourceLocation(_location) <<
 			errinfo_comment("Stack too deep, try removing local variables.")
 		);
@@ -60,7 +62,7 @@ void StackVariable::storeValue(Type const&, SourceLocation const& _location, boo
 	unsigned stackDiff = m_context.baseToCurrentStackOffset(m_baseStackOffset) - m_size + 1;
 	if (stackDiff > 16)
 		BOOST_THROW_EXCEPTION(
-			CompilerError() <<
+			StackTooDeepError() <<
 			errinfo_sourceLocation(_location) <<
 			errinfo_comment("Stack too deep, try removing local variables.")
 		);
@@ -143,9 +145,46 @@ void MemoryItem::setToZero(SourceLocation const&, bool _removeReference) const
 	m_context << Instruction::POP;
 }
 
+
+ImmutableItem::ImmutableItem(CompilerContext& _compilerContext, VariableDeclaration const& _variable):
+	LValue(_compilerContext, _variable.annotation().type), m_variable(_variable)
+{
+	solAssert(_variable.immutable(), "");
+}
+
+void ImmutableItem::retrieveValue(SourceLocation const&, bool) const
+{
+	solUnimplementedAssert(m_dataType->isValueType(), "");
+	solAssert(!m_context.runtimeContext(), "Tried to read immutable at construction time.");
+	for (auto&& slotName: m_context.immutableVariableSlotNames(m_variable))
+		m_context.appendImmutable(slotName);
+}
+
+void ImmutableItem::storeValue(Type const& _sourceType, SourceLocation const&, bool _move) const
+{
+	CompilerUtils utils(m_context);
+	solUnimplementedAssert(m_dataType->isValueType(), "");
+	solAssert(_sourceType.isValueType(), "");
+
+	utils.convertType(_sourceType, *m_dataType, true);
+	m_context << m_context.immutableMemoryOffset(m_variable);
+	if (_move)
+		utils.moveIntoStack(m_dataType->sizeOnStack());
+	else
+		utils.copyToStackTop(m_dataType->sizeOnStack() + 1, m_dataType->sizeOnStack());
+	utils.storeInMemoryDynamic(*m_dataType, false);
+	m_context << Instruction::POP;
+}
+
+void ImmutableItem::setToZero(SourceLocation const&, bool) const
+{
+	solAssert(false, "Attempted to set immutable variable to zero.");
+}
+
 StorageItem::StorageItem(CompilerContext& _compilerContext, VariableDeclaration const& _declaration):
 	StorageItem(_compilerContext, *_declaration.annotation().type)
 {
+	solAssert(!_declaration.immutable(), "");
 	auto const& location = m_context.storageLocationOfVariable(_declaration);
 	m_context << location.first << u256(location.second);
 }
@@ -252,7 +291,7 @@ void StorageItem::storeValue(Type const& _sourceType, SourceLocation const& _loc
 			// stack: value storage_ref multiplier
 			// fetch old value
 			m_context << Instruction::DUP2 << Instruction::SLOAD;
-			// stack: value storege_ref multiplier old_full_value
+			// stack: value storage_ref multiplier old_full_value
 			// clear bytes in old value
 			m_context
 				<< Instruction::DUP2 << ((u256(1) << (8 * m_dataType->storageBytes())) - 1)
@@ -317,40 +356,48 @@ void StorageItem::storeValue(Type const& _sourceType, SourceLocation const& _loc
 				structType.structDefinition() == sourceType.structDefinition(),
 				"Struct assignment with conversion."
 			);
-			solAssert(sourceType.location() != DataLocation::CallData, "Structs in calldata not supported.");
-			for (auto const& member: structType.members(nullptr))
+			solAssert(!structType.containsNestedMapping(), "");
+			if (sourceType.location() == DataLocation::CallData)
 			{
-				// assign each member that can live outside of storage
-				TypePointer const& memberType = member.type;
-				if (!memberType->canLiveOutsideStorage())
-					continue;
-				TypePointer sourceMemberType = sourceType.memberType(member.name);
-				if (sourceType.location() == DataLocation::Storage)
+				solAssert(sourceType.sizeOnStack() == 1, "");
+				solAssert(structType.sizeOnStack() == 1, "");
+				m_context << Instruction::DUP2 << Instruction::DUP2;
+				m_context.callYulFunction(m_context.utilFunctions().updateStorageValueFunction(sourceType, structType, 0), 2, 0);
+			}
+			else
+			{
+				for (auto const& member: structType.members(nullptr))
 				{
-					// stack layout: source_ref target_ref
-					pair<u256, unsigned> const& offsets = sourceType.storageOffsetsOfMember(member.name);
-					m_context << offsets.first << Instruction::DUP3 << Instruction::ADD;
-					m_context << u256(offsets.second);
-					// stack: source_ref target_ref source_member_ref source_member_off
-					StorageItem(m_context, *sourceMemberType).retrieveValue(_location, true);
-					// stack: source_ref target_ref source_value...
-				}
-				else
-				{
-					solAssert(sourceType.location() == DataLocation::Memory, "");
-					// stack layout: source_ref target_ref
+					// assign each member that can live outside of storage
+					TypePointer const& memberType = member.type;
+					solAssert(memberType->nameable(), "");
 					TypePointer sourceMemberType = sourceType.memberType(member.name);
-					m_context << sourceType.memoryOffsetOfMember(member.name);
-					m_context << Instruction::DUP3 << Instruction::ADD;
-					MemoryItem(m_context, *sourceMemberType).retrieveValue(_location, true);
-					// stack layout: source_ref target_ref source_value...
+					if (sourceType.location() == DataLocation::Storage)
+					{
+						// stack layout: source_ref target_ref
+						pair<u256, unsigned> const& offsets = sourceType.storageOffsetsOfMember(member.name);
+						m_context << offsets.first << Instruction::DUP3 << Instruction::ADD;
+						m_context << u256(offsets.second);
+						// stack: source_ref target_ref source_member_ref source_member_off
+						StorageItem(m_context, *sourceMemberType).retrieveValue(_location, true);
+						// stack: source_ref target_ref source_value...
+					}
+					else
+					{
+						solAssert(sourceType.location() == DataLocation::Memory, "");
+						// stack layout: source_ref target_ref
+						m_context << sourceType.memoryOffsetOfMember(member.name);
+						m_context << Instruction::DUP3 << Instruction::ADD;
+						MemoryItem(m_context, *sourceMemberType).retrieveValue(_location, true);
+						// stack layout: source_ref target_ref source_value...
+					}
+					unsigned stackSize = sourceMemberType->sizeOnStack();
+					pair<u256, unsigned> const& offsets = structType.storageOffsetsOfMember(member.name);
+					m_context << dupInstruction(1 + stackSize) << offsets.first << Instruction::ADD;
+					m_context << u256(offsets.second);
+					// stack: source_ref target_ref target_off source_value... target_member_ref target_member_byte_off
+					StorageItem(m_context, *memberType).storeValue(*sourceMemberType, _location, true);
 				}
-				unsigned stackSize = sourceMemberType->sizeOnStack();
-				pair<u256, unsigned> const& offsets = structType.storageOffsetsOfMember(member.name);
-				m_context << dupInstruction(1 + stackSize) << offsets.first << Instruction::ADD;
-				m_context << u256(offsets.second);
-				// stack: source_ref target_ref target_off source_value... target_member_ref target_member_byte_off
-				StorageItem(m_context, *memberType).storeValue(*sourceMemberType, _location, true);
 			}
 			// stack layout: source_ref target_ref
 			solAssert(sourceType.sizeOnStack() == 1, "Unexpected source size.");
@@ -414,7 +461,7 @@ void StorageItem::setToZero(SourceLocation const&, bool _removeReference) const
 			// stack: storage_ref multiplier
 			// fetch old value
 			m_context << Instruction::DUP2 << Instruction::SLOAD;
-			// stack: storege_ref multiplier old_full_value
+			// stack: storage_ref multiplier old_full_value
 			// clear bytes in old value
 			m_context
 				<< Instruction::SWAP1 << ((u256(1) << (8 * m_dataType->storageBytes())) - 1)
@@ -477,36 +524,6 @@ void StorageByteArrayElement::setToZero(SourceLocation const&, bool _removeRefer
 	// stack: ref old_full_value_with_cleared_byte
 	m_context << Instruction::SWAP1 << Instruction::SSTORE;
 }
-
-StorageArrayLength::StorageArrayLength(CompilerContext& _compilerContext, ArrayType const& _arrayType):
-	LValue(_compilerContext, _arrayType.memberType("length")),
-	m_arrayType(_arrayType)
-{
-	solAssert(m_arrayType.isDynamicallySized(), "");
-}
-
-void StorageArrayLength::retrieveValue(SourceLocation const&, bool _remove) const
-{
-	ArrayUtils(m_context).retrieveLength(m_arrayType);
-	if (_remove)
-		m_context << Instruction::SWAP1 << Instruction::POP;
-}
-
-void StorageArrayLength::storeValue(Type const&, SourceLocation const&, bool _move) const
-{
-	if (_move)
-		m_context << Instruction::SWAP1;
-	else
-		m_context << Instruction::DUP2;
-	ArrayUtils(m_context).resizeDynamicArray(m_arrayType);
-}
-
-void StorageArrayLength::setToZero(SourceLocation const&, bool _removeReference) const
-{
-	solAssert(_removeReference, "");
-	ArrayUtils(m_context).clearDynamicArray(m_arrayType);
-}
-
 
 TupleObject::TupleObject(
 	CompilerContext& _compilerContext,

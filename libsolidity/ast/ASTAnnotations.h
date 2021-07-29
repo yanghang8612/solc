@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Christian <c@ethdev.com>
  * @date 2015
@@ -26,29 +27,38 @@
 #include <libsolidity/ast/ASTEnums.h>
 #include <libsolidity/ast/ExperimentalFeatures.h>
 
+#include <libsolutil/SetOnce.h>
+
 #include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <vector>
 
-namespace yul
+namespace solidity::yul
 {
 struct AsmAnalysisInfo;
 struct Identifier;
 struct Dialect;
 }
 
-namespace dev
-{
-namespace solidity
+namespace solidity::frontend
 {
 
 class Type;
 using TypePointer = Type const*;
+using namespace util;
 
 struct ASTAnnotation
 {
+	ASTAnnotation() = default;
+
+	ASTAnnotation(ASTAnnotation const&) = delete;
+	ASTAnnotation(ASTAnnotation&&) = delete;
+
+	ASTAnnotation& operator=(ASTAnnotation const&) = delete;
+	ASTAnnotation& operator=(ASTAnnotation&&) = delete;
+
 	virtual ~ASTAnnotation() = default;
 };
 
@@ -58,41 +68,91 @@ struct DocTag
 	std::string paramName;	///< Only used for @param, stores the parameter name.
 };
 
-struct DocumentedAnnotation
+struct StructurallyDocumentedAnnotation
 {
-	virtual ~DocumentedAnnotation() = default;
+	StructurallyDocumentedAnnotation() = default;
+
+	StructurallyDocumentedAnnotation(StructurallyDocumentedAnnotation const&) = delete;
+	StructurallyDocumentedAnnotation(StructurallyDocumentedAnnotation&&) = delete;
+
+	StructurallyDocumentedAnnotation& operator=(StructurallyDocumentedAnnotation const&) = delete;
+	StructurallyDocumentedAnnotation& operator=(StructurallyDocumentedAnnotation&&) = delete;
+
+	virtual ~StructurallyDocumentedAnnotation() = default;
+
 	/// Mapping docstring tag name -> content.
 	std::multimap<std::string, DocTag> docTags;
+	/// contract that @inheritdoc references if it exists
+	ContractDefinition const* inheritdocReference = nullptr;
 };
 
 struct SourceUnitAnnotation: ASTAnnotation
 {
 	/// The "absolute" (in the compiler sense) path of this source unit.
-	std::string path;
+	SetOnce<std::string> path;
 	/// The exported symbols (all global symbols).
-	std::map<ASTString, std::vector<Declaration const*>> exportedSymbols;
+	SetOnce<std::map<ASTString, std::vector<Declaration const*>>> exportedSymbols;
 	/// Experimental features.
 	std::set<ExperimentalFeature> experimentalFeatures;
+	/// Using the new ABI coder. Set to `false` if using ABI coder v1.
+	SetOnce<bool> useABICoderV2;
 };
 
-struct ImportAnnotation: ASTAnnotation
+struct ScopableAnnotation
+{
+	ScopableAnnotation() = default;
+
+	ScopableAnnotation(ScopableAnnotation const&) = delete;
+	ScopableAnnotation(ScopableAnnotation&&) = delete;
+
+	ScopableAnnotation& operator=(ScopableAnnotation const&) = delete;
+	ScopableAnnotation& operator=(ScopableAnnotation&&) = delete;
+
+	virtual ~ScopableAnnotation() = default;
+
+	/// The scope this declaration resides in. Can be nullptr if it is the global scope.
+	/// Filled by the Scoper.
+	ASTNode const* scope = nullptr;
+	/// Pointer to the contract this declaration resides in. Can be nullptr if the current scope
+	/// is not part of a contract. Filled by the Scoper.
+	ContractDefinition const* contract = nullptr;
+};
+
+struct DeclarationAnnotation: ASTAnnotation, ScopableAnnotation
+{
+};
+
+struct ImportAnnotation: DeclarationAnnotation
 {
 	/// The absolute path of the source unit to import.
-	std::string absolutePath;
+	SetOnce<std::string> absolutePath;
 	/// The actual source unit.
 	SourceUnit const* sourceUnit = nullptr;
 };
 
-struct TypeDeclarationAnnotation: ASTAnnotation
+struct TypeDeclarationAnnotation: DeclarationAnnotation
 {
 	/// The name of this type, prefixed by proper namespaces if globally accessible.
-	std::string canonicalName;
+	SetOnce<std::string> canonicalName;
 };
 
-struct ContractDefinitionAnnotation: TypeDeclarationAnnotation, DocumentedAnnotation
+struct StructDeclarationAnnotation: TypeDeclarationAnnotation
 {
-	/// List of functions without a body. Can also contain functions from base classes.
-	std::vector<FunctionDefinition const*> unimplementedFunctions;
+	/// Whether the struct is recursive, i.e. if the struct (recursively) contains a member that involves a struct of the same
+	/// type, either in a dynamic array, as member of another struct or inside a mapping.
+	/// Only cases in which the recursive occurrence is within a dynamic array or a mapping are valid, while direct
+	/// recursion immediately raises an error.
+	/// Will be filled in by the DeclarationTypeChecker.
+	std::optional<bool> recursive;
+	/// Whether the struct contains a mapping type, either directly or, indirectly inside another
+	/// struct or an array.
+	std::optional<bool> containsNestedMapping;
+};
+
+struct ContractDefinitionAnnotation: TypeDeclarationAnnotation, StructurallyDocumentedAnnotation
+{
+	/// List of functions and modifiers without a body. Can also contain functions from base classes.
+	std::optional<std::vector<Declaration const*>> unimplementedDeclarations;
 	/// List of all (direct and indirect) base contracts in order from derived to
 	/// base, including the contract itself.
 	std::vector<ContractDefinition const*> linearizedBaseContracts;
@@ -104,28 +164,33 @@ struct ContractDefinitionAnnotation: TypeDeclarationAnnotation, DocumentedAnnota
 	std::map<FunctionDefinition const*, ASTNode const*> baseConstructorArguments;
 };
 
-struct FunctionDefinitionAnnotation: ASTAnnotation, DocumentedAnnotation
+struct CallableDeclarationAnnotation: DeclarationAnnotation
 {
-	/// The function this function overrides, if any. This is always the closest
-	/// in the linearized inheritance hierarchy.
-	FunctionDefinition const* superFunction = nullptr;
+	/// The set of functions/modifiers/events this callable overrides.
+	std::set<CallableDeclaration const*> baseFunctions;
 };
 
-struct EventDefinitionAnnotation: ASTAnnotation, DocumentedAnnotation
-{
-};
-
-struct ModifierDefinitionAnnotation: ASTAnnotation, DocumentedAnnotation
+struct FunctionDefinitionAnnotation: CallableDeclarationAnnotation, StructurallyDocumentedAnnotation
 {
 };
 
-struct VariableDeclarationAnnotation: ASTAnnotation
+struct EventDefinitionAnnotation: CallableDeclarationAnnotation, StructurallyDocumentedAnnotation
+{
+};
+
+struct ModifierDefinitionAnnotation: CallableDeclarationAnnotation, StructurallyDocumentedAnnotation
+{
+};
+
+struct VariableDeclarationAnnotation: DeclarationAnnotation, StructurallyDocumentedAnnotation
 {
 	/// Type of variable (type of identifier referencing this variable).
 	TypePointer type = nullptr;
+	/// The set of functions this (public state) variable overrides.
+	std::set<CallableDeclaration const*> baseFunctions;
 };
 
-struct StatementAnnotation: ASTAnnotation, DocumentedAnnotation
+struct StatementAnnotation: ASTAnnotation
 {
 };
 
@@ -134,8 +199,8 @@ struct InlineAssemblyAnnotation: StatementAnnotation
 	struct ExternalIdentifierInfo
 	{
 		Declaration const* declaration = nullptr;
-		bool isSlot = false; ///< Whether the storage slot of a variable is queried.
-		bool isOffset = false; ///< Whether the intra-slot offset of a storage variable is queried.
+		/// Suffix used, one of "slot", "offset", "length" or empty.
+		std::string suffix;
 		size_t valueSize = size_t(-1);
 	};
 
@@ -143,6 +208,18 @@ struct InlineAssemblyAnnotation: StatementAnnotation
 	std::map<yul::Identifier const*, ExternalIdentifierInfo> externalReferences;
 	/// Information generated during analysis phase.
 	std::shared_ptr<yul::AsmAnalysisInfo> analysisInfo;
+};
+
+struct BlockAnnotation: StatementAnnotation, ScopableAnnotation
+{
+};
+
+struct TryCatchClauseAnnotation: ASTAnnotation, ScopableAnnotation
+{
+};
+
+struct ForStatementAnnotation: StatementAnnotation, ScopableAnnotation
+{
 };
 
 struct ReturnAnnotation: StatementAnnotation
@@ -158,13 +235,12 @@ struct TypeNameAnnotation: ASTAnnotation
 	TypePointer type = nullptr;
 };
 
-struct UserDefinedTypeNameAnnotation: TypeNameAnnotation
+struct IdentifierPathAnnotation: ASTAnnotation
 {
 	/// Referenced declaration, set during reference resolution stage.
 	Declaration const* referencedDeclaration = nullptr;
-	/// Stores a reference to the current contract.
-	/// This is needed because types of base contracts change depending on the context.
-	ContractDefinition const* contractScope = nullptr;
+	/// What kind of lookup needs to be done (static, virtual, super) find the declaration.
+	SetOnce<VirtualLookup> requiredLookup;
 };
 
 struct ExpressionAnnotation: ASTAnnotation
@@ -172,23 +248,40 @@ struct ExpressionAnnotation: ASTAnnotation
 	/// Inferred type of the expression.
 	TypePointer type = nullptr;
 	/// Whether the expression is a constant variable
-	bool isConstant = false;
+	SetOnce<bool> isConstant;
 	/// Whether the expression is pure, i.e. compile-time constant.
-	bool isPure = false;
+	SetOnce<bool> isPure;
 	/// Whether it is an LValue (i.e. something that can be assigned to).
-	bool isLValue = false;
+	SetOnce<bool> isLValue;
 	/// Whether the expression is used in a context where the LValue is actually required.
-	bool lValueRequested = false;
+	bool willBeWrittenTo = false;
+	/// Whether the expression is an lvalue that is only assigned.
+	/// Would be false for --, ++, delete, +=, -=, ....
+	/// Only relevant if isLvalue == true
+	bool lValueOfOrdinaryAssignment = false;
 
 	/// Types and - if given - names of arguments if the expr. is a function
-	/// that is called, used for overload resoultion
+	/// that is called, used for overload resolution
 	std::optional<FuncCallArguments> arguments;
+
+	/// True if the expression consists solely of the name of the function and the function is called immediately
+	/// instead of being stored or processed. The name may be qualified with the name of a contract, library
+	/// module, etc., that clarifies the scope. For example: `m.L.f()`, where `m` is a module, `L` is a library
+	/// and `f` is a function is a direct call. This means that the function to be called is known at compilation
+	/// time and it's not necessary to rely on any runtime dispatch mechanism to resolve it.
+	/// Note that even the simplest expressions, like `(f)()`, result in an indirect call even if they consist of
+	/// values known at compilation time.
+	bool calledDirectly = false;
 };
 
 struct IdentifierAnnotation: ExpressionAnnotation
 {
 	/// Referenced declaration, set at latest during overload resolution stage.
 	Declaration const* referencedDeclaration = nullptr;
+	/// What kind of lookup needs to be done (static, virtual, super) find the declaration.
+	SetOnce<VirtualLookup> requiredLookup;
+	/// List of possible declarations it could refer to (can contain duplicates).
+	std::vector<Declaration const*> candidateDeclarations;
 	/// List of possible declarations it could refer to.
 	std::vector<Declaration const*> overloadedDeclarations;
 };
@@ -197,6 +290,8 @@ struct MemberAccessAnnotation: ExpressionAnnotation
 {
 	/// Referenced declaration, set at latest during overload resolution stage.
 	Declaration const* referencedDeclaration = nullptr;
+	/// What kind of lookup needs to be done (static, virtual, super) find the declaration.
+	SetOnce<VirtualLookup> requiredLookup;
 };
 
 struct BinaryOperationAnnotation: ExpressionAnnotation
@@ -208,7 +303,6 @@ struct BinaryOperationAnnotation: ExpressionAnnotation
 
 enum class FunctionCallKind
 {
-	Unset,
 	FunctionCall,
 	TypeConversion,
 	StructConstructorCall
@@ -216,8 +310,9 @@ enum class FunctionCallKind
 
 struct FunctionCallAnnotation: ExpressionAnnotation
 {
-	FunctionCallKind kind = FunctionCallKind::Unset;
+	util::SetOnce<FunctionCallKind> kind;
+	/// If true, this is the external call of a try statement.
+	bool tryCall = false;
 };
 
-}
 }

@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @file ExpressionClasses.cpp
  * @author Christian <c@ethdev.com>
@@ -22,19 +23,18 @@
  */
 
 #include <libevmasm/ExpressionClasses.h>
-#include <utility>
-#include <tuple>
-#include <functional>
-#include <boost/range/adaptor/reversed.hpp>
-#include <boost/noncopyable.hpp>
 #include <libevmasm/Assembly.h>
 #include <libevmasm/CommonSubexpressionEliminator.h>
 #include <libevmasm/SimplificationRules.h>
 
+#include <functional>
+#include <tuple>
+#include <utility>
+
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace langutil;
+using namespace solidity;
+using namespace solidity::evmasm;
+using namespace solidity::langutil;
 
 bool ExpressionClasses::Expression::operator<(ExpressionClasses::Expression const& _other) const
 {
@@ -86,7 +86,7 @@ ExpressionClasses::Id ExpressionClasses::find(
 		exp.id = id;
 	else
 	{
-		exp.id = m_representatives.size();
+		exp.id = static_cast<Id>(m_representatives.size());
 		m_representatives.push_back(exp);
 	}
 	m_expressions.insert(exp);
@@ -117,7 +117,7 @@ void ExpressionClasses::forceEqual(
 ExpressionClasses::Id ExpressionClasses::newClass(SourceLocation const& _location)
 {
 	Expression exp;
-	exp.id = m_representatives.size();
+	exp.id = static_cast<Id>(m_representatives.size());
 	exp.item = storeItem(AssemblyItem(UndefinedItem, (u256(1) << 255) + exp.id, _location));
 	m_representatives.push_back(exp);
 	m_expressions.insert(exp);
@@ -191,7 +191,7 @@ ExpressionClasses::Id ExpressionClasses::tryToSimplify(Expression const& _expr)
 		_expr.item->type() != Operation ||
 		!SemanticInformation::isDeterministic(*_expr.item)
 	)
-		return -1;
+		return numeric_limits<unsigned>::max();
 
 	if (auto match = rules.findFirstMatch(_expr, *this))
 	{
@@ -209,7 +209,7 @@ ExpressionClasses::Id ExpressionClasses::tryToSimplify(Expression const& _expr)
 		return rebuildExpression(ExpressionTemplate(match->action(), _expr.item->location()));
 	}
 
-	return -1;
+	return numeric_limits<unsigned>::max();
 }
 
 ExpressionClasses::Id ExpressionClasses::rebuildExpression(ExpressionTemplate const& _template)

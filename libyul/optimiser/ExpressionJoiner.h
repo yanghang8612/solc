@@ -14,23 +14,23 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Optimiser component that undoes what the ExpressionSplitter did, i.e.
  * it more or less inlines variable declarations.
  */
 #pragma once
 
-#include <libyul/AsmDataForward.h>
+#include <libyul/ASTForward.h>
 #include <libyul/optimiser/ASTWalker.h>
 
 #include <map>
 
-namespace yul
+namespace solidity::yul
 {
 
 class NameCollector;
 struct OptimiserStepContext;
-
 
 /**
  * Optimiser component that modifies an AST in place, turning sequences
@@ -78,7 +78,6 @@ private:
 	explicit ExpressionJoiner(Block& _ast);
 
 	void operator()(Block& _block) override;
-	void operator()(FunctionalInstruction&) override;
 	void operator()(FunctionCall&) override;
 
 	using ASTModifier::visit;

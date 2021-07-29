@@ -14,15 +14,10 @@
 
 #pragma once
 
-#include <libdevcore/AnsiColorized.h>
-#include <libdevcore/CommonData.h>
-#include <libsolidity/ast/Types.h>
+#include <libsolutil/AnsiColorized.h>
+#include <libsolutil/CommonData.h>
 
-namespace dev
-{
-namespace solidity
-{
-namespace test
+namespace solidity::frontend::test
 {
 
 /**
@@ -54,6 +49,7 @@ namespace test
 	T(Identifier, "identifier", 0) \
 	/* type keywords */            \
 	K(Ether, "ether", 0)           \
+	K(Wei, "wei", 0)               \
 	K(Hex, "hex", 0)               \
 	K(Boolean, "boolean", 0)       \
 	/* special keywords */         \
@@ -61,6 +57,7 @@ namespace test
 	K(Library, "library", 0)       \
 	K(Right, "right", 0)           \
 	K(Failure, "FAILURE", 0)       \
+	K(Storage, "storage", 0) \
 
 namespace soltest
 {
@@ -233,6 +230,21 @@ struct FunctionCallArgs
 	}
 };
 
+/// Units that can be used to express function value
+enum class FunctionValueUnit
+{
+	Wei,
+	Ether
+};
+
+/// Holds value along with unit it was expressed in originally.
+/// @a value is always in wei - it is converted back when stringifying again.
+struct FunctionValue
+{
+	u256 value;
+	FunctionValueUnit unit = FunctionValueUnit::Wei;
+};
+
 /**
  * Represents a function call read from an input stream. It contains the signature, the
  * arguments, an optional ether value and an expected execution result.
@@ -241,8 +253,10 @@ struct FunctionCall
 {
 	/// Signature of the function call, e.g. `f(uint256, uint256)`.
 	std::string signature;
-	/// Optional `ether` value that can be send with the call.
-	u256 value;
+	/// Optional value that can be sent with the call.
+	/// Value is expressed in wei, smallest unit of ether
+	/// Value has a field unit which represents denomination on which value was expressed originally
+	FunctionValue value;
 	/// Object that holds all function parameters in their `bytes`
 	/// representations given by the contract ABI.
 	FunctionCallArgs arguments;
@@ -261,18 +275,23 @@ struct FunctionCall
 		MultiLine
 	};
 	DisplayMode displayMode = DisplayMode::SingleLine;
-	/// Marks this function call as the constructor.
-	bool isConstructor = false;
-	/// If this function call's signature has no name and no arguments,
-	/// a low-level call with unstructured calldata will be issued.
-	bool useCallWithoutSignature = false;
+
+	enum class Kind {
+		Regular,
+		/// Marks this function call as the constructor.
+		Constructor,
+		/// If this function call's signature has no name and no arguments,
+		/// a low-level call with unstructured calldata will be issued.
+		LowLevel,
+		/// Marks a library deployment call.
+		Library,
+		/// Check that the storage of the current contract is empty or non-empty.
+		Storage
+	};
+	Kind kind = Kind::Regular;
 	/// Marks this function call as "short-handed", meaning
 	/// no `->` declared.
 	bool omitsArrow = true;
-	/// Marks a library deployment call.
-	bool isLibrary = false;
 };
 
-}
-}
 }

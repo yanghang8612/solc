@@ -11,6 +11,8 @@ contract C
 		assert(x == 2);
 	}
 }
+// ====
+// SMTSolvers: z3
 // ----
-// Warning: (120-123): Unreachable code.
-// Warning: (131-145): Assertion violation happens here
+// Warning 5740: (120-123): Unreachable code.
+// Warning 6328: (131-145): CHC: Assertion violation happens here.\nCounterexample:\n\nx = 3\n\n\nTransaction trace:\nconstructor()\nf(3)

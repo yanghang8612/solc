@@ -18,15 +18,11 @@
 
 #include <test/libsolidity/util/SoltestErrors.h>
 
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonData.h>
 
 #include <json/json.h>
 
-namespace dev
-{
-namespace solidity
-{
-namespace test
+namespace solidity::frontend::test
 {
 
 using ABITypes = std::vector<ABIType>;
@@ -69,7 +65,7 @@ public:
 	/// returned values in case of a failure. Creates an additional parameter
 	/// for the error message if _bytes is larger than 68 bytes
 	/// (function_selector + tail_ptr + message_length).
-	static ParameterList failureParameters(bytes const _bytes);
+	static ParameterList failureParameters(bytes const& _bytes);
 
 	/// Returns _count parameters with their type set to ABIType::UnsignedDec
 	/// and their size set to 32 bytes.
@@ -97,6 +93,4 @@ private:
 	);
 };
 
-}
-}
 }

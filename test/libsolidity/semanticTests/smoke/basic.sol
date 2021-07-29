@@ -1,4 +1,4 @@
-pragma experimental ABIEncoderV2;
+pragma abicoder               v2;
 
 contract C {
     function d() public {
@@ -13,7 +13,7 @@ contract C {
         return (2, 3);
     }
     function h(uint x, uint y) public  pure returns (uint) {
-        return x - y;
+        unchecked { return x - y; }
     }
     function i(bool b) public  pure returns (bool) {
         return !b;
@@ -28,9 +28,12 @@ contract C {
         return a * 7;
     }
 }
+// ====
+// compileViaYul: also
 // ----
 // d() ->
-// e(), 1 ether -> 1
+// e(), 1 wei -> 1
+// e(), 1 ether -> 1000000000000000000
 // f(uint256): 3 -> 3, 3
 // g() -> 2, 3
 // h(uint256,uint256): 1, -2 -> 3

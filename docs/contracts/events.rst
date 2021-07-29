@@ -13,12 +13,12 @@ Events are inheritable members of contracts. When you call them, they cause the
 arguments to be stored in the transaction's log - a special data structure
 in the blockchain. These logs are associated with the address of the contract,
 are incorporated into the blockchain, and stay there as long as a block is
-accessible (forever as of the Frontier and Homestead releases, but this might
+accessible (forever as of now, but this might
 change with Serenity). The Log and its event data is not accessible from within
 contracts (not even from the contract that created them).
 
-It is possible to request a simple payment verification (SPV) for logs, so if
-an external entity supplies a contract with such a verification, it can check
+It is possible to request a Merkle proof for logs, so if
+an external entity supplies a contract with such a proof, it can check
 that the log actually exists inside the blockchain. You have to supply block headers
 because the contract can only see the last 256 block hashes.
 
@@ -65,7 +65,8 @@ is that they are cheaper to deploy and call.
 
 ::
 
-    pragma solidity >=0.4.21 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.4.21 <0.9.0;
 
     contract ClientReceipt {
         event Deposit(
@@ -125,39 +126,9 @@ The output of the above looks like the following (trimmed):
      }
   }
 
-.. index:: ! log
-
-Low-Level Interface to Logs
-===========================
-
-It is also possible to access the low-level interface to the logging
-mechanism via the functions ``log0``, ``log1``, ``log2``, ``log3`` and ``log4``.
-Each function ``logi`` takes ``i + 1`` parameter of type ``bytes32``, where the first
-argument will be used for the data part of the log and the others
-as topics. The event call above can be performed in the same way as
-
-::
-
-    pragma solidity >=0.4.10 <0.7.0;
-
-    contract C {
-        function f() public payable {
-            uint256 _id = 0x420042;
-            log3(
-                bytes32(msg.value),
-                bytes32(0x50cb9fe53daa9737b786ab3646f04d0150dc50ef4e75f59509d83667ad5adb20),
-                bytes32(uint256(msg.sender)),
-                bytes32(_id)
-            );
-        }
-    }
-
-where the long hexadecimal number is equal to
-``keccak256("Deposit(address,bytes32,uint256)")``, the signature of the event.
-
 Additional Resources for Understanding Events
 ==============================================
 
-- `Javascript documentation <https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events>`_
-- `Example usage of events <https://github.com/debris/smart-exchange/blob/master/lib/contracts/SmartExchange.sol>`_
-- `How to access them in js <https://github.com/debris/smart-exchange/blob/master/lib/exchange_transactions.js>`_
+- `Javascript documentation <https://github.com/ethereum/web3.js/blob/1.x/docs/web3-eth-contract.rst#events>`_
+- `Example usage of events <https://github.com/ethchange/smart-exchange/blob/master/lib/contracts/SmartExchange.sol>`_
+- `How to access them in js <https://github.com/ethchange/smart-exchange/blob/master/lib/exchange_transactions.js>`_

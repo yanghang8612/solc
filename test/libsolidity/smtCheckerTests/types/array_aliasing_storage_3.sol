@@ -2,10 +2,14 @@ pragma experimental SMTChecker;
 
 contract C
 {
+	uint[][] array2d;
+	function g(uint x, uint y, uint[] memory c) public {
+		f(array2d[x], array2d[y], c);
+	}
 	function f(uint[] storage a, uint[] storage b, uint[] memory c) internal {
 		uint[] memory d = c;
-		require(c[0] == 42);
-		require(a[0] == 2);
+		c[0] = 42;
+		a[0] = 2;
 		b[0] = 1;
 		// Erasing knowledge about storage references should not
 		// erase knowledge about memory references.
@@ -18,5 +22,8 @@ contract C
 		assert(b[0] == 1);
 	}
 }
+// ====
+// SMTIgnoreCex: yes
 // ----
-// Warning: (497-514): Assertion violation happens here
+// Warning 6328: (524-542): CHC: Assertion violation happens here.
+// Warning 6328: (585-602): CHC: Assertion violation happens here.

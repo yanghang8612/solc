@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Expression simplification pattern.
  */
@@ -21,19 +22,16 @@
 #pragma once
 
 #include <libevmasm/Instruction.h>
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonData.h>
 #include <functional>
 
-namespace dev
-{
-namespace eth
+namespace solidity::evmasm
 {
 
 /**
  * Rule that contains a pattern, an action that can be applied
- * after the pattern has matched and a bool that indicates
- * whether the action would remove something from the expression
- * than is not a constant literal.
+ * after the pattern has matched and optional condition to check if the
+ * action should be applied.
  */
 template <class Pattern>
 struct SimplificationRule
@@ -41,18 +39,15 @@ struct SimplificationRule
 	SimplificationRule(
 		Pattern _pattern,
 		std::function<Pattern()> _action,
-		bool _removesNonConstants,
 		std::function<bool()> _feasible = {}
 	):
 		pattern(std::move(_pattern)),
 		action(std::move(_action)),
-		removesNonConstants(_removesNonConstants),
 		feasible(std::move(_feasible))
 	{}
 
 	Pattern pattern;
 	std::function<Pattern()> action;
-	bool removesNonConstants;
 	std::function<bool()> feasible;
 };
 
@@ -67,7 +62,7 @@ struct EVMBuiltins
 		template<typename... Args> constexpr Pattern operator()(Args&&... _args) const
 		{
 			return {inst, {std::forward<Args>(_args)...}};
-		};
+		}
 	};
 
 	struct PatternGeneratorInstance
@@ -76,7 +71,7 @@ struct EVMBuiltins
 		template<typename... Args> constexpr Pattern operator()(Args&&... _args) const
 		{
 			return {instruction, {std::forward<Args>(_args)...}};
-		};
+		}
 	};
 
 
@@ -157,5 +152,4 @@ struct EVMBuiltins
 	static auto constexpr SELFDESTRUCT = PatternGenerator<Instruction::SELFDESTRUCT>{};
 };
 
-}
 }

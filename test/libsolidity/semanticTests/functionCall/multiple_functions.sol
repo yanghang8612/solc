@@ -4,6 +4,10 @@ contract test {
     function c() public returns(uint n) { return 2; }
     function f() public returns(uint n) { return 3; }
 }
+// ====
+// compileViaYul: also
+// compileToEwasm: also
+// allowNonExistingFunctions: true
 // ----
 // a() -> 0
 // b() -> 1
