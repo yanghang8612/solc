@@ -2,14 +2,14 @@
 // because A does not have a payable fallback function.
 
 contract A {
-    function() payable external {}
+    receive() payable external {}
 }
 
 contract B {
     A a;
 
-    function() external {
-        address(a).transfer(100);
+    fallback() external {
+        payable(a).transfer(100);
     }
 }
 // ----

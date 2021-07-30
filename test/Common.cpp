@@ -14,19 +14,23 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 
+#include <stdexcept>
+#include <iostream>
 #include <test/Common.h>
 
-#include <libdevcore/Assertions.h>
+#include <libsolutil/Assertions.h>
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
-namespace dev
+namespace solidity::test
 {
-namespace test
+
+namespace
 {
 
 /// If non-empty returns the value of the env. variable ETH_TEST_PATH, otherwise
@@ -57,9 +61,9 @@ boost::filesystem::path testPath()
 	return {};
 }
 
-std::string EVMOneEnvOrDefaultPath()
+std::string envOrDefaultPath(std::string const& env_name, std::string const& lib_name)
 {
-	if (auto path = getenv("ETH_EVMONE"))
+	if (auto path = getenv(env_name.c_str()))
 		return path;
 
 	auto const searchPath =
@@ -76,11 +80,13 @@ std::string EVMOneEnvOrDefaultPath()
 	};
 	for (auto const& basePath: searchPath)
 	{
-		fs::path p = basePath / evmoneFilename;
+		fs::path p = basePath / lib_name;
 		if (fs::exists(p))
 			return p.string();
 	}
 	return {};
+}
+
 }
 
 CommonOptions::CommonOptions(std::string _caption):
@@ -91,9 +97,15 @@ CommonOptions::CommonOptions(std::string _caption):
 {
 	options.add_options()
 		("evm-version", po::value(&evmVersionString), "which evm version to use")
-		("testpath", po::value<fs::path>(&this->testPath)->default_value(dev::test::testPath()), "path to test files")
-		("evmonepath", po::value<fs::path>(&evmonePath)->default_value(EVMOneEnvOrDefaultPath()), "path to evmone library")
-		("no-smt", po::bool_switch(&disableSMT), "disable SMT checker");
+		("testpath", po::value<fs::path>(&this->testPath)->default_value(solidity::test::testPath()), "path to test files")
+		("vm", po::value<std::vector<fs::path>>(&vmPaths), "path to evmc library, can be supplied multiple times.")
+		("ewasm", po::bool_switch(&ewasm), "tries to automatically find an ewasm vm and enable ewasm test-execution.")
+		("no-smt", po::bool_switch(&disableSMT), "disable SMT checker")
+		("optimize", po::bool_switch(&optimize), "enables optimization")
+		("enforce-via-yul", po::bool_switch(&enforceViaYul), "Enforce compiling all tests via yul to see if additional tests can be activated.")
+		("abiencoderv1", po::bool_switch(&useABIEncoderV1), "enables abi encoder v1")
+		("show-messages", po::bool_switch(&showMessages), "enables message output")
+		("show-metadata", po::bool_switch(&showMetadata), "enables metadata output");
 }
 
 void CommonOptions::validate() const
@@ -117,8 +129,51 @@ bool CommonOptions::parse(int argc, char const* const* argv)
 
 	po::command_line_parser cmdLineParser(argc, argv);
 	cmdLineParser.options(options);
-	po::store(cmdLineParser.run(), arguments);
+	auto parsedOptions = cmdLineParser.run();
+	po::store(parsedOptions, arguments);
 	po::notify(arguments);
+
+	for (auto const& parsedOption: parsedOptions.options)
+		if (parsedOption.position_key >= 0)
+		{
+			if (
+				parsedOption.original_tokens.empty() ||
+				(parsedOption.original_tokens.size() == 1 && parsedOption.original_tokens.front().empty())
+			)
+				continue; // ignore empty options
+			std::stringstream errorMessage;
+			errorMessage << "Unrecognized option: ";
+			for (auto const& token: parsedOption.original_tokens)
+				errorMessage << token;
+			throw std::runtime_error(errorMessage.str());
+		}
+
+	if (vmPaths.empty())
+	{
+		std::string evmone = envOrDefaultPath("ETH_EVMONE", evmoneFilename);
+		if (!evmone.empty())
+			vmPaths.emplace_back(evmone);
+		else
+		{
+			std::cout << "Unable to find " << solidity::test::evmoneFilename
+				 << ". Please provide the path using --vm <path>." << std::endl;
+			std::cout << "You can download it at" << std::endl;
+			std::cout << solidity::test::evmoneDownloadLink << std::endl;
+		}
+	}
+
+	if (ewasm) {
+		std::string hera = envOrDefaultPath("ETH_HERA", heraFilename);
+		if (!hera.empty())
+			vmPaths.emplace_back(hera);
+		else {
+			std::cout << "Unable to find " << solidity::test::heraFilename
+					  << ". Please provide the path using --vm <path>." << std::endl;
+			std::cout << "You can download it at" << std::endl;
+			std::cout << solidity::test::heraDownloadLink << std::endl;
+			std::cout << "Ewasm tests disabled." << std::endl;
+		}
+	}
 
 	return true;
 }
@@ -137,6 +192,20 @@ langutil::EVMVersion CommonOptions::evmVersion() const
 		return langutil::EVMVersion();
 }
 
+
+CommonOptions const& CommonOptions::get()
+{
+	if (!m_singleton)
+		throw std::runtime_error("Options not yet constructed!");
+
+	return *m_singleton;
 }
+
+void CommonOptions::setSingleton(std::unique_ptr<CommonOptions const>&& _instance)
+{
+	m_singleton = std::move(_instance);
+}
+
+std::unique_ptr<CommonOptions const> CommonOptions::m_singleton = nullptr;
 
 }

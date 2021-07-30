@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Component that collects variables that are never assigned to and their
  * initial values.
@@ -21,11 +22,11 @@
 
 #include <libyul/optimiser/SSAValueTracker.h>
 
-#include <libyul/AsmData.h>
+#include <libyul/AST.h>
 
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::yul;
 
 void SSAValueTracker::operator()(Assignment const& _assignment)
 {

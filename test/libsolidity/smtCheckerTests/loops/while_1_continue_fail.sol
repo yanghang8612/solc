@@ -17,6 +17,8 @@ contract C
 		assert(x >= 17);
 	}
 }
+// ====
+// SMTSolvers: z3
 // ----
-// Warning: (169-176): Unreachable code.
-// Warning: (227-242): Assertion violation happens here
+// Warning 5740: (169-176): Unreachable code.
+// Warning 6328: (227-242): CHC: Assertion violation happens here.\nCounterexample:\n\nx = 10\nb = false\n\n\nTransaction trace:\nconstructor()\nf(10, false)

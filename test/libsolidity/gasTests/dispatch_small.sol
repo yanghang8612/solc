@@ -2,15 +2,15 @@ contract Small {
     uint public a;
     uint[] public b;
     function f1(uint x) public returns (uint) { a = x; b[uint8(msg.data[0])] = x; }
-    function () external payable {}
+    fallback () external payable {}
 }
 // ----
 // creation:
-//   codeDepositCost: 83600
-//   executionCost: 135
-//   totalCost: 83735
+//   codeDepositCost: 123600
+//   executionCost: 171
+//   totalCost: 123771
 // external:
-//   fallback: 118
-//   a(): 983
-//   b(uint256): 2002
-//   f1(uint256): 41263
+//   fallback: 129
+//   a(): 1107
+//   b(uint256): infinite
+//   f1(uint256): infinite

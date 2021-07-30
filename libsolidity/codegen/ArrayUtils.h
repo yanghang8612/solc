@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Christian <c@ethdev.com>
  * @date 2015
@@ -24,9 +25,7 @@
 
 #include <memory>
 
-namespace dev
-{
-namespace solidity
+namespace solidity::frontend
 {
 
 class CompilerContext;
@@ -73,7 +72,7 @@ public:
 	/// Stack pre: reference (excludes byte offset)
 	/// Stack post: new_length
 	void incrementDynamicArraySize(ArrayType const& _type) const;
-	/// Decrements the size of a dynamic array by one if length is nonzero. Causes an invalid instruction otherwise.
+	/// Decrements the size of a dynamic array by one if length is nonzero. Causes a Panic otherwise.
 	/// Clears the removed data element. In case of a byte array, this might move the data.
 	/// Stack pre: reference
 	/// Stack post:
@@ -119,5 +118,4 @@ private:
 	CompilerContext& m_context;
 };
 
-}
 }

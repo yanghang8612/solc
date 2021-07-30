@@ -8,3 +8,4 @@ contract C
 		assert((y % 2) == 0);
 	}
 }
+// ----

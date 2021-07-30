@@ -31,18 +31,17 @@ function test_fn { yarn run test:contracts; }
 function colony_test
 {
     OPTIMIZER_LEVEL=3
-    FORCE_ABIv2=false
-    setup https://github.com/JoinColony/colonyNetwork.git develop master
-    run_install install_fn
+    CONFIG="truffle.js"
 
-    CONFIG=$(find_truffle_config)
+    truffle_setup "$SOLJSON" https://github.com/solidity-external-tests/colonyNetwork.git develop_080
+    run_install "$SOLJSON" install_fn
 
     cd lib
     rm -Rf dappsys
-    git clone https://github.com/erak/dappsys-monolithic.git -b callvalue-payable-fix dappsys
+    git clone https://github.com/solidity-external-tests/dappsys-monolithic.git -b master_080 dappsys
     cd ..
 
-    run_test compile_fn test_fn
+    truffle_run_test "$SOLJSON" compile_fn test_fn
 }
 
 external_test ColonyNetworks colony_test

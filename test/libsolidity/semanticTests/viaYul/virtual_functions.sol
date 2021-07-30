@@ -2,7 +2,7 @@ contract X {
     function f() public returns (uint x) {
         x = g();
     }
-    function g() public returns (uint x) {
+    function g() public virtual returns (uint x) {
         x = 2;
     }
 }
@@ -19,12 +19,13 @@ contract C is X {
         // explicit call via base
         //x = super.g();
     }
-    function g() public returns (uint x) {
+    function g() public override returns (uint x) {
         x = 3;
     }
 }
 // ====
-// compileViaYul: true
+// compileViaYul: also
+// compileToEwasm: also
 // ----
 // f() -> 3
 // f1() -> 3

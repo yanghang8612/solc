@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 
 #include <libyul/optimiser/LoopInvariantCodeMotion.h>
 
@@ -21,27 +22,27 @@
 #include <libyul/optimiser/NameCollector.h>
 #include <libyul/optimiser/Semantics.h>
 #include <libyul/optimiser/SSAValueTracker.h>
-#include <libyul/AsmData.h>
-#include <libdevcore/CommonData.h>
+#include <libyul/AST.h>
+#include <libsolutil/CommonData.h>
 
 #include <utility>
 
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::yul;
 
 void LoopInvariantCodeMotion::run(OptimiserStepContext& _context, Block& _ast)
 {
 	map<YulString, SideEffects> functionSideEffects =
 		SideEffectsPropagator::sideEffects(_context.dialect, CallGraphGenerator::callGraph(_ast));
-
+	bool containsMSize = MSizeFinder::containsMSize(_context.dialect, _ast);
 	set<YulString> ssaVars = SSAValueTracker::ssaVariables(_ast);
-	LoopInvariantCodeMotion{_context.dialect, ssaVars, functionSideEffects}(_ast);
+	LoopInvariantCodeMotion{_context.dialect, ssaVars, functionSideEffects, containsMSize}(_ast);
 }
 
 void LoopInvariantCodeMotion::operator()(Block& _block)
 {
-	iterateReplacing(
+	util::iterateReplacing(
 		_block.statements,
 		[&](Statement& _s) -> optional<vector<Statement>>
 		{
@@ -56,7 +57,8 @@ void LoopInvariantCodeMotion::operator()(Block& _block)
 
 bool LoopInvariantCodeMotion::canBePromoted(
 	VariableDeclaration const& _varDecl,
-	set<YulString> const& _varsDefinedInCurrentScope
+	set<YulString> const& _varsDefinedInCurrentScope,
+	SideEffects const& _forLoopSideEffects
 ) const
 {
 	// A declaration can be promoted iff
@@ -72,7 +74,8 @@ bool LoopInvariantCodeMotion::canBePromoted(
 		for (auto const& ref: ReferencesCounter::countReferences(*_varDecl.value, ReferencesCounter::OnlyVariables))
 			if (_varsDefinedInCurrentScope.count(ref.first) || !m_ssaVariables.count(ref.first))
 				return false;
-		if (!SideEffectsCollector{m_dialect, *_varDecl.value, &m_functionSideEffects}.movable())
+		SideEffectsCollector sideEffects{m_dialect, *_varDecl.value, &m_functionSideEffects};
+		if (!sideEffects.movableRelativeTo(_forLoopSideEffects, m_containsMSize))
 			return false;
 	}
 	return true;
@@ -81,18 +84,22 @@ bool LoopInvariantCodeMotion::canBePromoted(
 optional<vector<Statement>> LoopInvariantCodeMotion::rewriteLoop(ForLoop& _for)
 {
 	assertThrow(_for.pre.statements.empty(), OptimizerException, "");
+
+	auto forLoopSideEffects =
+		SideEffectsCollector{m_dialect, _for, &m_functionSideEffects}.sideEffects();
+
 	vector<Statement> replacement;
 	for (Block* block: {&_for.post, &_for.body})
 	{
 		set<YulString> varsDefinedInScope;
-		iterateReplacing(
+		util::iterateReplacing(
 			block->statements,
 			[&](Statement& _s) -> optional<vector<Statement>>
 			{
 				if (holds_alternative<VariableDeclaration>(_s))
 				{
 					VariableDeclaration const& varDecl = std::get<VariableDeclaration>(_s);
-					if (canBePromoted(varDecl, varsDefinedInScope))
+					if (canBePromoted(varDecl, varsDefinedInScope, forLoopSideEffects))
 					{
 						replacement.emplace_back(std::move(_s));
 						// Do not add the variables declared here to varsDefinedInScope because we are moving them.

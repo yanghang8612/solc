@@ -16,16 +16,15 @@ set(sources
 	SemVerHandler.cpp
 	SemVerHandler.h
 	SourceLocation.h
+	SourceLocation.cpp
 	SourceReferenceExtractor.cpp
 	SourceReferenceExtractor.h
 	SourceReferenceFormatter.cpp
 	SourceReferenceFormatter.h
-	SourceReferenceFormatterHuman.cpp
-	SourceReferenceFormatterHuman.h
 	Token.cpp
 	Token.h
 	UndefMacros.h
 )
 
 add_library(langutil ${sources})
-target_link_libraries(langutil PUBLIC devcore)
+target_link_libraries(langutil PUBLIC solutil)

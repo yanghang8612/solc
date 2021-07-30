@@ -9,4 +9,3 @@ contract C
 	}
 }
 // ----
-// Warning: (113-121): Type conversion is not yet fully supported and might yield false positives.

@@ -12,14 +12,15 @@ A literal number can take a suffix of ``sun`` or ``trx`` to convert between the 
 ::
 
     assert(1 wei == 1);
-    assert(1 szabo == 1e12);
-    assert(1 finney == 1e15);
+    assert(1 gwei == 1e9);
     assert(1 ether == 1e18);
     assert(1 sun == 1);
     assert(1 trx == 1e6);
 
 The only effect of the subdenomination suffix is a multiplication by a power of ten.
 
+.. note::
+    The denominations ``finney`` and ``szabo`` have been removed in version 0.7.0.
 
 .. index:: time, seconds, minutes, hours, days, weeks, years
 
@@ -49,7 +50,7 @@ These suffixes cannot be applied to variables. For example, if you want to
 interpret a function parameter in days, you can in the following way::
 
     function f(uint start, uint daysAfter) public {
-        if (now >= start + daysAfter * 1 days) {
+        if (block.timestamp >= start + daysAfter * 1 days) {
           // ...
         }
     }
@@ -63,13 +64,14 @@ There are special variables and functions which always exist in the global
 namespace and are mainly used to provide information about the blockchain
 or are general-use utility functions.
 
-.. index:: abi, block, coinbase, difficulty, encode, number, block;number, timestamp, block;timestamp, msg, data, gas, sender, value, now, gas price, origin
+.. index:: abi, block, coinbase, difficulty, encode, number, block;number, timestamp, block;timestamp, msg, data, gas, sender, value, gas price, origin
 
 
 Block and Transaction Properties
 --------------------------------
 
 - ``blockhash(uint blockNumber) returns (bytes32)``: hash of the given block - only works for 256 most recent, excluding current, blocks
+- ``block.chainid`` (``uint``): current chain id
 - ``block.coinbase`` (``address payable``): current block miner's address
 - ``block.difficulty`` (``uint``): current block difficulty
 - ``block.gaslimit`` (``uint``): current block gaslimit
@@ -80,7 +82,6 @@ Block and Transaction Properties
 - ``msg.sender`` (``address payable``): sender of the message (current call)
 - ``msg.sig`` (``bytes4``): first four bytes of the calldata (i.e. function identifier)
 - ``msg.value`` (``uint``): number of sun sent with the message
-- ``now`` (``uint``): current block timestamp (alias for ``block.timestamp``)
 - ``tx.gasprice`` (``uint``): gas price of the transaction
 - ``tx.origin`` (``address payable``): sender of the transaction (full call chain)
 
@@ -90,7 +91,7 @@ Block and Transaction Properties
     This includes calls to library functions.
 
 .. note::
-    Do not rely on ``block.timestamp``, ``now`` and ``blockhash`` as a source of randomness,
+    Do not rely on ``block.timestamp`` or ``blockhash`` as a source of randomness,
     unless you know what you are doing.
 
     Both the timestamp and the block hash can be influenced by miners to some degree.
@@ -113,6 +114,9 @@ Block and Transaction Properties
 .. note::
     The function ``gasleft`` was previously known as ``msg.gas``, which was deprecated in
     version 0.4.21 and removed in version 0.5.0.
+
+.. note::
+    In version 0.7.0, the alias ``now`` (for ``block.timestamp``) was removed.
 
 .. index:: abi, encoding, packed
 
@@ -142,86 +146,103 @@ Error Handling
 See the dedicated section on :ref:`assert and require<assert-and-require>` for
 more details on error handling and when to use which function.
 
-``assert(bool condition)``:
-    causes an invalid opcode and thus state change reversion if the condition is not met - to be used for internal errors.
-``require(bool condition)``:
+``assert(bool condition)``
+    causes a Panic error and thus state change reversion if the condition is not met - to be used for internal errors.
+
+``require(bool condition)``
     reverts if the condition is not met - to be used for errors in inputs or external components.
-``require(bool condition, string memory message)``:
+
+``require(bool condition, string memory message)``
     reverts if the condition is not met - to be used for errors in inputs or external components. Also provides an error message.
-``revert()``:
+
+``revert()``
     abort execution and revert state changes
-``revert(string memory reason)``:
+
+``revert(string memory reason)``
     abort execution and revert state changes, providing an explanatory string
 
 .. index:: keccak256, ripemd160, sha256, ecrecover, addmod, mulmod, cryptography,
 
+.. _mathematical-and-cryptographic-functions:
+
 Mathematical and Cryptographic Functions
 ----------------------------------------
 
-``addmod(uint x, uint y, uint k) returns (uint)``:
+``addmod(uint x, uint y, uint k) returns (uint)``
     compute ``(x + y) % k`` where the addition is performed with arbitrary precision and does not wrap around at ``2**256``. Assert that ``k != 0`` starting from version 0.5.0.
 
-``mulmod(uint x, uint y, uint k) returns (uint)``:
+``mulmod(uint x, uint y, uint k) returns (uint)``
     compute ``(x * y) % k`` where the multiplication is performed with arbitrary precision and does not wrap around at ``2**256``. Assert that ``k != 0`` starting from version 0.5.0.
 
-``keccak256(bytes memory) returns (bytes32)``:
+``keccak256(bytes memory) returns (bytes32)``
     compute the Keccak-256 hash of the input
 
 .. note::
 
     There used to be an alias for ``keccak256`` called ``sha3``, which was removed in version 0.5.0.
 
-``sha256(bytes memory) returns (bytes32)``:
+``sha256(bytes memory) returns (bytes32)``
     compute the SHA-256 hash of the input
 
-``ripemd160(bytes memory) returns (bytes20)``:
+``ripemd160(bytes memory) returns (bytes20)``
     compute RIPEMD-160 hash of the input
 
-``ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s) returns (address)``:
+``ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s) returns (address)``
     recover the address associated with the public key from elliptic curve signature or return zero on error.
     The function parameters correspond to ECDSA values of the signature:
 
-    ``r`` = first 32 bytes of signature
-    ``s`` = second 32 bytes of signature
-    ``v`` = final 1 byte of signature
+    * ``r`` = first 32 bytes of signature
+    * ``s`` = second 32 bytes of signature
+    * ``v`` = final 1 byte of signature
 
     ``ecrecover`` returns an ``address``, and not an ``address payable``. See :ref:`address payable<address>` for
     conversion, in case you need to transfer funds to the recovered address.
 
-    For further details, read `example usage <https://ethereum.stackexchange.com/q/1777/222>`_.
+    For further details, read `example usage <https://ethereum.stackexchange.com/questions/1777/workflow-on-signing-a-string-with-private-key-followed-by-signature-verificatio>`_.
 
 .. warning::
 
     If you use ``ecrecover``, be aware that a valid signature can be turned into a different valid signature without
     requiring knowledge of the corresponding private key. In the Homestead hard fork, this issue was fixed
-    for _transaction_ signatures (see `EIP-2 <http://eips.ethereum.org/EIPS/eip-2#specification>`_), but
+    for _transaction_ signatures (see `EIP-2 <https://eips.ethereum.org/EIPS/eip-2#specification>`_), but
     the ecrecover function remained unchanged.
 
     This is usually not a problem unless you require signatures to be unique or
-    use them to identify items. OpenZeppelin have a `ECDSA helper library <https://docs.openzeppelin.org/v2.3.0/api/cryptography#ecdsa>`_ that you can use as a wrapper for ``ecrecover`` without this issue.
+    use them to identify items. OpenZeppelin have a `ECDSA helper library <https://docs.openzeppelin.com/contracts/2.x/api/cryptography#ECDSA>`_ that you can use as a wrapper for ``ecrecover`` without this issue.
 
 .. note::
 
     When running ``sha256``, ``ripemd160`` or ``ecrecover`` on a *private blockchain*, you might encounter Out-of-Gas. This is because these functions are implemented as "precompiled contracts" and only really exist after they receive the first message (although their contract code is hardcoded). Messages to non-existing contracts are more expensive and thus the execution might run into an Out-of-Gas error. A workaround for this problem is to first send Wei (1 for example) to each of the contracts before you use them in your actual contracts. This is not an issue on the main or test net.
 
-.. index:: balance, send, transfer, call, callcode, delegatecall, staticcall
+.. index:: balance, codehash, send, transfer, call, callcode, delegatecall, staticcall
 
 .. _address_related:
 
 Members of Address Types
 ------------------------
 
-``<address>.balance`` (``uint256``):
+``<address>.balance`` (``uint256``)
     balance of the :ref:`address` in sun
-``<address payable>.transfer(uint256 amount)``:
+
+``<address>.code`` (``bytes memory``)
+    code at the :ref:`address` (can be empty)
+
+``<address>.codehash`` (``bytes32``)
+    the codehash of the :ref:`address`
+
+``<address payable>.transfer(uint256 amount)``
     send given amount of sun to :ref:`address`, reverts on failure, forwards 2300 gas stipend, not adjustable
-``<address payable>.send(uint256 amount) returns (bool)``:
+
+``<address payable>.send(uint256 amount) returns (bool)``
     send given amount of sun to :ref:`address`, returns ``false`` on failure, forwards 2300 gas stipend, not adjustable
-``<address>.call(bytes memory) returns (bool, bytes memory)``:
+
+``<address>.call(bytes memory) returns (bool, bytes memory)``
     issue low-level ``CALL`` with the given payload, returns success condition and return data, forwards all available gas, adjustable
-``<address>.delegatecall(bytes memory) returns (bool, bytes memory)``:
+
+``<address>.delegatecall(bytes memory) returns (bool, bytes memory)``
     issue low-level ``DELEGATECALL`` with the given payload, returns success condition and return data, forwards all available gas, adjustable
-``<address>.staticcall(bytes memory) returns (bool, bytes memory)``:
+
+``<address>.staticcall(bytes memory) returns (bool, bytes memory)``
     issue low-level ``STATICCALL`` with the given payload, returns success condition and return data, forwards all available gas, adjustable
 
 For more information, see the section on :ref:`address`.
@@ -260,10 +281,10 @@ For more information, see the section on :ref:`address`.
 Contract Related
 ----------------
 
-``this`` (current contract's type):
+``this`` (current contract's type)
     the current contract, explicitly convertible to :ref:`address`
 
-``selfdestruct(address payable recipient)``:
+``selfdestruct(address payable recipient)``
     Destroy the current contract, sending its funds to the given :ref:`address`
     and end execution.
     Note that ``selfdestruct`` has some peculiarities inherited from the EVM:
@@ -287,15 +308,16 @@ Furthermore, all functions of the current contract are callable directly includi
 Type Information
 ----------------
 
-The expression ``type(X)`` can be used to retrieve information about the
-type ``X``. Currently, there is limited support for this feature, but
-it might be expanded in the future. The following properties are
-available for a contract type ``C``:
+The expression ``type(X)`` can be used to retrieve information about the type
+``X``. Currently, there is limited support for this feature (``X`` can be either
+a contract or an integer type) but it might be expanded in the future.
 
-``type(C).name``:
+The following properties are available for a contract type ``C``:
+
+``type(C).name``
     The name of the contract.
 
-``type(C).creationCode``:
+``type(C).creationCode``
     Memory byte array that contains the creation bytecode of the contract.
     This can be used in inline assembly to build custom creation routines,
     especially by using the ``create2`` opcode.
@@ -303,7 +325,7 @@ available for a contract type ``C``:
     derived contract. It causes the bytecode to be included in the bytecode
     of the call site and thus circular references like that are not possible.
 
-``type(C).runtimeCode``:
+``type(C).runtimeCode``
     Memory byte array that contains the runtime bytecode of the contract.
     This is the code that is usually deployed by the constructor of ``C``.
     If ``C`` has a constructor that uses inline assembly, this might be
@@ -312,3 +334,19 @@ available for a contract type ``C``:
     regular calls.
     The same restrictions as with ``.creationCode`` also apply for this
     property.
+
+In addition to the properties above, the following properties are available
+for an interface type ``I``:
+
+``type(I).interfaceId``:
+    A ``bytes4`` value containing the `EIP-165 <https://eips.ethereum.org/EIPS/eip-165>`_
+    interface identifier of the given interface ``I``. This identifier is defined as the ``XOR`` of all
+    function selectors defined within the interface itself - excluding all inherited functions.
+
+The following properties are available for an integer type ``T``:
+
+``type(T).min``
+    The smallest value representable by type ``T``.
+
+``type(T).max``
+    The largest value representable by type ``T``.

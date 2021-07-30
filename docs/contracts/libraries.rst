@@ -30,31 +30,33 @@ not possible to destroy a library.
 Libraries can be seen as implicit base contracts of the contracts that use them.
 They will not be explicitly visible in the inheritance hierarchy, but calls
 to library functions look just like calls to functions of explicit base
-contracts (``L.f()`` if ``L`` is the name of the library). Furthermore,
-``internal`` functions of libraries are visible in all contracts, just as
-if the library were a base contract. Of course, calls to internal functions
+contracts (using qualified access like ``L.f()``).
+Of course, calls to internal functions
 use the internal calling convention, which means that all internal types
 can be passed and types :ref:`stored in memory <data-location>` will be passed by reference and not copied.
 To realize this in the EVM, code of internal library functions
-and all functions called from therein will at compile time be pulled into the calling
+and all functions called from therein will at compile time be included in the calling
 contract, and a regular ``JUMP`` call will be used instead of a ``DELEGATECALL``.
 
 .. index:: using for, set
 
-The following example illustrates how to use libraries (but manual method
+The following example illustrates how to use libraries (but using a manual method,
 be sure to check out :ref:`using for <using-for>` for a
 more advanced example to implement a set).
 
 ::
 
-    pragma solidity >=0.4.22 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.6.0 <0.9.0;
 
+
+    // We define a new struct datatype that will be used to
+    // hold its data in the calling contract.
+    struct Data {
+        mapping(uint => bool) flags;
+    }
 
     library Set {
-        // We define a new struct datatype that will be used to
-        // hold its data in the calling contract.
-        struct Data { mapping(uint => bool) flags; }
-
         // Note that the first parameter is of type "storage
         // reference" and thus only its storage address and not
         // its contents is passed as part of the call.  This is a
@@ -92,7 +94,7 @@ more advanced example to implement a set).
 
 
     contract C {
-        Set.Data knownValues;
+        Data knownValues;
 
         function register(uint value) public {
             // The library functions can be called without a
@@ -123,13 +125,14 @@ custom types without the overhead of external function calls:
 
 ::
 
-    pragma solidity >=0.4.16 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.6.8 <0.9.0;
+
+    struct bigint {
+        uint[] limbs;
+    }
 
     library BigInt {
-        struct bigint {
-            uint[] limbs;
-        }
-
         function fromUint(uint x) internal pure returns (bigint memory r) {
             r.limbs = new uint[](1);
             r.limbs[0] = x;
@@ -142,7 +145,7 @@ custom types without the overhead of external function calls:
                 uint a = limb(_a, i);
                 uint b = limb(_b, i);
                 r.limbs[i] = a + b + carry;
-                if (a + b < a || (a + b == uint(-1) && carry > 0))
+                if (a + b < a || (a + b == type(uint).max && carry > 0))
                     carry = 1;
                 else
                     carry = 0;
@@ -168,12 +171,12 @@ custom types without the overhead of external function calls:
     }
 
     contract C {
-        using BigInt for BigInt.bigint;
+        using BigInt for bigint;
 
         function f() public pure {
-            BigInt.bigint memory x = BigInt.fromUint(7);
-            BigInt.bigint memory y = BigInt.fromUint(uint(-1));
-            BigInt.bigint memory z = x.add(y);
+            bigint memory x = BigInt.fromUint(7);
+            bigint memory y = BigInt.fromUint(type(uint).max);
+            bigint memory z = x.add(y);
             assert(z.limb(1) > 0);
         }
     }
@@ -181,30 +184,22 @@ custom types without the overhead of external function calls:
 It is possible to obtain the address of a library by converting
 the library type to the ``address`` type, i.e. using ``address(LibraryName)``.
 
-As the compiler cannot know where the library will be
-deployed at, these addresses have to be filled into the
-final bytecode by a linker
-(see :ref:`commandline-compiler` for how to use the
-commandline compiler for linking). If the addresses are not
-given as arguments to the compiler, the compiled hex code
-will contain placeholders of the form ``__Set______`` (where
-``Set`` is the name of the library). The address can be filled
-manually by replacing all those 40 symbols by the hex
-encoding of the address of the library contract.
+As the compiler does not know the address where the library will be deployed, the compiled hex code
+will contain placeholders of the form ``__$30bbc0abd4d6364515865950d3e0d10953$__``. The placeholder
+is a 34 character prefix of the hex encoding of the keccak256 hash of the fully qualified library
+name, which would be for example ``libraries/bigint.sol:BigInt`` if the library was stored in a file
+called ``bigint.sol`` in a ``libraries/`` directory. Such bytecode is incomplete and should not be
+deployed. Placeholders need to be replaced with actual addresses. You can do that by either passing
+them to the compiler when the library is being compiled or by using the linker to update an already
+compiled binary. See :ref:`library-linking` for information on how to use the commandline compiler
+for linking.
 
-.. note::
-    Manually linking libraries on the generated bytecode is discouraged, because
-    it is restricted to 36 characters.
-    You should ask the compiler to link the libraries at the time
-    a contract is compiled by either using
-    the ``--libraries`` option of ``solc`` or the ``libraries`` key if you use
-    the standard-JSON interface to the compiler.
+In comparison to contracts, libraries are restricted in the following ways:
 
-Restrictions for libraries in comparison to contracts:
-
-- No state variables
-- Cannot inherit nor be inherited
-- Cannot receive Ether
+- they cannot have state variables
+- they cannot inherit nor be inherited
+- they cannot receive Ether
+- they cannot be destroyed
 
 (These might be lifted at a later point.)
 
@@ -225,7 +220,9 @@ The following identifiers are used for the types in the signatures:
  - Non-storage array types follow the same convention as in the contract ABI, i.e. ``<type>[]`` for dynamic arrays and
    ``<type>[M]`` for fixed-size arrays of ``M`` elements.
  - Non-storage structs are referred to by their fully qualified name, i.e. ``C.S`` for ``contract C { struct S { ... } }``.
- - Storage pointer types use the type identifier of their corresponding non-storage type, but append a single space
+ - Storage pointer mappings use ``mapping(<keyType> => <valueType>) storage`` where ``<keyType>`` and ``<valueType>`` are
+   the identifiers for the key and value types of the mapping, respectively.
+ - Other storage pointer types use the type identifier of their corresponding non-storage type, but append a single space
    followed by ``storage`` to it.
 
 The argument encoding is the same as for the regular contract ABI, except for storage pointers, which are encoded as a
@@ -236,7 +233,8 @@ Its value can be obtained from Solidity using the ``.selector`` member as follow
 
 ::
 
-    pragma solidity >0.5.13 <0.7.0;
+    // SPDX-License-Identifier: GPL-3.0
+    pragma solidity >=0.5.14 <0.9.0;
 
     library L {
         function f(uint256) external {}
@@ -275,3 +273,7 @@ this causes the deploy time address to be the first
 constant to be pushed onto the stack and the dispatcher
 code compares the current address against this constant
 for any non-view and non-pure function.
+
+This means that the actual code stored on chain for a library
+is different from the code reported by the compiler as
+``deployedBytecode``.

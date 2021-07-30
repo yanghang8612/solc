@@ -5,7 +5,7 @@
 #
 # The documentation for solidity is hosted at:
 #
-#     https://solidity.readthedocs.org
+#     https://docs.soliditylang.org
 #
 # ------------------------------------------------------------------------------
 # This file is part of solidity.
@@ -29,7 +29,7 @@
 set -e
 
 REPO_ROOT="$(dirname "$0")/.."
-SOLIDITY_BUILD_DIR="${SOLIDITY_BUILD_DIR:-build}"
+SOLIDITY_BUILD_DIR="${SOLIDITY_BUILD_DIR:-${REPO_ROOT}/build}"
 
 source "${REPO_ROOT}/scripts/common.sh"
 
@@ -88,43 +88,46 @@ fi
 # and homestead / byzantium VM
 for optimize in "" "--optimize"
 do
-  for vm in $EVM_VERSIONS
-  do
-    FORCE_ABIV2_RUNS="no"
-    if [[ "$vm" == "istanbul" ]]
-    then
-      FORCE_ABIV2_RUNS="no yes" # run both in istanbul
-    fi
-    for abiv2 in $FORCE_ABIV2_RUNS
+    for vm in $EVM_VERSIONS
     do
-        force_abiv2_flag=""
-        if [[ "$abiv2" == "yes" ]]
+        FORCE_ABIV1_RUNS="no"
+        if [[ "$vm" == "istanbul" ]]
         then
-            force_abiv2_flag="--abiencoderv2 --optimize-yul"
+            FORCE_ABIV1_RUNS="no yes" # run both in istanbul
         fi
-        printTask "--> Running tests using "$optimize" --evm-version "$vm" $force_abiv2_flag..."
+        for abiv1 in $FORCE_ABIV1_RUNS
+        do
+            force_abiv1_flag=""
+            if [[ "$abiv1" == "yes" ]]
+            then
+                force_abiv1_flag="--abiencoderv1"
+            fi
+            printTask "--> Running tests using "$optimize" --evm-version "$vm" $force_abiv1_flag..."
 
-        log=""
-        if [ -n "$log_directory" ]
-        then
-			if [ -n "$optimize" ]
-			then
-				log=--logger=JUNIT,error,$log_directory/opt_$vm.xml $testargs
-			else
-				log=--logger=JUNIT,error,$log_directory/noopt_$vm.xml $testargs_no_opt
-			fi
-        fi
+            log=""
+            if [ -n "$log_directory" ]
+            then
+                if [ -n "$optimize" ]
+                then
+                    log=--logger=JUNIT,error,$log_directory/opt_$vm.xml
+                else
+                    log=--logger=JUNIT,error,$log_directory/noopt_$vm.xml
+                fi
+            fi
 
-        set +e
-        "$REPO_ROOT"/${SOLIDITY_BUILD_DIR}/test/soltest --show-progress $log -- --testpath "$REPO_ROOT"/test "$optimize" --evm-version "$vm" $SMT_FLAGS $force_abiv2_flag
+            EWASM_ARGS=""
+            [ "${vm}" = "byzantium" ] && [ "${optimize}" = "" ] && EWASM_ARGS="--ewasm"
 
-        if test "0" -ne "$?"; then
-            exit 1
-        fi
-        set -e
+            set +e
+            "${SOLIDITY_BUILD_DIR}"/test/soltest --show-progress $log -- ${EWASM_ARGS} --testpath "$REPO_ROOT"/test "$optimize" --evm-version "$vm" $SMT_FLAGS $force_abiv1_flag
 
+            if test "0" -ne "$?"; then
+                exit 1
+            fi
+            set -e
+
+        done
     done
-  done
 done
 
 if [[ -n $CMDLINE_PID ]] && ! wait $CMDLINE_PID

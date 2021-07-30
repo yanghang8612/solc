@@ -24,24 +24,42 @@
 
 #include <libyul/optimiser/NameCollector.h>
 #include <libyul/optimiser/Semantics.h>
+#include <libyul/AST.h>
+#include <libyul/Dialect.h>
 #include <libyul/Exceptions.h>
-#include <libyul/AsmData.h>
-#include <libyul/backends/evm/EVMDialect.h>
 
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonData.h>
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/range/algorithm_ext/erase.hpp>
 #include <variant>
 
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::util;
+using namespace solidity::yul;
 
+DataFlowAnalyzer::DataFlowAnalyzer(
+	Dialect const& _dialect,
+	map<YulString, SideEffects> _functionSideEffects
+):
+m_dialect(_dialect),
+m_functionSideEffects(std::move(_functionSideEffects)),
+m_knowledgeBase(_dialect, m_value)
+{
+	if (auto const* builtin = _dialect.memoryStoreFunction(YulString{}))
+		m_storeFunctionName[static_cast<unsigned>(StoreLoadLocation::Memory)] = builtin->name;
+	if (auto const* builtin = _dialect.memoryLoadFunction(YulString{}))
+		m_loadFunctionName[static_cast<unsigned>(StoreLoadLocation::Memory)] = builtin->name;
+	if (auto const* builtin = _dialect.storageStoreFunction(YulString{}))
+		m_storeFunctionName[static_cast<unsigned>(StoreLoadLocation::Storage)] = builtin->name;
+	if (auto const* builtin = _dialect.storageLoadFunction(YulString{}))
+		m_loadFunctionName[static_cast<unsigned>(StoreLoadLocation::Storage)] = builtin->name;
+}
 
 void DataFlowAnalyzer::operator()(ExpressionStatement& _statement)
 {
-	if (auto vars = isSimpleStore(dev::eth::Instruction::SSTORE, _statement))
+	if (auto vars = isSimpleStore(StoreLoadLocation::Storage, _statement))
 	{
 		ASTModifier::operator()(_statement);
 		set<YulString> keysToErase;
@@ -55,7 +73,7 @@ void DataFlowAnalyzer::operator()(ExpressionStatement& _statement)
 			m_storage.eraseKey(key);
 		m_storage.set(vars->first, vars->second);
 	}
-	else if (auto vars = isSimpleStore(dev::eth::Instruction::MSTORE, _statement))
+	else if (auto vars = isSimpleStore(StoreLoadLocation::Memory, _statement))
 	{
 		ASTModifier::operator()(_statement);
 		set<YulString> keysToErase;
@@ -81,7 +99,7 @@ void DataFlowAnalyzer::operator()(Assignment& _assignment)
 	assertThrow(_assignment.value, OptimizerException, "");
 	clearKnowledgeIfInvalidated(*_assignment.value);
 	visit(*_assignment.value);
-	handleAssignment(names, _assignment.value.get());
+	handleAssignment(names, _assignment.value.get(), false);
 }
 
 void DataFlowAnalyzer::operator()(VariableDeclaration& _varDecl)
@@ -97,7 +115,7 @@ void DataFlowAnalyzer::operator()(VariableDeclaration& _varDecl)
 		visit(*_varDecl.value);
 	}
 
-	handleAssignment(names, _varDecl.value.get());
+	handleAssignment(names, _varDecl.value.get(), true);
 }
 
 void DataFlowAnalyzer::operator()(If& _if)
@@ -143,11 +161,13 @@ void DataFlowAnalyzer::operator()(FunctionDefinition& _fun)
 {
 	// Save all information. We might rather reinstantiate this class,
 	// but this could be difficult if it is subclassed.
-	map<YulString, Expression const*> value;
+	map<YulString, AssignedValue> value;
+	size_t loopDepth{0};
 	InvertibleRelation<YulString> references;
 	InvertibleMap<YulString, YulString> storage;
 	InvertibleMap<YulString, YulString> memory;
-	m_value.swap(value);
+	swap(m_value, value);
+	swap(m_loopDepth, loopDepth);
 	swap(m_references, references);
 	swap(m_storage, storage);
 	swap(m_memory, memory);
@@ -158,12 +178,17 @@ void DataFlowAnalyzer::operator()(FunctionDefinition& _fun)
 	for (auto const& var: _fun.returnVariables)
 	{
 		m_variableScopes.back().variables.emplace(var.name);
-		handleAssignment({var.name}, nullptr);
+		handleAssignment({var.name}, nullptr, true);
 	}
 	ASTModifier::operator()(_fun);
 
+	// Note that the contents of return variables, storage and memory at this point
+	// might be incorrect due to the fact that the DataFlowAnalyzer ignores the ``leave``
+	// statement.
+
 	popScope();
-	m_value.swap(value);
+	swap(m_value, value);
+	swap(m_loopDepth, loopDepth);
 	swap(m_references, references);
 	swap(m_storage, storage);
 	swap(m_memory, memory);
@@ -174,6 +199,8 @@ void DataFlowAnalyzer::operator()(ForLoop& _for)
 	// If the pre block was not empty,
 	// we would have to deal with more complicated scoping rules.
 	assertThrow(_for.pre.statements.empty(), OptimizerException, "");
+
+	++m_loopDepth;
 
 	AssignmentsSinceContinue assignmentsSinceCont;
 	assignmentsSinceCont(_for.body);
@@ -197,6 +224,8 @@ void DataFlowAnalyzer::operator()(ForLoop& _for)
 	clearKnowledgeIfInvalidated(*_for.condition);
 	clearKnowledgeIfInvalidated(_for.post);
 	clearKnowledgeIfInvalidated(_for.body);
+
+	--m_loopDepth;
 }
 
 void DataFlowAnalyzer::operator()(Block& _block)
@@ -208,16 +237,17 @@ void DataFlowAnalyzer::operator()(Block& _block)
 	assertThrow(numScopes == m_variableScopes.size(), OptimizerException, "");
 }
 
-void DataFlowAnalyzer::handleAssignment(set<YulString> const& _variables, Expression* _value)
+void DataFlowAnalyzer::handleAssignment(set<YulString> const& _variables, Expression* _value, bool _isDeclaration)
 {
-	clearValues(_variables);
+	if (!_isDeclaration)
+		clearValues(_variables);
 
 	MovableChecker movableChecker{m_dialect, &m_functionSideEffects};
 	if (_value)
 		movableChecker.visit(*_value);
 	else
 		for (auto const& var: _variables)
-			m_value[var] = &m_zero;
+			assignValue(var, &m_zero);
 
 	if (_value && _variables.size() == 1)
 	{
@@ -225,21 +255,39 @@ void DataFlowAnalyzer::handleAssignment(set<YulString> const& _variables, Expres
 		// Expression has to be movable and cannot contain a reference
 		// to the variable that will be assigned to.
 		if (movableChecker.movable() && !movableChecker.referencedVariables().count(name))
-			m_value[name] = _value;
+			assignValue(name, _value);
 	}
 
 	auto const& referencedVariables = movableChecker.referencedVariables();
 	for (auto const& name: _variables)
 	{
 		m_references.set(name, referencedVariables);
-		// assignment to slot denoted by "name"
-		m_storage.eraseKey(name);
-		// assignment to slot contents denoted by "name"
-		m_storage.eraseValue(name);
-		// assignment to slot denoted by "name"
-		m_memory.eraseKey(name);
-		// assignment to slot contents denoted by "name"
-		m_memory.eraseValue(name);
+		if (!_isDeclaration)
+		{
+			// assignment to slot denoted by "name"
+			m_storage.eraseKey(name);
+			// assignment to slot contents denoted by "name"
+			m_storage.eraseValue(name);
+			// assignment to slot denoted by "name"
+			m_memory.eraseKey(name);
+			// assignment to slot contents denoted by "name"
+			m_memory.eraseValue(name);
+		}
+	}
+
+	if (_value && _variables.size() == 1)
+	{
+		YulString variable = *_variables.begin();
+		if (!movableChecker.referencedVariables().count(variable))
+		{
+			// This might erase additional knowledge about the slot.
+			// On the other hand, if we knew the value in the slot
+			// already, then the sload() / mload() would have been replaced by a variable anyway.
+			if (auto key = isSimpleLoad(StoreLoadLocation::Memory, *_value))
+				m_memory.set(*key, variable);
+			else if (auto key = isSimpleLoad(StoreLoadLocation::Storage, *_value))
+				m_storage.set(*key, variable);
+		}
 	}
 }
 
@@ -294,6 +342,11 @@ void DataFlowAnalyzer::clearValues(set<YulString> _variables)
 		m_value.erase(name);
 	for (auto const& name: _variables)
 		m_references.eraseKey(name);
+}
+
+void DataFlowAnalyzer::assignValue(YulString _variable, Expression const* _value)
+{
+	m_value[_variable] = {_value, m_loopDepth};
 }
 
 void DataFlowAnalyzer::clearKnowledgeIfInvalidated(Block const& _block)
@@ -356,31 +409,27 @@ bool DataFlowAnalyzer::inScope(YulString _variableName) const
 }
 
 std::optional<pair<YulString, YulString>> DataFlowAnalyzer::isSimpleStore(
-	dev::eth::Instruction _store,
+	StoreLoadLocation _location,
 	ExpressionStatement const& _statement
 ) const
 {
-	yulAssert(
-		_store == dev::eth::Instruction::MSTORE ||
-		_store == dev::eth::Instruction::SSTORE,
-		""
-	);
-	if (holds_alternative<FunctionCall>(_statement.expression))
-	{
-		FunctionCall const& funCall = std::get<FunctionCall>(_statement.expression);
-		if (EVMDialect const* dialect = dynamic_cast<EVMDialect const*>(&m_dialect))
-			if (auto const* builtin = dialect->builtin(funCall.functionName.name))
-				if (builtin->instruction == _store)
-					if (
-						holds_alternative<Identifier>(funCall.arguments.at(0)) &&
-						holds_alternative<Identifier>(funCall.arguments.at(1))
-					)
-					{
-						YulString key = std::get<Identifier>(funCall.arguments.at(0)).name;
-						YulString value = std::get<Identifier>(funCall.arguments.at(1)).name;
-						return make_pair(key, value);
-					}
-	}
+	if (FunctionCall const* funCall = get_if<FunctionCall>(&_statement.expression))
+		if (funCall->functionName.name == m_storeFunctionName[static_cast<unsigned>(_location)])
+			if (Identifier const* key = std::get_if<Identifier>(&funCall->arguments.front()))
+				if (Identifier const* value = std::get_if<Identifier>(&funCall->arguments.back()))
+					return make_pair(key->name, value->name);
+	return {};
+}
+
+std::optional<YulString> DataFlowAnalyzer::isSimpleLoad(
+	StoreLoadLocation _location,
+	Expression const& _expression
+) const
+{
+	if (FunctionCall const* funCall = get_if<FunctionCall>(&_expression))
+		if (funCall->functionName.name == m_loadFunctionName[static_cast<unsigned>(_location)])
+			if (Identifier const* key = std::get_if<Identifier>(&funCall->arguments.front()))
+				return key->name;
 	return {};
 }
 

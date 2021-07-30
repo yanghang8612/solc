@@ -14,19 +14,26 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Small useful snippets for the optimiser.
  */
 
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libyul/AsmDataForward.h>
+#include <libsolutil/Common.h>
+#include <libyul/ASTForward.h>
+#include <libyul/Dialect.h>
+#include <libyul/YulString.h>
 
-namespace yul
+namespace solidity::yul
 {
 
 /// Removes statements that are just empty blocks (non-recursive).
 void removeEmptyBlocks(Block& _block);
+
+/// Returns true if a given literal can not be used as an identifier.
+/// This includes Yul keywords and builtins of the given dialect.
+bool isRestrictedIdentifier(Dialect const& _dialect, YulString const& _identifier);
 
 }

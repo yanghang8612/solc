@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 
 #include <libyul/AsmAnalysisInfo.h>
 #include <libyul/AsmParser.h>
@@ -25,10 +26,9 @@
 #include <liblangutil/Exceptions.h>
 #include <liblangutil/ErrorReporter.h>
 #include <liblangutil/EVMVersion.h>
-#include <liblangutil/SourceReferenceFormatter.h>
 
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonIO.h>
+#include <libsolutil/CommonData.h>
 
 #include <test/tools/ossfuzz/yulFuzzerCommon.h>
 
@@ -36,12 +36,15 @@
 #include <memory>
 #include <iostream>
 
-using namespace yul;
 using namespace std;
+using namespace solidity;
+using namespace solidity::yul;
+using namespace solidity::util;
+using namespace solidity::langutil;
+using namespace solidity::yul::test::yul_fuzzer;
 
-using namespace langutil;
-using namespace dev;
-using namespace yul::test::yul_fuzzer;
+// Prototype as we can't use the FuzzerInterface.h header.
+extern "C" int LLVMFuzzerTestOneInput(uint8_t const* _data, size_t _size);
 
 extern "C" int LLVMFuzzerTestOneInput(uint8_t const* _data, size_t _size)
 {
@@ -60,7 +63,7 @@ extern "C" int LLVMFuzzerTestOneInput(uint8_t const* _data, size_t _size)
 	AssemblyStack stack(
 		langutil::EVMVersion(),
 		AssemblyStack::Language::StrictAssembly,
-		dev::solidity::OptimiserSettings::full()
+		solidity::frontend::OptimiserSettings::full()
 	);
 	try
 	{

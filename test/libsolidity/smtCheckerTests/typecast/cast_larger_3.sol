@@ -12,6 +12,4 @@ contract C
 	}
 }
 // ----
-// Warning: (108-117): Type conversion is not yet fully supported and might yield false positives.
-// Warning: (207-230): Assertion violation happens here
-// Warning: (273-287): Assertion violation happens here
+// Warning 6328: (273-287): CHC: Assertion violation happens here.\nCounterexample:\n\n\n\n\nTransaction trace:\nconstructor()\nf()

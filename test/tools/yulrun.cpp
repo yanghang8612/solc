@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Yul interpreter.
  */
@@ -32,8 +33,9 @@
 #include <liblangutil/EVMVersion.h>
 #include <liblangutil/SourceReferenceFormatter.h>
 
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/CommonData.h>
+#include <libsolutil/CommonIO.h>
+#include <libsolutil/CommonData.h>
+#include <libsolutil/Exceptions.h>
 
 #include <boost/program_options.hpp>
 
@@ -42,10 +44,11 @@
 #include <iostream>
 
 using namespace std;
-using namespace langutil;
-using namespace yul;
-using namespace dev;
-using namespace yul::test;
+using namespace solidity;
+using namespace solidity::util;
+using namespace solidity::langutil;
+using namespace solidity::yul;
+using namespace solidity::yul::test;
 
 namespace po = boost::program_options;
 
@@ -55,7 +58,7 @@ namespace
 void printErrors(ErrorList const& _errors)
 {
 	for (auto const& error: _errors)
-		SourceReferenceFormatter(cout).printErrorInformation(*error);
+		SourceReferenceFormatter(cout, true, false).printErrorInformation(*error);
 }
 
 pair<shared_ptr<Block>, shared_ptr<AsmAnalysisInfo>> parse(string const& _source)
@@ -63,7 +66,7 @@ pair<shared_ptr<Block>, shared_ptr<AsmAnalysisInfo>> parse(string const& _source
 	AssemblyStack stack(
 		langutil::EVMVersion(),
 		AssemblyStack::Language::StrictAssembly,
-		solidity::OptimiserSettings::none()
+		solidity::frontend::OptimiserSettings::none()
 	);
 	if (stack.parseAndAnalyze("--INPUT--", _source))
 	{
@@ -87,11 +90,10 @@ void interpret(string const& _source)
 
 	InterpreterState state;
 	state.maxTraceSize = 10000;
-	Dialect const& dialect(EVMDialect::strictAssemblyForEVMObjects(langutil::EVMVersion{}));
-	Interpreter interpreter(state, dialect);
 	try
 	{
-		interpreter(*ast);
+		Dialect const& dialect(EVMDialect::strictAssemblyForEVMObjects(langutil::EVMVersion{}));
+		Interpreter::run(state, dialect, *ast);
 	}
 	catch (InterpreterTerminatedGeneric const&)
 	{
@@ -136,10 +138,19 @@ Allowed options)",
 	else
 	{
 		string input;
-
 		if (arguments.count("input-file"))
 			for (string path: arguments["input-file"].as<vector<string>>())
-				input += readFileAsString(path);
+			{
+				try
+				{
+					input += readFileAsString(path);
+				}
+				catch (FileNotFound const&)
+				{
+					cerr << "File not found: " << path << endl;
+					return 1;
+				}
+			}
 		else
 			input = readStandardInput();
 

@@ -14,8 +14,9 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
- * Utilities to handle the Contract ABI (https://solidity.readthedocs.io/en/develop/abi-spec.html)
+ * Utilities to handle the Contract ABI (https://docs.soliditylang.org/en/develop/abi-spec.html)
  */
 
 #pragma once
@@ -24,9 +25,7 @@
 #include <memory>
 #include <string>
 
-namespace dev
-{
-namespace solidity
+namespace solidity::frontend
 {
 
 // Forward declarations
@@ -66,5 +65,4 @@ private:
 	);
 };
 
-}
 }

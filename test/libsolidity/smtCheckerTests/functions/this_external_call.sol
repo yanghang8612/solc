@@ -12,3 +12,4 @@ contract C
 		assert(x < 1000);
 	}
 }
+// ----

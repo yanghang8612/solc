@@ -1,4 +1,4 @@
-pragma experimental ABIEncoderV2;
+pragma abicoder               v2;
 library L {
     struct S { uint a; T[] sub; bytes b; }
     struct T { uint[2] x; }
@@ -9,7 +9,6 @@ library L {
 //     :L
 // [
 //   {
-//     "constant": true,
 //     "inputs":
 //     [
 //       {
@@ -46,7 +45,6 @@ library L {
 //     ],
 //     "name": "g",
 //     "outputs": [],
-//     "payable": false,
 //     "stateMutability": "view",
 //     "type": "function"
 //   }

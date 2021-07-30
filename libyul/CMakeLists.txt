@@ -1,9 +1,31 @@
+# This will re-generate the polyfill headers, if any file within libyul/backends/wasm/polyfill/ was modified.
+set_directory_properties(PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/libyul/backends/wasm/polyfill/)
+
+set(POLYFILLS Arithmetic Bitwise Comparison Conversion Interface Keccak Logical Memory)
+set(GENERATED_POLYFILL_HEADERS)
+foreach(polyfill IN LISTS POLYFILLS)
+	set(POLYFILL_FILE ${CMAKE_SOURCE_DIR}/libyul/backends/wasm/polyfill/${polyfill}.yul)
+	file(READ ${POLYFILL_FILE} EWASM_POLYFILL_CONTENT HEX)
+	string(REGEX MATCHALL ".." EWASM_POLYFILL_CONTENT "${EWASM_POLYFILL_CONTENT}")
+	string(REGEX REPLACE ";" ",\n\t0x" EWASM_POLYFILL_CONTENT "${EWASM_POLYFILL_CONTENT}")
+	set(EWASM_POLYFILL_CONTENT "0x${EWASM_POLYFILL_CONTENT}")
+	set(EWASM_POLYFILL_NAME ${polyfill})
+	configure_file("${CMAKE_SOURCE_DIR}/cmake/templates/ewasm_polyfill.in" ${CMAKE_BINARY_DIR}/include/ewasmPolyfills/${polyfill}.h @ONLY)
+	list(APPEND GENERATED_POLYFILL_HEADERS ${CMAKE_BINARY_DIR}/include/ewasmPolyfills/${polyfill}.h)
+endforeach()
+
 add_library(yul
+	${GENERATED_POLYFILL_HEADERS}
+
 	AsmAnalysis.cpp
 	AsmAnalysis.h
 	AsmAnalysisInfo.h
-	AsmData.h
-	AsmDataForward.h
+	AST.h
+	ASTForward.h
+	AsmJsonConverter.h
+	AsmJsonConverter.cpp
+	AsmJsonImporter.h
+	AsmJsonImporter.cpp
 	AsmParser.cpp
 	AsmParser.h
 	AsmPrinter.cpp
@@ -16,6 +38,7 @@ add_library(yul
 	AssemblyStack.cpp
 	CompilabilityChecker.cpp
 	CompilabilityChecker.h
+	Dialect.cpp
 	Dialect.h
 	Exceptions.h
 	Object.cpp
@@ -42,18 +65,18 @@ add_library(yul
 	backends/evm/EVMMetrics.h
 	backends/evm/NoOutputAssembly.h
 	backends/evm/NoOutputAssembly.cpp
-	backends/wasm/EVMToEWasmTranslator.cpp
-	backends/wasm/EVMToEWasmTranslator.h
-	backends/wasm/EWasmCodeTransform.cpp
-	backends/wasm/EWasmCodeTransform.h
-	backends/wasm/EWasmObjectCompiler.cpp
-	backends/wasm/EWasmObjectCompiler.h
-	backends/wasm/EWasmToText.cpp
-	backends/wasm/EWasmToText.h
+	backends/wasm/EVMToEwasmTranslator.cpp
+	backends/wasm/EVMToEwasmTranslator.h
 	backends/wasm/BinaryTransform.cpp
 	backends/wasm/BinaryTransform.h
+	backends/wasm/TextTransform.cpp
+	backends/wasm/TextTransform.h
+	backends/wasm/WasmCodeTransform.cpp
+	backends/wasm/WasmCodeTransform.h
 	backends/wasm/WasmDialect.cpp
 	backends/wasm/WasmDialect.h
+	backends/wasm/WasmObjectCompiler.cpp
+	backends/wasm/WasmObjectCompiler.h
 	backends/wasm/WordSizeTransform.cpp
 	backends/wasm/WordSizeTransform.h
 	optimiser/ASTCopier.cpp
@@ -66,6 +89,8 @@ add_library(yul
 	optimiser/BlockHasher.h
 	optimiser/CallGraphGenerator.cpp
 	optimiser/CallGraphGenerator.h
+	optimiser/CircularReferencesPruner.cpp
+	optimiser/CircularReferencesPruner.h
 	optimiser/CommonSubexpressionEliminator.cpp
 	optimiser/CommonSubexpressionEliminator.h
 	optimiser/ConditionalSimplifier.cpp
@@ -100,6 +125,8 @@ add_library(yul
 	optimiser/ForLoopInitRewriter.h
 	optimiser/FullInliner.cpp
 	optimiser/FullInliner.h
+	optimiser/FunctionCallFinder.cpp
+	optimiser/FunctionCallFinder.h
 	optimiser/FunctionGrouper.cpp
 	optimiser/FunctionGrouper.h
 	optimiser/FunctionHoister.cpp
@@ -122,9 +149,13 @@ add_library(yul
 	optimiser/NameDispenser.h
 	optimiser/NameDisplacer.cpp
 	optimiser/NameDisplacer.h
+	optimiser/NameSimplifier.cpp
+	optimiser/NameSimplifier.h
 	optimiser/OptimiserStep.h
 	optimiser/OptimizerUtilities.cpp
 	optimiser/OptimizerUtilities.h
+	optimiser/ReasoningBasedSimplifier.cpp
+	optimiser/ReasoningBasedSimplifier.h
 	optimiser/RedundantAssignEliminator.cpp
 	optimiser/RedundantAssignEliminator.h
 	optimiser/Rematerialiser.cpp
@@ -141,6 +172,10 @@ add_library(yul
 	optimiser/SimplificationRules.h
 	optimiser/StackCompressor.cpp
 	optimiser/StackCompressor.h
+	optimiser/StackLimitEvader.cpp
+	optimiser/StackLimitEvader.h
+	optimiser/StackToMemoryMover.cpp
+	optimiser/StackToMemoryMover.h
 	optimiser/StructuralSimplifier.cpp
 	optimiser/StructuralSimplifier.h
 	optimiser/Substitution.cpp
@@ -149,6 +184,12 @@ add_library(yul
 	optimiser/Suite.h
 	optimiser/SyntacticalEquality.cpp
 	optimiser/SyntacticalEquality.h
+	optimiser/TypeInfo.cpp
+	optimiser/TypeInfo.h
+	optimiser/UnusedFunctionParameterPruner.cpp
+	optimiser/UnusedFunctionParameterPruner.h
+	optimiser/UnusedFunctionsCommon.h
+	optimiser/UnusedFunctionsCommon.cpp
 	optimiser/UnusedPruner.cpp
 	optimiser/UnusedPruner.h
 	optimiser/VarDeclInitializer.cpp
@@ -156,4 +197,5 @@ add_library(yul
 	optimiser/VarNameCleaner.cpp
 	optimiser/VarNameCleaner.h
 )
-target_link_libraries(yul PUBLIC evmasm devcore langutil)
+
+target_link_libraries(yul PUBLIC evmasm solutil langutil smtutil)

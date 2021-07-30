@@ -14,19 +14,20 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Information generated during analyzer part of inline assembly.
  */
 
 #pragma once
 
-#include <libyul/AsmDataForward.h>
+#include <libyul/ASTForward.h>
 
 #include <map>
 #include <memory>
 #include <vector>
 
-namespace yul
+namespace solidity::yul
 {
 
 struct Scope;
@@ -36,7 +37,6 @@ struct AsmAnalysisInfo
 	using StackHeightInfo = std::map<void const*, int>;
 	using Scopes = std::map<Block const*, std::shared_ptr<Scope>>;
 	Scopes scopes;
-	StackHeightInfo stackHeightInfo;
 	/// Virtual blocks which will be used for scopes for function arguments and return values.
 	std::map<FunctionDefinition const*, std::shared_ptr<Block const>> virtualBlocks;
 };

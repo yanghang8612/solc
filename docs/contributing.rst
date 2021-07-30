@@ -2,22 +2,25 @@
 Contributing
 ############
 
-Help is always appreciated!
+Help is always welcome and there are plenty of options how you can contribute to Solidity.
 
-To get started, you can try :ref:`building-from-source` in order to familiarize
-yourself with the components of Solidity and the build process. Also, it may be
-useful to become well-versed at writing smart-contracts in Solidity.
+In particular, we appreciate support in the following areas:
 
-In particular, we need help in the following areas:
-
-* Improving the documentation
-* Responding to questions from other users on `StackExchange
-  <https://ethereum.stackexchange.com>`_ and the `Solidity Gitter
-  <https://gitter.im/ethereum/solidity>`_
+* Reporting issues.
 * Fixing and responding to `Solidity's GitHub issues
   <https://github.com/ethereum/solidity/issues>`_, especially those tagged as
   `good first issue <https://github.com/ethereum/solidity/labels/good%20first%20issue>`_ which are
   meant as introductory issues for external contributors.
+* Improving the documentation.
+* Translating the documentation into more languages.
+* Responding to questions from other users on `StackExchange
+  <https://ethereum.stackexchange.com>`_ and the `Solidity Gitter Chat
+  <https://gitter.im/ethereum/solidity>`_.
+* Getting involved in the language design process by joining language design calls, proposing language changes or new features and providing feedback.
+
+To get started, you can try :ref:`building-from-source` in order to familiarize
+yourself with the components of Solidity and the build process. Also, it may be
+useful to become well-versed at writing smart-contracts in Solidity.
 
 Please note that this project is released with a `Contributor Code of Conduct <https://raw.githubusercontent.com/ethereum/solidity/develop/CODE_OF_CONDUCT.md>`_. By participating in this project - in the issues, pull requests, or Gitter channels - you agree to abide by its terms.
 
@@ -27,10 +30,10 @@ Team Calls
 If you have issues or pull requests to discuss, or are interested in hearing what
 the team and contributors are working on, you can join our public team calls:
 
-- Monday at 12pm CET
-- Wednesday at 3pm CET
+- Mondays at 3pm CET/CEST.
+- Wednesdays at 2pm CET/CEST.
 
-Both calls take place on `Google Hangouts <https://hangouts.google.com/hangouts/_/ethereum.org/solidity-weekly>`_.
+Both calls take place on `Google Meet <https://meet.google.com/mrq-kbwv-edg>`_.
 
 How to Report Issues
 ====================
@@ -39,12 +42,12 @@ To report an issue, please use the
 `GitHub issues tracker <https://github.com/ethereum/solidity/issues>`_. When
 reporting issues, please mention the following details:
 
-* Which version of Solidity you are using
-* What was the source code (if applicable)
-* Which platform are you running on
-* How to reproduce the issue
-* What was the result of the issue
-* What the expected behaviour is
+* Which version of Solidity you are using.
+* What was the source code (if applicable).
+* Which platform are you running on.
+* How to reproduce the issue.
+* What was the result of the issue.
+* What the expected behaviour is.
 
 Reducing the source code that caused the issue to a bare minimum is always
 very helpful and sometimes even clarifies a misunderstanding.
@@ -66,7 +69,7 @@ test cases under ``test/`` (see below).
 
 However, if you are making a larger change, please consult with the `Solidity Development Gitter channel
 <https://gitter.im/ethereum/solidity-dev>`_ (different from the one mentioned above, this one is
-focused on compiler and language development instead of language use) first.
+focused on compiler and language development instead of language usage) first.
 
 New features and bugfixes should be added to the ``Changelog.md`` file: please
 follow the style of previous entries, when applicable.
@@ -78,29 +81,61 @@ ensure that it builds locally before submitting a pull request.
 
 Thank you for your help!
 
-Running the compiler tests
+Running the Compiler Tests
 ==========================
 
-The ``./scripts/tests.sh`` script executes most Solidity tests automatically,
-but for quicker feedback, you might want to run specific tests.
+Prerequisites
+-------------
+
+Some tests require the `evmone <https://github.com/ethereum/evmone/releases>`_
+library, others require `libz3 <https://github.com/Z3Prover/z3>`_. The test script
+tries to discover the location of the ``evmone`` library, which can be located
+in the current directory, installed on the system level, or the ``deps`` folder
+in the project top level. The required file is called ``libevmone.so`` on Linux
+systems, ``evmone.dll`` on Windows systems and ``libevmone.dylib`` on macOS.
+
+On macOS some of the testing scripts expect GNU coreutils to be installed.
+This can be easiest accomplished using Homebrew: ``brew install coreutils``.
+
+Running the Tests
+-----------------
 
 Solidity includes different types of tests, most of them bundled into the
 `Boost C++ Test Framework <https://www.boost.org/doc/libs/1_69_0/libs/test/doc/html/index.html>`_ application ``soltest``.
 Running ``build/test/soltest`` or its wrapper ``scripts/soltest.sh`` is sufficient for most changes.
 
-Some tests require the ``evmone`` library, others require ``libz3``.
+The ``./scripts/tests.sh`` script executes most Solidity tests automatically,
+including those bundled into the `Boost C++ Test Framework <https://www.boost.org/doc/libs/1_69_0/libs/test/doc/html/index.html>`_ application ``soltest`` (or its wrapper ``scripts/soltest.sh``),
+as well as command line tests and compilation tests.
 
-The test system will automatically try to discover the location of the ``evmone`` library
+The test system automatically tries to discover the location of the ``evmone`` library
 starting from the current directory. The required file is called ``libevmone.so`` on Linux systems,
-``evmone.dll`` on Windows systems and ``libevmone.dylib`` on MacOS. If it is not found, the relevant tests
-are skipped. To run all tests, download the library from
-`Github <https://github.com/ethereum/evmone/releases/tag/v0.3.0>`_
-and either place it in the project root path or inside the ``deps`` folder.
+``evmone.dll`` on Windows systems and ``libevmone.dylib`` on macOS. If it is not found, tests that
+use it are skipped. These tests are ``libsolididty/semanticTests``, ``libsolidity/GasCosts``,
+``libsolidity/SolidityEndToEndTest``, part of the soltest suite. To run all tests, download the library from
+`GitHub <https://github.com/ethereum/evmone/releases/tag/v0.4.1>`_
+and place it in the project root path or inside the ``deps`` folder.
 
-If you do not have libz3 installed on your system, you should disable the SMT tests:
-``./scripts/soltest.sh --no-smt``.
+If the ``libz3`` library is not installed on your system, you should disable the
+SMT tests by exporting ``SMT_FLAGS=--no-smt`` before running ``./scripts/tests.sh`` or
+running ``./scripts/soltest.sh --no-smt``.
+These tests are ``libsolidity/smtCheckerTests`` and ``libsolidity/smtCheckerTestsJSON``.
+
+.. note ::
+
+    To get a list of all unit tests run by Soltest, run ``./build/test/soltest --list_content=HRF``.
+
+For quicker results you can run a subset of, or specific tests.
+
+To run a subset of tests, you can use filters:
+``./scripts/soltest.sh -t TestSuite/TestName``,
+where ``TestName`` can be a wildcard ``*``.
+
+Or, for example, to run all the tests for the yul disambiguator:
+``./scripts/soltest.sh -t "yulOptimizerTests/disambiguator/*" --no-smt``.
 
 ``./build/test/soltest --help`` has extensive help on all of the options available.
+
 See especially:
 
 - `show_progress (-p) <https://www.boost.org/doc/libs/1_69_0/libs/test/doc/html/boost_test/utf_reference/rt_param_reference/show_progress.html>`_ to show test completion,
@@ -109,19 +144,9 @@ See especially:
 
 .. note ::
 
-    Those working in a Windows environment wanting to run the above basic sets without libz3 in Git Bash, you would have to do: ``./build/test/Release/soltest.exe -- --no-smt``.
+    Those working in a Windows environment wanting to run the above basic sets
+    without libz3. Using Git Bash, you use: ``./build/test/Release/soltest.exe -- --no-smt``.
     If you are running this in plain Command Prompt, use ``.\build\test\Release\soltest.exe -- --no-smt``.
-
-To run a subset of tests, you can use filters:
-``./scripts/soltest.sh -t TestSuite/TestName``,
-where ``TestName`` can be a wildcard ``*``.
-
-For example, here is an example test you might run;
-``./scripts/soltest.sh -t "yulOptimizerTests/disambiguator/*" --no-smt``.
-This will test all the tests for the disambiguator.
-
-To get a list of all tests, use
-``./build/test/soltest --list_content=HRF``.
 
 If you want to debug using GDB, make sure you build differently than the "usual".
 For example, you could run the following command in your ``build`` folder:
@@ -130,16 +155,13 @@ For example, you could run the following command in your ``build`` folder:
    cmake -DCMAKE_BUILD_TYPE=Debug ..
    make
 
-This will create symbols such that when you debug a test using the ``--debug`` flag, you will have access to functions and variables in which you can break or print with.
+This creates symbols so that when you debug a test using the ``--debug`` flag,
+you have access to functions and variables in which you can break or print with.
 
+The CI runs additional tests (including ``solc-js`` and testing third party Solidity
+frameworks) that require compiling the Emscripten target.
 
-The script ``./scripts/tests.sh`` also runs commandline tests and compilation tests
-in addition to those found in ``soltest``.
-
-The CI runs additional tests (including ``solc-js`` and testing third party Solidity frameworks) that require compiling the Emscripten target.
-
-
-Writing and running syntax tests
+Writing and Running Syntax Tests
 --------------------------------
 
 Syntax tests check that the compiler generates the correct error messages for invalid code
@@ -238,7 +260,7 @@ inside the input. We have a specialized binary called ``solfuzzer`` which takes 
 and fails whenever it encounters an internal compiler error, segmentation fault or similar, but
 does not fail if e.g., the code contains an error. This way, fuzzing tools can find internal problems in the compiler.
 
-We mainly use `AFL <http://lcamtuf.coredump.cx/afl/>`_ for fuzzing. You need to download and
+We mainly use `AFL <https://lcamtuf.coredump.cx/afl/>`_ for fuzzing. You need to download and
 install the AFL packages from your repositories (afl, afl-clang) or build them manually.
 Next, build Solidity (or just the ``solfuzzer`` binary) with AFL as your compiler:
 
@@ -328,7 +350,7 @@ Whiskers
 compiler in various places to aid readability, and thus maintainability and verifiability, of the code.
 
 The syntax comes with a substantial difference to Mustache. The template markers ``{{`` and ``}}`` are
-replaced by ``<`` and ``>`` in order to aid parsing and avoid conflicts with :ref:`inline-assembly`
+replaced by ``<`` and ``>`` in order to aid parsing and avoid conflicts with :ref:`yul`
 (The symbols ``<`` and ``>`` are invalid in inline assembly, while ``{`` and ``}`` are used to delimit blocks).
 Another limitation is that lists are only resolved one depth and they do not recurse. This may change in the future.
 
@@ -340,12 +362,17 @@ by as many concatenations of its contents as there were sets of variables suppli
 each time replacing any ``<inner>`` items by their respective value. Top-level variables can also be used
 inside such areas.
 
+There are also conditionals of the form ``<?name>...<!name>...</name>``, where template replacements
+continue recursively either in the first or the second segment depending on the value of the boolean
+parameter ``name``. If ``<?+name>...<!+name>...</+name>`` is used, then the check is whether
+the string parameter ``name`` is non-empty.
+
 .. _documentation-style:
 
 Documentation Style Guide
 =========================
 
-The following are style recommendations specifically for documentation
+In the following section you find style recommendations specifically focusing on documentation
 contributions to Solidity.
 
 English Language
@@ -367,16 +394,16 @@ local slang and references, making your language as clear to all readers as poss
 Title Case for Headings
 -----------------------
 
-Use `title case <http://titlecase.com>`_ for headings. This means capitalise all principal words in
+Use `title case <https://titlecase.com>`_ for headings. This means capitalise all principal words in
 titles, but not articles, conjunctions, and prepositions unless they start the
 title.
 
 For example, the following are all correct:
 
-* Title Case for Headings
-* For Headings Use Title Case
-* Local and State Variable Names
-* Order of Layout
+* Title Case for Headings.
+* For Headings Use Title Case.
+* Local and State Variable Names.
+* Order of Layout.
 
 Expand Contractions
 -------------------
@@ -422,10 +449,28 @@ or ``interface`` using the ``./test/cmdlineTests.sh`` script when you create a P
 ensure they work and pass tests before creating the PR.
 
 Ensure that all code examples begin with a ``pragma`` version that spans the largest where the contract code is valid.
-For example ``pragma solidity >=0.4.0 <0.7.0;``.
+For example ``pragma solidity >=0.4.0 <0.9.0;``.
 
 Running Documentation Tests
 ---------------------------
 
 Make sure your contributions pass our documentation tests by running ``./scripts/docs.sh`` that installs dependencies
 needed for documentation and checks for any problems such as broken links or syntax issues.
+
+Solidity Language Design
+========================
+
+If you want to get involved in the language design process and share your ideas, please join the `solidity-users forum <https://groups.google.com/g/solidity-users>`_,
+where existing properties of the language and proposals for new features can be discussed.
+
+We regularly host language design discussion calls, in which selected topics, issues or feature implementations are debated in detail. The invitation
+to those calls is shared via the aforementioned forum. We are also sharing feedback surveys and other language design relevant content in this forum.
+
+For ad-hoc cases and questions you can reach out to us via the `Solidity-dev Gitter channel <https://gitter.im/ethereum/solidity-dev>`_, a
+dedicated chatroom for conversations around the Solidity compiler and language development.
+
+You can follow the implementation status of new features in the `Solidity Github project <https://github.com/ethereum/solidity/projects/43>`_.
+Issues in the design backlog need further specification and will either be discussed in a language design call or in a regular team call. You can
+see the upcoming changes for the next breaking release by changing from the default branch (`develop`) to the `breaking branch <https://github.com/ethereum/solidity/tree/breaking>`_.
+
+We are happy to hear your thoughts on how we can improve the language design process to be even more collaborative and transparent.

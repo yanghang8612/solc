@@ -9,4 +9,5 @@ contract C {
 }
 //
 // ----
-// Warning: (126-129): Assertion checker does not support recursive function calls.
+// Warning 6321: (81-85): Unnamed return variable can remain unassigned. Add an explicit return with value to all non-reverting code paths or name the variable.
+// Warning 6321: (87-91): Unnamed return variable can remain unassigned. Add an explicit return with value to all non-reverting code paths or name the variable.

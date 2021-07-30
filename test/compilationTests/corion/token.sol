@@ -11,12 +11,18 @@ contract thirdPartyContractAbstract {
     function approvedCorionToken(address, uint256, bytes calldata) external returns (bool) {}
 }
 
+/**
+ *
+ * @title Corion Platform Token
+ * @author iFA @ Corion Platform
+ *
+ */
 contract token is safeMath, module, announcementTypes {
     /*
         module callbacks
     */
-    function replaceModule(address payable addr) external returns (bool success) {
-        require( super.isModuleHandler(msg.sender) );
+    function replaceModule(address payable addr) external override returns (bool success) {
+        require( super.isModuleHandler(payable(msg.sender)) );
         require( db.replaceOwner(addr) );
         super._replaceModule(addr);
         return true;
@@ -26,12 +32,7 @@ contract token is safeMath, module, announcementTypes {
         require( _success && _active );
         _;
     }
-    /**
-    *
-    * @title Corion Platform Token
-    * @author iFA @ Corion Platform
-    *
-    */
+
     string public name = "Corion";
     string public symbol = "COR";
     uint8 public decimals = 6;
@@ -48,7 +49,7 @@ contract token is safeMath, module, announcementTypes {
 
     mapping(address => bool) public genesis;
 
-    constructor(bool forReplace, address payable moduleHandler, address dbAddr, address payable icoContractAddr, address payable exchangeContractAddress, address payable[] memory genesisAddr, uint256[] memory genesisValue) public payable {
+    constructor(bool forReplace, address payable moduleHandler, address dbAddr, address payable icoContractAddr, address payable exchangeContractAddress, address payable[] memory genesisAddr, uint256[] memory genesisValue) payable {
         /*
             Installation function
 
@@ -98,7 +99,7 @@ contract token is safeMath, module, announcementTypes {
      * @param spender The address of the account able to transfer the tokens
      * @param amount The amount of tokens to be approved for transfer
      * @param nonce The transaction count of the authorised address
-     * @return True if the approval was successful
+     * @return success True if the approval was successful
      */
     function approve(address spender, uint256 amount, uint256 nonce) isReady external returns (bool success) {
         /*
@@ -120,7 +121,7 @@ contract token is safeMath, module, announcementTypes {
      * @param amount The amount of tokens to be approved for transfer
      * @param nonce The transaction count of the authorised address
      * @param extraData Data to give forward to the receiver
-     * @return True if the approval was successful
+     * @return success True if the approval was successful
      */
     function approveAndCall(address spender, uint256 amount, uint256 nonce, bytes calldata extraData) isReady external returns (bool success) {
         /*
@@ -173,7 +174,7 @@ contract token is safeMath, module, announcementTypes {
      * @notice Send `amount` Corion tokens to `to` from `msg.sender`
      * @param to The address of the recipient
      * @param amount The amount of tokens to be transferred
-     * @return Whether the transfer was successful or not
+     * @return success Whether the transfer was successful or not
      */
     function transfer(address to, uint256 amount) isReady external returns (bool success) {
         /*
@@ -201,7 +202,7 @@ contract token is safeMath, module, announcementTypes {
      * @param from The address holding the tokens being transferred
      * @param to The address of the recipient
      * @param amount The amount of tokens to be transferred
-     * @return True if the transfer was successful
+     * @return success True if the transfer was successful
      */
     function transferFrom(address from, address to, uint256 amount) isReady external returns (bool success) {
         /*
@@ -238,7 +239,7 @@ contract token is safeMath, module, announcementTypes {
      * @param from The address holding the tokens being transferred
      * @param to The address of the recipient
      * @param amount The amount of tokens to be transferred
-     * @return True if the transfer was successful
+     * @return success True if the transfer was successful
      */
     function transferFromByModule(address from, address to, uint256 amount, bool fee) isReady external returns (bool success) {
         /*
@@ -253,7 +254,7 @@ contract token is safeMath, module, announcementTypes {
             @success    Was the Function successful?
         */
         bytes memory _data;
-        require( super.isModuleHandler(msg.sender) );
+        require( super.isModuleHandler(payable(msg.sender)) );
         _transfer( from, to, amount, fee);
         emit Transfer(from, to, amount, _data);
         return true;
@@ -264,7 +265,7 @@ contract token is safeMath, module, announcementTypes {
      * @param to The contract address of the recipient
      * @param amount The amount of tokens to be transferred
      * @param extraData Data to give forward to the receiver
-     * @return Whether the transfer was successful or not
+     * @return success Whether the transfer was successful or not
      */
     function transfer(address to, uint256 amount, bytes calldata extraData) isReady external returns (bool success) {
         /*
@@ -340,7 +341,7 @@ contract token is safeMath, module, announcementTypes {
      * @notice Transaction fee will be deduced from `owner` for transacting `value`
      * @param owner The address where will the transaction fee deduced
      * @param value The base for calculating the fee
-     * @return True if the transfer was successful
+     * @return success True if the transfer was successful
      */
     function processTransactionFee(address owner, uint256 value) isReady external returns (bool success) {
         /*
@@ -351,7 +352,7 @@ contract token is safeMath, module, announcementTypes {
 
             @success    Was the Function successful?
         */
-        require( super.isModuleHandler(msg.sender) );
+        require( super.isModuleHandler(payable(msg.sender)) );
         _processTransactionFee(owner, value);
         return true;
     }
@@ -410,7 +411,7 @@ contract token is safeMath, module, announcementTypes {
 
             @success    Was the Function successful?
         */
-        require( super.isModuleHandler(msg.sender) || msg.sender == icoAddr );
+        require( super.isModuleHandler(payable(msg.sender)) || msg.sender == icoAddr );
         _mint(owner, value);
         return true;
     }
@@ -439,7 +440,7 @@ contract token is safeMath, module, announcementTypes {
 
             @success    Was the Function successful?
         */
-        require( super.isModuleHandler(msg.sender) );
+        require( super.isModuleHandler(payable(msg.sender)) );
         _burn(owner, value);
         return true;
     }
@@ -500,7 +501,7 @@ contract token is safeMath, module, announcementTypes {
 
             @success    Was the Function successful?
         */
-        require( super.isModuleHandler(msg.sender) );
+        require( super.isModuleHandler(payable(msg.sender)) );
         if      ( aType == announcementType.transactionFeeRate )    { transactionFeeRate = value; }
         else if ( aType == announcementType.transactionFeeMin )     { transactionFeeMin = value; }
         else if ( aType == announcementType.transactionFeeMax )     { transactionFeeMax = value; }

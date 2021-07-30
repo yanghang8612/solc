@@ -14,13 +14,14 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /** @file IsolTestOptions.cpp
 * @date 2019
 */
 
 #include <test/tools/IsolTestOptions.h>
 
-#include <libdevcore/Assertions.h>
+#include <libsolutil/Assertions.h>
 
 #include <boost/filesystem.hpp>
 
@@ -31,9 +32,10 @@
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
-namespace dev
+namespace solidity::test
 {
-namespace test
+
+namespace
 {
 
 auto const description = R"(isoltest, tool for interactively managing test contracts.
@@ -50,6 +52,8 @@ std::string editorPath()
 		return "/usr/bin/editor";
 
 	return std::string{};
+}
+
 }
 
 IsolTestOptions::IsolTestOptions(std::string* _editor):
@@ -71,13 +75,14 @@ bool IsolTestOptions::parse(int _argc, char const* const* _argv)
 		std::cout << options << std::endl;
 		return false;
 	}
+	enforceViaYul = true;
 
 	return res;
 }
 
 void IsolTestOptions::validate() const
 {
-	static std::string filterString{"[a-zA-Z1-9_/*]*"};
+	static std::string filterString{"[a-zA-Z0-9_/*]*"};
 	static std::regex filterExpression{filterString};
 	assertThrow(
 		regex_match(testFilter, filterExpression),
@@ -86,5 +91,4 @@ void IsolTestOptions::validate() const
 	);
 }
 
-}
 }

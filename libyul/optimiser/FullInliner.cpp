@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Optimiser component that performs function inlining for arbitrary functions.
  */
@@ -26,25 +27,28 @@
 #include <libyul/optimiser/OptimizerUtilities.h>
 #include <libyul/optimiser/Metrics.h>
 #include <libyul/optimiser/SSAValueTracker.h>
+#include <libyul/optimiser/Semantics.h>
+#include <libyul/optimiser/CallGraphGenerator.h>
 #include <libyul/Exceptions.h>
-#include <libyul/AsmData.h>
+#include <libyul/AST.h>
+#include <libyul/Dialect.h>
 
-#include <libdevcore/CommonData.h>
-#include <libdevcore/Visitor.h>
-
-#include <boost/range/adaptor/reversed.hpp>
+#include <libsolutil/CommonData.h>
+#include <libsolutil/Visitor.h>
 
 using namespace std;
-using namespace dev;
-using namespace yul;
+using namespace solidity;
+using namespace solidity::yul;
 
 void FullInliner::run(OptimiserStepContext& _context, Block& _ast)
 {
-	FullInliner{_ast, _context.dispenser}.run();
+	FullInliner inliner{_ast, _context.dispenser, _context.dialect};
+	inliner.run(Pass::InlineTiny);
+	inliner.run(Pass::InlineRest);
 }
 
-FullInliner::FullInliner(Block& _ast, NameDispenser& _dispenser):
-	m_ast(_ast), m_nameDispenser(_dispenser)
+FullInliner::FullInliner(Block& _ast, NameDispenser& _dispenser, Dialect const& _dialect):
+	m_ast(_ast), m_nameDispenser(_dispenser), m_dialect(_dialect)
 {
 	// Determine constants
 	SSAValueTracker tracker;
@@ -62,6 +66,8 @@ FullInliner::FullInliner(Block& _ast, NameDispenser& _dispenser):
 			continue;
 		FunctionDefinition& fun = std::get<FunctionDefinition>(statement);
 		m_functions[fun.name] = &fun;
+		if (LeaveFinder::containsLeave(fun))
+			m_noInlineFunctions.insert(fun.name);
 		// Always inline functions that are only called once.
 		if (references[fun.name] == 1)
 			m_singleUse.emplace(fun.name);
@@ -69,19 +75,86 @@ FullInliner::FullInliner(Block& _ast, NameDispenser& _dispenser):
 	}
 }
 
-void FullInliner::run()
+void FullInliner::run(Pass _pass)
 {
+	m_pass = _pass;
+
+	// Note that the order of inlining can result in very different code.
+	// Since AST IDs and thus function names depend on whether or not a contract
+	// is compiled together with other source files, a change in AST IDs
+	// should have as little an impact as possible. This is the case
+	// if we handle inlining in source (and thus, for the IR generator,
+	// function name) order.
+	// We use stable_sort below to keep the inlining order of two functions
+	// with the same depth.
+	map<YulString, size_t> depths = callDepths();
+	vector<FunctionDefinition*> functions;
+	for (auto& statement: m_ast.statements)
+		if (holds_alternative<FunctionDefinition>(statement))
+			functions.emplace_back(&std::get<FunctionDefinition>(statement));
+	std::stable_sort(functions.begin(), functions.end(), [depths](
+		FunctionDefinition const* _a,
+		FunctionDefinition const* _b
+	) {
+		return depths.at(_a->name) < depths.at(_b->name);
+	});
+	for (FunctionDefinition* fun: functions)
+	{
+		handleBlock(fun->name, fun->body);
+		updateCodeSize(*fun);
+	}
+
 	for (auto& statement: m_ast.statements)
 		if (holds_alternative<Block>(statement))
 			handleBlock({}, std::get<Block>(statement));
+}
 
-	// TODO it might be good to determine a visiting order:
-	// first handle functions that are called from many places.
-	for (auto const& fun: m_functions)
+map<YulString, size_t> FullInliner::callDepths() const
+{
+	CallGraph cg = CallGraphGenerator::callGraph(m_ast);
+	cg.functionCalls.erase(""_yulstring);
+
+	// Remove calls to builtin functions.
+	for (auto& call: cg.functionCalls)
+		for (auto it = call.second.begin(); it != call.second.end();)
+			if (m_dialect.builtin(*it))
+				it = call.second.erase(it);
+			else
+				++it;
+
+	map<YulString, size_t> depths;
+	size_t currentDepth = 0;
+
+	while (true)
 	{
-		handleBlock(fun.second->name, fun.second->body);
-		updateCodeSize(*fun.second);
+		vector<YulString> removed;
+		for (auto it = cg.functionCalls.begin(); it != cg.functionCalls.end();)
+		{
+			auto const& [fun, callees] = *it;
+			if (callees.empty())
+			{
+				removed.emplace_back(fun);
+				depths[fun] = currentDepth;
+				it = cg.functionCalls.erase(it);
+			}
+			else
+				++it;
+		}
+
+		for (auto& call: cg.functionCalls)
+			call.second -= removed;
+
+		currentDepth++;
+
+		if (removed.empty())
+			break;
 	}
+
+	// Only recursive functions left here.
+	for (auto const& fun: cg.functionCalls)
+		depths[fun.first] = currentDepth;
+
+	return depths;
 }
 
 bool FullInliner::shallInline(FunctionCall const& _funCall, YulString _callSite)
@@ -94,13 +167,17 @@ bool FullInliner::shallInline(FunctionCall const& _funCall, YulString _callSite)
 	if (!calledFunction)
 		return false;
 
-	if (recursive(*calledFunction))
+	if (m_noInlineFunctions.count(_funCall.functionName.name) || recursive(*calledFunction))
 		return false;
 
 	// Inline really, really tiny functions
 	size_t size = m_functionSizes.at(calledFunction->name);
 	if (size <= 1)
 		return true;
+
+	// In the first pass, only inline tiny functions.
+	if (m_pass == Pass::InlineTiny)
+		return false;
 
 	// Do not inline into already big functions.
 	if (m_functionSizes.at(_callSite) > 45)
@@ -136,7 +213,7 @@ void FullInliner::updateCodeSize(FunctionDefinition const& _fun)
 
 void FullInliner::handleBlock(YulString _currentFunctionName, Block& _block)
 {
-	InlineModifier{*this, m_nameDispenser, _currentFunctionName}(_block);
+	InlineModifier{*this, m_nameDispenser, _currentFunctionName, m_dialect}(_block);
 }
 
 bool FullInliner::recursive(FunctionDefinition const& _fun) const
@@ -151,14 +228,14 @@ void InlineModifier::operator()(Block& _block)
 		visit(_statement);
 		return tryInlineStatement(_statement);
 	};
-	iterateReplacing(_block.statements, f);
+	util::iterateReplacing(_block.statements, f);
 }
 
 std::optional<vector<Statement>> InlineModifier::tryInlineStatement(Statement& _statement)
 {
 	// Only inline for expression statements, assignments and variable declarations.
-	Expression* e = std::visit(GenericVisitor{
-		VisitorFallback<Expression*>{},
+	Expression* e = std::visit(util::GenericVisitor{
+		util::VisitorFallback<Expression*>{},
 		[](ExpressionStatement& _s) { return &_s.expression; },
 		[](Assignment& _s) { return _s.value.get(); },
 		[](VariableDeclaration& _s) { return _s.value.get(); }
@@ -166,8 +243,8 @@ std::optional<vector<Statement>> InlineModifier::tryInlineStatement(Statement& _
 	if (e)
 	{
 		// Only inline direct function calls.
-		FunctionCall* funCall = std::visit(GenericVisitor{
-			VisitorFallback<FunctionCall*>{},
+		FunctionCall* funCall = std::visit(util::GenericVisitor{
+			util::VisitorFallback<FunctionCall*>{},
 			[](FunctionCall& _e) { return &_e; }
 		}, *e);
 		if (funCall && m_driver.shallInline(*funCall, m_currentFunction))
@@ -195,7 +272,7 @@ vector<Statement> InlineModifier::performInline(Statement& _statement, FunctionC
 		if (_value)
 			varDecl.value = make_unique<Expression>(std::move(*_value));
 		else
-			varDecl.value = make_unique<Expression>(Literal{{}, LiteralKind::Number, YulString{"0"}, {}});
+			varDecl.value = make_unique<Expression>(m_dialect.zeroLiteralForType(varDecl.variables.front().type));
 		newStatements.emplace_back(std::move(varDecl));
 	};
 
@@ -207,8 +284,8 @@ vector<Statement> InlineModifier::performInline(Statement& _statement, FunctionC
 	Statement newBody = BodyCopier(m_nameDispenser, variableReplacements)(function->body);
 	newStatements += std::move(std::get<Block>(newBody).statements);
 
-	std::visit(GenericVisitor{
-		VisitorFallback<>{},
+	std::visit(util::GenericVisitor{
+		util::VisitorFallback<>{},
 		[&](Assignment& _assignment)
 		{
 			for (size_t i = 0; i < _assignment.variableNames.size(); ++i)

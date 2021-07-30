@@ -18,8 +18,8 @@ contract C
 // ====
 // EVMVersion: >spuriousDragon
 // ----
-// Warning: (224-240): Unused local variable.
-// Warning: (260-275): Assertion violation happens here
-// Warning: (279-293): Assertion violation happens here
-// Warning: (297-316): Assertion violation happens here
-// Warning: (320-344): Assertion violation happens here
+// Warning 2072: (224-240): Unused local variable.
+// Warning 6328: (260-275): CHC: Assertion violation happens here.\nCounterexample:\nx = 0\na = 0\ndata = []\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf(0, [])
+// Warning 6328: (279-293): CHC: Assertion violation happens here.\nCounterexample:\nx = 1\na = 0\ndata = []\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf(0, [])
+// Warning 6328: (297-316): CHC: Assertion violation happens here.\nCounterexample:\nx = 1\na = 0\ndata = []\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf(0, [])
+// Warning 6328: (320-344): CHC: Assertion violation happens here.\nCounterexample:\nx = 1\na = 0\ndata = []\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf(0, [])

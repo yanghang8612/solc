@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * Container of (unparsed) Yul functions identified by name which are meant to be generated
  * only once.
@@ -23,18 +24,20 @@
 
 #include <liblangutil/Exceptions.h>
 
-#include <boost/algorithm/string/join.hpp>
-#include <boost/range/adaptor/reversed.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::solidity;
+using namespace solidity;
+using namespace solidity::frontend;
 
 string MultiUseYulFunctionCollector::requestedFunctions()
 {
 	string result;
 	for (auto const& f: m_requestedFunctions)
+	{
+		solAssert(f.second != "<<STUB<<", "");
+		// std::map guarantees ascending order when iterating through its keys.
 		result += f.second;
+	}
 	m_requestedFunctions.clear();
 	return result;
 }
@@ -43,9 +46,10 @@ string MultiUseYulFunctionCollector::createFunction(string const& _name, functio
 {
 	if (!m_requestedFunctions.count(_name))
 	{
+		m_requestedFunctions[_name] = "<<STUB<<";
 		string fun = _creator();
 		solAssert(!fun.empty(), "");
-		solAssert(fun.find("function " + _name) != string::npos, "Function not properly named.");
+		solAssert(fun.find("function " + _name + "(") != string::npos, "Function not properly named.");
 		m_requestedFunctions[_name] = std::move(fun);
 	}
 	return _name;

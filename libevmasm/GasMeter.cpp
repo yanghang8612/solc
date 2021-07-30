@@ -14,16 +14,16 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 
 #include <libevmasm/GasMeter.h>
 
 #include <libevmasm/KnownState.h>
 
-#include <libdevcore/FixedHash.h>
-
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace solidity;
+using namespace solidity::util;
+using namespace solidity::evmasm;
 
 GasMeter::GasConsumption& GasMeter::GasConsumption::operator+=(GasConsumption const& _other)
 {
@@ -182,32 +182,31 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 		case Instruction::EXP:
 			gas = GasCosts::expGas;
 			if (u256 const* value = classes.knownConstant(m_state->relativeStackElement(-1)))
-				gas += GasCosts::expByteGas(m_evmVersion) * (32 - (h256(*value).firstBitSet() / 8));
+			{
+				if (*value)
+				{
+					// Note: msb() counts from 0 and throws on 0 as input.
+					unsigned const significantByteCount  = (boost::multiprecision::msb(*value) + 1 + 7) / 8;
+					gas += GasCosts::expByteGas(m_evmVersion) * significantByteCount;
+				}
+			}
 			else
 				gas += GasCosts::expByteGas(m_evmVersion) * 32;
 			break;
 		case Instruction::BALANCE:
-		case Instruction::REWARDBALANCE:
 		case Instruction::TOKENBALANCE:
 		case Instruction::ISCONTRACT:
-		case Instruction::ISSRCANDIDATE:
 			gas = GasCosts::balanceGas(m_evmVersion);
 			break;
-        case Instruction::NATIVESTAKE:
-            gas = runGas(Instruction::NATIVESTAKE);
+        case Instruction::NATIVEFREEZE:
+            gas = runGas(Instruction::NATIVEFREEZE);
             break;
-		case Instruction::NATIVEUNSTAKE:
-			gas = runGas(Instruction::NATIVEUNSTAKE);
-			break;
-		case Instruction::NATIVEWITHDRAWREWARD:
-			gas = runGas(Instruction::NATIVEWITHDRAWREWARD);
-			break;
-		case Instruction::TOKENISSUE:
-            gas = runGas(Instruction::TOKENISSUE);
+        case Instruction::NATIVEUNFREEZE:
+            gas = runGas(Instruction::NATIVEUNFREEZE);
             break;
-		case Instruction::UPDATEASSET:
-			gas = runGas(Instruction::UPDATEASSET);
-		break;
+        case Instruction::NATIVEFREEZEEXPIRETIME:
+            gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME);
+            break;
 		case Instruction::CHAINID:
 			gas = runGas(Instruction::CHAINID);
 			break;

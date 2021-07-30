@@ -14,6 +14,7 @@
 	You should have received a copy of the GNU General Public License
 	along with solidity.  If not, see <http://www.gnu.org/licenses/>.
 */
+// SPDX-License-Identifier: GPL-3.0
 /**
  * @author Christian <c@ethdev.com>
  * @date 2014
@@ -22,57 +23,61 @@
 
 #pragma once
 
-#include <test/Options.h>
+#include <test/Common.h>
+#include <test/EVMHost.h>
 
 #include <libsolidity/interface/OptimiserSettings.h>
+#include <libsolidity/interface/DebugSettings.h>
 
 #include <liblangutil/EVMVersion.h>
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Keccak256.h>
+#include <libsolutil/FixedHash.h>
+#include <libsolutil/Keccak256.h>
+#include <libsolutil/ErrorCodes.h>
 
 #include <functional>
 
-namespace dev
-{
-namespace test
-{
-class EVMHost;
+#include <boost/test/unit_test.hpp>
 
-using rational = boost::rational<dev::bigint>;
-/// An Ethereum address: 20 bytes.
-/// @NOTE This is not endian-specific; it's just a bunch of bytes.
-using Address = h160;
+namespace solidity::test
+{
+using rational = boost::rational<bigint>;
 
-	// The various denominations; here for ease of use where needed within code.
-    static const u256 sun = 1;
-    static const u256 trx = sun * 1000000;
+// The various denominations; here for ease of use where needed within code.
+static const u256 sun = 1;
+static const u256 trx = sun * 1000000;
 
 class ExecutionFramework
 {
 
 public:
 	ExecutionFramework();
-	explicit ExecutionFramework(langutil::EVMVersion _evmVersion);
+	ExecutionFramework(langutil::EVMVersion _evmVersion, std::vector<boost::filesystem::path> const& _vmPaths);
 	virtual ~ExecutionFramework() = default;
 
 	virtual bytes const& compileAndRunWithoutCheck(
-		std::string const& _sourceCode,
+		std::map<std::string, std::string> const& _sourceCode,
 		u256 const& _value = 0,
 		std::string const& _contractName = "",
-		bytes const& _arguments = bytes(),
-		std::map<std::string, Address> const& _libraryAddresses = std::map<std::string, Address>()
+		bytes const& _arguments = {},
+		std::map<std::string, util::h160> const& _libraryAddresses = {}
 	) = 0;
 
 	bytes const& compileAndRun(
 		std::string const& _sourceCode,
 		u256 const& _value = 0,
 		std::string const& _contractName = "",
-		bytes const& _arguments = bytes(),
-		std::map<std::string, Address> const& _libraryAddresses = std::map<std::string, Address>()
+		bytes const& _arguments = {},
+		std::map<std::string, util::h160> const& _libraryAddresses = {}
 	)
 	{
-		compileAndRunWithoutCheck(_sourceCode, _value, _contractName, _arguments, _libraryAddresses);
+		compileAndRunWithoutCheck(
+			{{"", _sourceCode}},
+			_value,
+			_contractName,
+			_arguments,
+			_libraryAddresses
+		);
 		BOOST_REQUIRE(m_transactionSuccessful);
 		BOOST_REQUIRE(!m_output.empty());
 		return m_output;
@@ -97,7 +102,7 @@ public:
 
 	bytes const& callContractFunctionWithValueNoEncoding(std::string _sig, u256 const& _value, bytes const& _arguments)
 	{
-		FixedHash<4> hash(dev::keccak256(_sig));
+		util::FixedHash<4> hash(util::keccak256(_sig));
 		sendMessage(hash.asBytes() + _arguments, false, _value);
 		return m_output;
 	}
@@ -127,9 +132,9 @@ public:
 		BOOST_CHECK_MESSAGE(
 			contractResult == cppResult,
 			"Computed values do not match.\nContract: " +
-				toHex(contractResult) +
+				util::toHex(contractResult) +
 				"\nC++:      " +
-				toHex(cppResult)
+				util::toHex(cppResult)
 		);
 	}
 
@@ -143,11 +148,11 @@ public:
 			BOOST_CHECK_MESSAGE(
 				contractResult == cppResult,
 				"Computed values do not match.\nContract: " +
-					toHex(contractResult) +
+					util::toHex(contractResult) +
 					"\nC++:      " +
-					toHex(cppResult) +
+					util::toHex(cppResult) +
 					"\nArgument: " +
-					toHex(encode(argument))
+					util::toHex(encode(argument))
 			);
 		}
 	}
@@ -159,7 +164,7 @@ public:
 	static bytes encode(size_t _value) { return encode(u256(_value)); }
 	static bytes encode(char const* _value) { return encode(std::string(_value)); }
 	static bytes encode(uint8_t _value) { return bytes(31, 0) + bytes{_value}; }
-	static bytes encode(u256 const& _value) { return toBigEndian(_value); }
+	static bytes encode(u256 const& _value) { return util::toBigEndian(_value); }
 	/// @returns the fixed-point encoding of a rational number with a given
 	/// number of fractional bits.
 	static bytes encode(std::pair<rational, int> const& _valueAndPrecision)
@@ -168,15 +173,16 @@ public:
 		int fractionalBits = _valueAndPrecision.second;
 		return encode(u256((value.numerator() << fractionalBits) / value.denominator()));
 	}
-	static bytes encode(h256 const& _value) { return _value.asBytes(); }
+	static bytes encode(util::h256 const& _value) { return _value.asBytes(); }
+	static bytes encode(util::h160 const& _value) { return encode(util::h256(_value, util::h256::AlignRight)); }
 	static bytes encode(bytes const& _value, bool _padLeft = true)
 	{
 		bytes padding = bytes((32 - _value.size() % 32) % 32, 0);
 		return _padLeft ? padding + _value : _value + padding;
 	}
-	static bytes encode(std::string const& _value) { return encode(asBytes(_value), false); }
-	template <class _T>
-	static bytes encode(std::vector<_T> const& _value)
+	static bytes encode(std::string const& _value) { return encode(util::asBytes(_value), false); }
+	template <class T>
+	static bytes encode(std::vector<T> const& _value)
 	{
 		bytes ret;
 		for (auto const& v: _value)
@@ -193,6 +199,9 @@ public:
 	{
 		return bytes();
 	}
+	/// @returns error returndata corresponding to the Panic(uint256) error code,
+	/// if REVERT is supported by the current EVM version and the empty string otherwise.
+	bytes panicData(util::PanicCode _code);
 
 	//@todo might be extended in the future
 	template <class Arg>
@@ -247,33 +256,39 @@ private:
 	}
 
 protected:
+	void selectVM(evmc_capabilities _cap = evmc_capabilities::EVMC_CAPABILITY_EVM1);
+	void reset();
+
 	void sendMessage(bytes const& _data, bool _isCreation, u256 const& _value = 0);
-	void sendEther(Address const& _to, u256 const& _value);
+	void sendEther(util::h160 const& _to, u256 const& _value);
 	size_t currentTimestamp();
 	size_t blockTimestamp(u256 _number);
 
 	/// @returns the (potentially newly created) _ith address.
-	Address account(size_t _i);
+	util::h160 account(size_t _i);
 
-	u256 balanceAt(Address const& _addr);
-	bool storageEmpty(Address const& _addr);
-	bool addressHasCode(Address const& _addr);
+	u256 balanceAt(util::h160 const& _addr);
+	bool storageEmpty(util::h160 const& _addr);
+	bool addressHasCode(util::h160 const& _addr);
 
 	size_t numLogs() const;
 	size_t numLogTopics(size_t _logIdx) const;
-	h256 logTopic(size_t _logIdx, size_t _topicIdx) const;
-	Address logAddress(size_t _logIdx) const;
+	util::h256 logTopic(size_t _logIdx, size_t _topicIdx) const;
+	util::h160 logAddress(size_t _logIdx) const;
 	bytes logData(size_t _logIdx) const;
 
 	langutil::EVMVersion m_evmVersion;
-	solidity::OptimiserSettings m_optimiserSettings = solidity::OptimiserSettings::minimal();
+	solidity::frontend::RevertStrings m_revertStrings = solidity::frontend::RevertStrings::Default;
+	solidity::frontend::OptimiserSettings m_optimiserSettings = solidity::frontend::OptimiserSettings::minimal();
 	bool m_showMessages = false;
-	std::shared_ptr<EVMHost> m_evmHost;
+	bool m_supportsEwasm = false;
+	std::unique_ptr<EVMHost> m_evmcHost;
+
+	std::vector<boost::filesystem::path> m_vmPaths;
 
 	bool m_transactionSuccessful = true;
-	Address m_sender = account(0);
-	Address m_contractAddress;
-	u256 m_blockNumber;
+	util::h160 m_sender = account(0);
+	util::h160 m_contractAddress;
 	u256 const m_gasPrice = 10000 * sun;
 	u256 const m_gas = 100000000;
 	bytes m_output;
@@ -286,6 +301,4 @@ protected:
 } while (0)
 
 
-}
 } // end namespaces
-

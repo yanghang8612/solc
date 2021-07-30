@@ -6,7 +6,7 @@
 ## You can pass a branch name as argument to this script (which, if no argument is given,
 ## will default to "develop").
 ##
-## If the gien branch is "release", the resulting package will be uplaoded to
+## If the given branch is "release", the resulting package will be uploaded to
 ## ethereum/ethereum PPA, or ethereum/ethereum-dev PPA otherwise.
 ##
 ## The gnupg key for "builds@ethereum.org" has to be present in order to sign
@@ -51,13 +51,13 @@ is_release() {
     [[ "${branch}" = "release" ]] || [[ "${branch}" =~ ^v[0-9]+(\.[0-9])*$ ]]
 }
 
-keyid=70D110489D66E2F6
+keyid=379F4801D622CDCF
 email=builds@ethereum.org
 packagename=solc
 
-static_build_distribution=disco
+static_build_distribution=focal
 
-DISTRIBUTIONS="bionic disco eoan"
+DISTRIBUTIONS="focal groovy"
 
 if is_release
 then
@@ -83,14 +83,19 @@ else
     else
         pparepo=ethereum-dev
     fi
-    if [ $distribution = disco ]
+    if [ $distribution = focal ]
     then
         SMTDEPENDENCY="libz3-static-dev,
-               libcvc4-dev,
-               "
+            libcvc4-dev,
+            "
+    elif [ $distribution = disco ]
+    then
+        SMTDEPENDENCY="libz3-static-dev,
+            libcvc4-dev,
+            "
     else
         SMTDEPENDENCY="libz3-static-dev,
-               "
+            "
     fi
     CMAKE_OPTIONS=""
 fi
@@ -102,13 +107,12 @@ mv solidity solc
 
 # Fetch jsoncpp dependency
 mkdir -p ./solc/deps/downloads/ 2>/dev/null || true
-wget -O ./solc/deps/downloads/jsoncpp-1.8.4.tar.gz https://github.com/open-source-parsers/jsoncpp/archive/1.8.4.tar.gz
+wget -O ./solc/deps/downloads/jsoncpp-1.9.3.tar.gz https://github.com/open-source-parsers/jsoncpp/archive/1.9.3.tar.gz
 
 # Determine version
 cd solc
 version=$($(dirname "$0")/get_version.sh)
 commithash=$(git rev-parse --short=8 HEAD)
-committimestamp=$(git show --format=%ci HEAD | head -n 1)
 commitdate=$(git show --format=%ci HEAD | head -n 1 | cut - -b1-10 | sed -e 's/-0?/./' | sed -e 's/-0?/./')
 
 echo "$commithash" > commit_hash.txt
@@ -140,7 +144,7 @@ Priority: extra
 Maintainer: Christian (Buildserver key) <builds@ethereum.org>
 Build-Depends: ${SMTDEPENDENCY}debhelper (>= 9.0.0),
                cmake,
-               g++,
+               g++ (>= 5.0),
                git,
                libgmp-dev,
                libboost-all-dev,
@@ -153,10 +157,9 @@ Vcs-Git: git://github.com/ethereum/solidity.git
 Vcs-Browser: https://github.com/ethereum/solidity
 
 Package: solc
-Architecture: any-i386 any-amd64
+Architecture: any-amd64
 Multi-Arch: same
 Depends: \${shlibs:Depends}, \${misc:Depends}
-Replaces: lllc (<< 1:0.3.6)
 Conflicts: libethereum (<= 1.2.9)
 Description: Solidity compiler.
  The commandline interface to the Solidity smart contract compiler.
@@ -194,7 +197,7 @@ override_dh_shlibdeps:
 	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DINSTALL_LLLC=Off -DTESTS=OFF ${CMAKE_OPTIONS}
+	dh_auto_configure -- -DTESTS=OFF ${CMAKE_OPTIONS}
 EOF
 cat <<EOF > debian/copyright
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/

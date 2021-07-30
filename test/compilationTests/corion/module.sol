@@ -51,7 +51,7 @@ contract module {
         moduleHandlerAddress = newModuleHandlerAddress;
     }
 
-    function connectModule() external onlyForModuleHandler returns (bool success) {
+    function connectModule() virtual external onlyForModuleHandler returns (bool success) {
         _connectModule();
         return true;
     }
@@ -77,7 +77,7 @@ contract module {
         moduleStatus = status.Disconnected;
     }
 
-    function replaceModule(address payable newModuleAddress) external onlyForModuleHandler returns (bool success) {
+    function replaceModule(address payable newModuleAddress) virtual external onlyForModuleHandler returns (bool success) {
         _replaceModule(newModuleAddress);
         return true;
     }
@@ -90,10 +90,10 @@ contract module {
             @newModuleAddress   New module handler address
         */
         require( moduleStatus != status.New && moduleStatus != status.Disconnected);
-        (bool _success, uint256 _balance) = abstractModuleHandler(moduleHandlerAddress).balanceOf(address(this));
+        (bool _success, uint256 _balance) = abstractModuleHandler(moduleHandlerAddress).balanceOf(payable(this));
         require( _success );
         if ( _balance > 0 ) {
-            require( abstractModuleHandler(moduleHandlerAddress).transfer(address(this), newModuleAddress, _balance, false) );
+            require( abstractModuleHandler(moduleHandlerAddress).transfer(payable(this), newModuleAddress, _balance, false) );
         }
         if ( address(this).balance > 0 ) {
             require( newModuleAddress.send(address(this).balance) );
@@ -101,10 +101,11 @@ contract module {
         moduleStatus = status.Disconnected;
     }
 
-    function transferEvent(address payable from, address payable to, uint256 value) external onlyForModuleHandler returns (bool success) {
+    function transferEvent(address payable from, address payable to, uint256
+value) virtual external onlyForModuleHandler returns (bool success) {
         return true;
     }
-    function newSchellingRoundEvent(uint256 roundID, uint256 reward) external onlyForModuleHandler returns (bool success) {
+    function newSchellingRoundEvent(uint256 roundID, uint256 reward) virtual external onlyForModuleHandler returns (bool success) {
         return true;
     }
 
@@ -140,6 +141,6 @@ contract module {
         require( msg.sender == moduleHandlerAddress );
         _;
     }
-    function() external payable {
+    receive() external payable {
     }
 }

@@ -33,7 +33,7 @@ Solidity Integrations
     * `Solidity IDE <https://github.com/System-Glitch/Solidity-IDE>`_
         Browser-based IDE with integrated compiler, Ganache and local file system support.
 
-    * `Solium <https://github.com/duaraghav8/Solium/>`_
+    * `Ethlint <https://github.com/duaraghav8/Ethlint>`_
         Linter to identify and fix style and security issues in Solidity.
 
     * `Superblocks Lab <https://lab.superblocks.com/>`_
@@ -48,7 +48,7 @@ Solidity Integrations
         Plugin for the Atom editor that provides Solidity linting.
 
     * `Atom Solium Linter <https://atom.io/packages/linter-solium>`_
-        Configurable Solidty linter for Atom using Solium as a base.
+        Configurable Solidity linter for Atom using Solium (now Ethlint) as a base.
 
 * Eclipse:
 
@@ -75,36 +75,22 @@ Solidity Integrations
     * `Vim Solidity <https://github.com/tomlion/vim-solidity/>`_
         Plugin for the Vim editor providing syntax highlighting.
 
-    * `Vim Syntastic <https://github.com/scrooloose/syntastic>`_
+    * `Vim Syntastic <https://github.com/vim-syntastic/syntastic>`_
         Plugin for the Vim editor providing compile checking.
 
 * Visual Studio Code:
 
-    * `Visual Studio Code extension <http://juan.blanco.ws/solidity-contracts-in-visual-studio-code/>`_
+    * `Visual Studio Code extension <https://juan.blanco.ws/solidity-contracts-in-visual-studio-code/>`_
         Solidity plugin for Microsoft Visual Studio Code that includes syntax highlighting and the Solidity compiler.
-
-Discontinued:
-
-* `Mix IDE <https://github.com/ethereum/mix/>`_
-    Qt based IDE for designing, debugging and testing solidity smart contracts.
-
-* `Ethereum Studio <https://live.ether.camp/>`_
-    Specialized web IDE that also provides shell access to a complete Ethereum environment.
-
-* `Visual Studio Extension <https://visualstudiogallery.msdn.microsoft.com/96221853-33c4-4531-bdd5-d2ea5acc4799/>`_
-    Solidity plugin for Microsoft Visual Studio that includes the Solidity compiler.
 
 Solidity Tools
 ~~~~~~~~~~~~~~
 
+* `ABI to Solidity interface converter <https://gist.github.com/chriseth/8f533d133fa0c15b0d6eaf3ec502c82b>`_
+    A script for generating contract interfaces from the ABI of a smart contract.
+
 * `Dapp <https://dapp.tools/dapp/>`_
     Build tool, package manager, and deployment assistant for Solidity.
-
-* `Solidity REPL <https://github.com/raineorshine/solidity-repl>`_
-    Try Solidity instantly with a command-line Solidity console.
-
-* `solgraph <https://github.com/raineorshine/solgraph>`_
-    Visualize Solidity control flow and highlight potential security vulnerabilities.
 
 * `Doxity <https://github.com/DigixGlobal/doxity>`_
     Documentation Generator for Solidity.
@@ -112,8 +98,26 @@ Solidity Tools
 * `evmdis <https://github.com/Arachnid/evmdis>`_
     EVM Disassembler that performs static analysis on the bytecode to provide a higher level of abstraction than raw EVM operations.
 
-* `ABI to solidity interface converter <https://gist.github.com/chriseth/8f533d133fa0c15b0d6eaf3ec502c82b>`_
-    A script for generating contract interfaces from the ABI of a smart contract.
+* `EVM Lab <https://github.com/ethereum/evmlab/>`_
+    Rich tool package to interact with the EVM. Includes a VM, Etherchain API, and a trace-viewer with gas cost display.
+
+* `leafleth <https://github.com/clemlak/leafleth>`_
+    A documentation generator for Solidity smart-contracts.
+
+* `PIET <https://piet.slock.it/>`_
+    A tool to develop, audit and use Solidity smart contracts through a simple graphical interface.
+
+* `solc-select <https://github.com/crytic/solc-select>`_
+    A script to quickly switch between Solidity compiler versions.
+
+* `Solidity prettier plugin <https://github.com/prettier-solidity/prettier-plugin-solidity>`_
+    A Prettier Plugin for Solidity.
+
+* `Solidity REPL <https://github.com/raineorshine/solidity-repl>`_
+    Try Solidity instantly with a command-line Solidity console.
+
+* `solgraph <https://github.com/raineorshine/solgraph>`_
+    Visualize Solidity control flow and highlight potential security vulnerabilities.
 
 * `Securify <https://securify.ch/>`_
     Fully automated online static analyzer for smart contracts, providing a security report based on vulnerability patterns.
@@ -121,23 +125,11 @@ Solidity Tools
 * `Sūrya <https://github.com/ConsenSys/surya/>`_
     Utility tool for smart contract systems, offering a number of visual outputs and information about the contracts' structure. Also supports querying the function call graph.
 
-* `EVM Lab <https://github.com/ethereum/evmlab/>`_
-    Rich tool package to interact with the EVM. Includes a VM, Etherchain API, and a trace-viewer with gas cost display.
-
 * `Universal Mutator <https://github.com/agroce/universalmutator>`_
     A tool for mutation generation, with configurable rules and support for Solidity and Vyper.
-
-* `PIET <https://piet.slock.it/>`_
-    A tool to develop, audit and use solidity smart contracts through a simple graphical interface.
-
-.. note::
-  Information like variable names, comments, and source code formatting is lost in the compilation process and it is not possible to completely recover the original source code. Decompiling smart contracts to view the original source code might not be possible, or the end result that useful.
 
 Third-Party Solidity Parsers and Grammars
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* `solidity-parser <https://github.com/ConsenSys/solidity-parser>`_
-    Solidity parser for JavaScript
-
-* `Solidity Grammar for ANTLR 4 <https://github.com/federicobond/solidity-antlr4>`_
-    Solidity grammar for the ANTLR 4 parser generator
+* `Solidity Parser for JavaScript <https://github.com/solidity-parser/parser>`_
+    A Solidity parser for JS built on top of a robust ANTLR4 grammar.

@@ -1,23 +1,23 @@
 pragma experimental SMTChecker;
 contract C {
 	uint a;
-	constructor(uint x) public {
+	constructor(uint x) {
 		a = x;
 	}
 }
 
-contract B is C {
-	constructor(uint x) public {
+abstract contract B is C {
+	constructor(uint x) {
 		a = x;
 	}
 }
 
 contract A is B {
-	constructor(uint x) C(x + 2) B(x + 1) public {
+	constructor(uint x) C(x + 2) B(x + 1) {
 		assert(a == x + 1);
 	}
 }
 // ----
-// Warning: (212-217): Overflow (resulting value larger than 2**256 - 1) happens here
-// Warning: (203-208): Overflow (resulting value larger than 2**256 - 1) happens here
-// Warning: (242-247): Overflow (resulting value larger than 2**256 - 1) happens here
+// Warning 4984: (230-235): CHC: Overflow (resulting value larger than 2**256 - 1) happens here.
+// Warning 4984: (207-212): CHC: Overflow (resulting value larger than 2**256 - 1) happens here.\nCounterexample:\na = 0\nx = 115792089237316195423570985008687907853269984665640564039457584007913129639935\n\n\nTransaction trace:\nconstructor(115792089237316195423570985008687907853269984665640564039457584007913129639935)
+// Warning 4984: (198-203): CHC: Overflow (resulting value larger than 2**256 - 1) happens here.\nCounterexample:\na = 0\nx = 115792089237316195423570985008687907853269984665640564039457584007913129639935\n\n\nTransaction trace:\nconstructor(115792089237316195423570985008687907853269984665640564039457584007913129639935)
