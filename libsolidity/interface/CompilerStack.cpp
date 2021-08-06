@@ -1652,7 +1652,7 @@ bytes CompilerStack::createCBORMetadata(Contract const& _contract) const
 	MetadataCBOREncoder encoder;
 
 	if (m_metadataHash == MetadataHash::IPFS)
-		encoder.pushBytes("ipfs", util::ipfsHash(meta));
+		encoder.pushBytes("tron", util::ipfsHash(meta));
 	else if (m_metadataHash == MetadataHash::Bzzr1)
 		encoder.pushBytes("tron", util::bzzr1Hash(meta).asBytes());
 	else
