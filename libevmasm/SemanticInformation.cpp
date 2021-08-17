@@ -38,6 +38,7 @@ bool SemanticInformation::breaksCSEAnalysisBlock(AssemblyItem const& _item, bool
 	case Tag:
 	case PushDeployTimeAddress:
 	case AssignImmutable:
+	case VerbatimBytecode:
 		return true;
 	case Push:
 	case PushString:
@@ -135,14 +136,6 @@ bool SemanticInformation::altersControlFlow(AssemblyItem const& _item)
 	}
 }
 
-bool SemanticInformation::terminatesControlFlow(AssemblyItem const& _item)
-{
-	if (_item.type() != Operation)
-		return false;
-	else
-		return terminatesControlFlow(_item.instruction());
-}
-
 bool SemanticInformation::terminatesControlFlow(Instruction _instruction)
 {
 	switch (_instruction)
@@ -156,14 +149,6 @@ bool SemanticInformation::terminatesControlFlow(Instruction _instruction)
 	default:
 		return false;
 	}
-}
-
-bool SemanticInformation::reverts(AssemblyItem const& _item)
-{
-	if (_item.type() != Operation)
-		return false;
-	else
-		return reverts(_item.instruction());
 }
 
 bool SemanticInformation::reverts(Instruction _instruction)
@@ -180,6 +165,8 @@ bool SemanticInformation::reverts(Instruction _instruction)
 
 bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 {
+	assertThrow(_item.type() != VerbatimBytecode, AssemblyException, "");
+
 	if (_item.type() != Operation)
 		return true;
 
@@ -201,6 +188,8 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
     case Instruction::NATIVEFREEZE:
     case Instruction::NATIVEUNFREEZE:
     case Instruction::NATIVEFREEZEEXPIRETIME:
+	case Instruction::NATIVEVOTE:
+	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::SELFBALANCE: // depends on previous calls
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODEHASH:
@@ -377,6 +366,8 @@ bool SemanticInformation::invalidInPureFunctions(Instruction _instruction)
     case Instruction::NATIVEFREEZE:
     case Instruction::NATIVEUNFREEZE:
     case Instruction::NATIVEFREEZEEXPIRETIME:
+	case Instruction::NATIVEVOTE:
+	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::ORIGIN:
 	case Instruction::CALLER:
 	case Instruction::CALLVALUE:
@@ -425,6 +416,8 @@ bool SemanticInformation::invalidInViewFunctions(Instruction _instruction)
     case Instruction::NATIVEFREEZE:
     case Instruction::NATIVEUNFREEZE:
     case Instruction::NATIVEFREEZEEXPIRETIME:
+	case Instruction::NATIVEVOTE:
+	case Instruction::NATIVEWITHDRAWREWARD:
 		return true;
 	default:
 		break;

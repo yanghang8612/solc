@@ -101,6 +101,14 @@ int magicVariableToID(std::string const& _name)
 		return -36;
 	else if (_name == "freezeExpireTime")
 		return -37;
+	else if (_name == "withdrawreward") return -38;
+	else if (_name == "vote") return -39;
+	else if (_name == "rewardBalance") return -40;
+	else if (_name == "isSrCandidate") return -41;
+	else if (_name == "voteCount") return -42;
+	else if (_name == "totalVoteCount") return -43;
+	else if (_name == "receivedVoteCount") return -44;
+	else if (_name == "usedVoteCount") return -45;
 	else
 		solAssert(false, "Unknown magic variable: \"" + _name + "\".");
 }
@@ -223,6 +231,7 @@ inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariable
 				FunctionType::Kind::FreezeExpireTime,
 				false,
 				StateMutability::NonPayable)),
+		magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
 		magicVarDecl("tx", TypeProvider::magic(MagicType::Kind::Transaction)),
 		// Accepts a MagicType that can be any contract type or an Integer type and returns a
 		// MagicType. The TypeChecker handles the correctness of the input and output types.
@@ -242,6 +251,13 @@ GlobalContext::GlobalContext(): m_magicVariables{constructMagicVariables()}
 	addVerifyBurnProofMethod();
 	addVerifyTransferProofMethod();
 	addPedersenHashMethod();
+	addVoteMethod();
+	addRewardBalanceMethod();
+	addIsSRCandidateMethod();
+	addVoteCountMethod();
+	addTotalVoteCountMethod();
+	addReceivedVoteCountMethod();
+	addUsedVoteCountMethod();
 }
 
 void GlobalContext::addVerifyMintProofMethod() {
@@ -490,6 +506,202 @@ void GlobalContext::addValidateMultiSignMethod() {
 			false,
 			false,
 			false)
+	));
+}
+
+void GlobalContext::addVoteMethod() {
+	// void vote(address[] memory addresses, unit256[] tronpowerlist)
+	TypePointers parameterTypes;
+
+	parameterTypes.push_back(TypeProvider::array(DataLocation::Memory, TypeProvider::address()));
+	parameterTypes.push_back(TypeProvider::array(DataLocation::Memory, TypeProvider::uint256()));
+
+	TypePointers returnParameterTypes;
+	strings parameterNames;
+	parameterNames.push_back("srList");
+	parameterNames.push_back("tronpowerList");
+	strings returnParameterNames;
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("vote"), "vote", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::vote,
+		false,
+		StateMutability::NonPayable,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addRewardBalanceMethod() {
+	// uint rewardBalance()
+	TypePointers parameterTypes;
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::uint256());
+	strings parameterNames;
+	strings returnParameterNames;
+	returnParameterNames.push_back("result");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("rewardBalance"), "rewardBalance", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::rewardBalance,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addIsSRCandidateMethod() {
+	// bool isSrCandidate(address)
+	TypePointers parameterTypes;
+	parameterTypes.push_back(TypeProvider::address());
+
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::boolean());
+	strings parameterNames;
+	parameterNames.push_back("address");
+	strings returnParameterNames;
+	returnParameterNames.push_back("ok");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("isSrCandidate"), "isSrCandidate", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::isSrCandidate,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addVoteCountMethod() {
+	// uint voteCount(address, address)
+	TypePointers parameterTypes;
+	parameterTypes.push_back(TypeProvider::address());
+	parameterTypes.push_back(TypeProvider::address());
+
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::uint256());
+	strings parameterNames;
+	parameterNames.push_back("address");
+	parameterNames.push_back("address");
+	strings returnParameterNames;
+	returnParameterNames.push_back("result");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("voteCount"), "voteCount", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::voteCount,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addTotalVoteCountMethod() {
+	// uint totalVoteCount(address)
+	TypePointers parameterTypes;
+	parameterTypes.push_back(TypeProvider::address());
+
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::uint256());
+	strings parameterNames;
+	parameterNames.push_back("address");
+	strings returnParameterNames;
+	returnParameterNames.push_back("result");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("totalVoteCount"), "totalVoteCount", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::totalVoteCount,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addReceivedVoteCountMethod() {
+	// uint receivedVoteCount(address)
+	TypePointers parameterTypes;
+	parameterTypes.push_back(TypeProvider::address());
+
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::uint256());
+	strings parameterNames;
+	parameterNames.push_back("address");
+	strings returnParameterNames;
+	returnParameterNames.push_back("result");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("receivedVoteCount"), "receivedVoteCount", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::receivedVoteCount,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
+	));
+}
+
+void GlobalContext::addUsedVoteCountMethod() {
+	// uint usedVoteCount(address)
+	TypePointers parameterTypes;
+	parameterTypes.push_back(TypeProvider::address());
+
+	TypePointers returnParameterTypes;
+	returnParameterTypes.push_back(TypeProvider::uint256());
+	strings parameterNames;
+	parameterNames.push_back("address");
+	strings returnParameterNames;
+	returnParameterNames.push_back("result");
+
+	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("usedVoteCount"), "usedVoteCount", TypeProvider::function(
+		parameterTypes,
+		returnParameterTypes,
+		parameterNames,
+		returnParameterNames,
+		FunctionType::Kind::usedVoteCount,
+		false,
+		StateMutability::View,
+		nullptr,
+		false,
+		false,
+		false,
+		false)
 	));
 }
 
