@@ -574,7 +574,7 @@ BOOST_AUTO_TEST_CASE(comments_mixed_in_sequence)
 
 BOOST_AUTO_TEST_CASE(ether_subdenominations)
 {
-	TestScanner scanner(CharStream("sun trx", ""));
+	TestScanner scanner("sun trx");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::SubSun);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::SubTrx);
 }
