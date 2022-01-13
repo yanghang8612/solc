@@ -37,6 +37,7 @@
 
 #include <functional>
 
+#include <boost/rational.hpp>
 #include <boost/test/unit_test.hpp>
 
 namespace solidity::frontend::test
@@ -49,8 +50,7 @@ namespace solidity::test
 using rational = boost::rational<bigint>;
 
 // The various denominations; here for ease of use where needed within code.
-static const u256 sun = 1;
-static const u256 trx = sun * 1000000;
+static u256 const sun = 1;
 
 class ExecutionFramework
 {
@@ -170,7 +170,7 @@ public:
 	static bytes encode(size_t _value) { return encode(u256(_value)); }
 	static bytes encode(char const* _value) { return encode(std::string(_value)); }
 	static bytes encode(uint8_t _value) { return bytes(31, 0) + bytes{_value}; }
-	static bytes encode(u256 const& _value) { return util::toBigEndian(_value); }
+	static bytes encode(u256 const& _value) { return toBigEndian(_value); }
 	/// @returns the fixed-point encoding of a rational number with a given
 	/// number of fractional bits.
 	static bytes encode(std::pair<rational, int> const& _valueAndPrecision)
@@ -274,6 +274,9 @@ private:
 	}
 
 protected:
+	u256 const m_gasPrice = 10000 * sun;
+	u256 const m_gas = 100000000;
+
 	void selectVM(evmc_capabilities _cap = evmc_capabilities::EVMC_CAPABILITY_EVM1);
 	void reset();
 
@@ -303,8 +306,6 @@ protected:
 	bool m_transactionSuccessful = true;
 	util::h160 m_sender = account(0);
 	util::h160 m_contractAddress;
-	u256 const m_gasPrice = 10000 * sun;
-	u256 const m_gas = 100000000;
 	bytes m_output;
 	u256 m_gasUsed;
 };
