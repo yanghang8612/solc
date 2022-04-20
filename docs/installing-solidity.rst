@@ -86,7 +86,9 @@ local folder for input and output, and specify the contract to compile. For exam
     docker run -v /local/path:/sources ethereum/solc:stable -o /sources/output --abi --bin /sources/Contract.sol
 
 You can also use the standard JSON interface (which is recommended when using the compiler with tooling).
-When using this interface it is not necessary to mount any directories.
+When using this interface it is not necessary to mount any directories as long as the JSON input is
+self-contained (i.e. it does not refer to any external files that would have to be
+:ref:`loaded by the import callback <initial-vfs-content-standard-json-with-import-callback>`).
 
 .. code-block:: bash
 
@@ -229,6 +231,7 @@ Each one contains a ``list.json`` file listing the available binaries. For examp
       "build": "commit.3f05b770",
       "longVersion": "0.7.4+commit.3f05b770",
       "keccak256": "0x300330ecd127756b824aa13e843cb1f43c473cb22eaf3750d5fb9c99279af8c3",
+      "sha256": "0x2b55ed5fec4d9625b6c7b3ab1abd2b7fb7dd2a9c68543bf0323db2c7e2d55af2",
       "urls": [
         "bzzr://16c5f09109c793db99fe35f037c6092b061bd39260ee7a677c8a97f18c955ab1",
         "dweb:/ipfs/QmTLs5MuLEWXQkths41HiACoXDiH8zxyqBHGFDRSzVE5CS"
@@ -250,6 +253,8 @@ This means that:
   ``0x300330ecd127756b824aa13e843cb1f43c473cb22eaf3750d5fb9c99279af8c3``.  The hash can be computed
   on the command line using ``keccak256sum`` utility provided by `sha3sum`_ or `keccak256() function
   from ethereumjs-util`_ in JavaScript.
+- You can also verify the integrity of the binary by comparing its sha256 hash to
+  ``0x2b55ed5fec4d9625b6c7b3ab1abd2b7fb7dd2a9c68543bf0323db2c7e2d55af2``.
 
 .. warning::
 
@@ -308,7 +313,8 @@ The following are dependencies for all builds of Solidity:
 +===================================+=======================================================+
 | `CMake`_ (version 3.13+)          | Cross-platform build file generator.                  |
 +-----------------------------------+-------------------------------------------------------+
-| `Boost`_  (version 1.65+)         | C++ libraries.                                        |
+| `Boost`_ (version 1.77+ on        | C++ libraries.                                        |
+| Windows, 1.65+ otherwise)         |                                                       |
 +-----------------------------------+-------------------------------------------------------+
 | `Git`_                            | Command-line tool for retrieving source code.         |
 +-----------------------------------+-------------------------------------------------------+
@@ -330,7 +336,17 @@ The following are dependencies for all builds of Solidity:
 
     Starting from 0.5.10 linking against Boost 1.70+ should work without manual intervention.
 
-Minimum compiler versions
+.. note::
+    The default build configuration requires a specific Z3 version (the latest one at the time the
+    code was last updated). Changes introduced between Z3 releases often result in slightly different
+    (but still valid) results being returned. Our SMT tests do not account for these differences and
+    will likely fail with a different version than the one they were written for. This does not mean
+    that a build using a different version is faulty. If you pass ``-DSTRICT_Z3_VERSION=OFF`` option
+    to CMake, you can build with any version that satisfies the requirement given in the table above.
+    If you do this, however, please remember to pass the ``--no-smt`` option to ``scripts/tests.sh``
+    to skip the SMT tests.
+
+Minimum Compiler Versions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The following C++ compilers and their minimum versions can build the Solidity codebase:
@@ -373,6 +389,8 @@ You need to install the following dependencies for Windows builds of Solidity:
 +-----------------------------------+-------------------------------------------------------+
 | `Visual Studio 2019`_  (Optional) | C++ compiler and dev environment.                     |
 +-----------------------------------+-------------------------------------------------------+
+| `Boost`_ (version 1.77+)          | C++ libraries.                                        |
++-----------------------------------+-------------------------------------------------------+
 
 If you already have one IDE and only need the compiler and libraries,
 you could install Visual Studio 2019 Build Tools.
@@ -393,24 +411,13 @@ in Visual Studio 2019 Build Tools or Visual Studio 2019:
 .. _Visual Studio 2019: https://www.visualstudio.com/vs/
 .. _Visual Studio 2019 Build Tools: https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019
 
-Dependencies Helper Script
---------------------------
-
-We have a helper script which you can use to install all required external dependencies
-on macOS, Windows and on numerous Linux distros.
-
-.. code-block:: bash
-
-    ./scripts/install_deps.sh
-
-Or, on Windows:
+We have a helper script which you can use to install all required external dependencies:
 
 .. code-block:: bat
 
     scripts\install_deps.ps1
 
-Note that the latter command will install ``boost`` and ``cmake`` to the ``deps`` subdirectory, while the former command
-will attempt to install the dependencies globally.
+This will install ``boost`` and ``cmake`` to the ``deps`` subdirectory.
 
 Clone the Repository
 --------------------
@@ -474,10 +481,10 @@ And for Windows:
 
     mkdir build
     cd build
-    cmake -G "Visual Studio 16 2019 Win64" ..
+    cmake -G "Visual Studio 16 2019" ..
 
-In case you want to use the version of boost installed by ``./scripts/install_deps.ps1``, you will
-additionally need to pass ``-DBoost_DIR="..\deps\boost\lib\cmake\Boost-*"`` and ``-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded``
+In case you want to use the version of boost installed by ``scripts\install_deps.ps1``, you will
+additionally need to pass ``-DBoost_DIR="deps\boost\lib\cmake\Boost-*"`` and ``-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded``
 as arguments to the call to ``cmake``.
 
 This should result in the creation of **solidity.sln** in that build directory.
@@ -547,10 +554,10 @@ of the current nightly build, but without the ``prerelease`` specifier.
 
 Example:
 
-0. the 0.4.0 release is made
-1. nightly build has a version of 0.4.1 from now on
-2. non-breaking changes are introduced - no change in version
-3. a breaking change is introduced - version is bumped to 0.5.0
-4. the 0.5.0 release is made
+0. The 0.4.0 release is made.
+1. The nightly build has a version of 0.4.1 from now on.
+2. Non-breaking changes are introduced --> no change in version.
+3. A breaking change is introduced --> version is bumped to 0.5.0.
+4. The 0.5.0 release is made.
 
 This behaviour works well with the  :ref:`version pragma <version_pragma>`.

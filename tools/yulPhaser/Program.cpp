@@ -41,6 +41,8 @@
 
 #include <libsolutil/JSON.h>
 
+#include <libsolidity/interface/OptimiserSettings.h>
+
 #include <cassert>
 #include <memory>
 
@@ -56,16 +58,6 @@ namespace solidity::phaser
 
 ostream& operator<<(ostream& _stream, Program const& _program);
 
-}
-
-ostream& std::operator<<(ostream& _outputStream, ErrorList const& _errors)
-{
-	SourceReferenceFormatter formatter(_outputStream, true, false);
-
-	for (auto const& error: _errors)
-		formatter.printErrorInformation(*error);
-
-	return _outputStream;
 }
 
 Program::Program(Program const& program):
@@ -128,7 +120,7 @@ variant<unique_ptr<Block>, ErrorList> Program::parseObject(Dialect const& _diale
 {
 	ErrorList errors;
 	ErrorReporter errorReporter(errors);
-	auto scanner = make_shared<Scanner>(move(_source));
+	auto scanner = make_shared<Scanner>(_source);
 
 	ObjectParser parser(errorReporter, _dialect);
 	shared_ptr<Object> object = parser.parse(scanner, false);
@@ -201,7 +193,12 @@ unique_ptr<Block> Program::applyOptimisationSteps(
 	// An empty set of reserved identifiers. It could be a constructor parameter but I don't
 	// think it would be useful in this tool. Other tools (like yulopti) have it empty too.
 	set<YulString> const externallyUsedIdentifiers = {};
-	OptimiserStepContext context{_dialect, _nameDispenser, externallyUsedIdentifiers};
+	OptimiserStepContext context{
+		_dialect,
+		_nameDispenser,
+		externallyUsedIdentifiers,
+		frontend::OptimiserSettings::standard().expectedExecutionsPerDeployment
+	};
 
 	for (string const& step: _optimisationSteps)
 		OptimiserSuite::allSteps().at(step)->run(context, *_ast);

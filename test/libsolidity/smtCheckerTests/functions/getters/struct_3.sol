@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	struct S {
 		string s;
@@ -20,5 +18,15 @@ contract C {
 		assert(b[0] == "t"); // should fail
 	}
 }
+// ====
+// SMTEngine: all
 // ----
-// Warning 6328: (340-359): CHC: Assertion violation happens here.
+// Warning 1218: (273-277): CHC: Error trying to invoke SMT solver.
+// Warning 1218: (281-287): CHC: Error trying to invoke SMT solver.
+// Warning 1218: (314-318): CHC: Error trying to invoke SMT solver.
+// Warning 1218: (307-326): CHC: Error trying to invoke SMT solver.
+// Warning 6368: (273-277): CHC: Out of bounds access might happen here.
+// Warning 6368: (281-287): CHC: Out of bounds access might happen here.
+// Warning 6368: (314-318): CHC: Out of bounds access might happen here.
+// Warning 6328: (307-326): CHC: Assertion violation might happen here.
+// Warning 4661: (307-326): BMC: Assertion violation happens here.

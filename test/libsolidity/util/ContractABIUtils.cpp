@@ -20,6 +20,8 @@
 
 #include <test/libsolidity/util/SoltestErrors.h>
 
+#include <libsolidity/ast/Types.h>
+#include <libsolidity/ast/TypeProvider.h>
 #include <libsolutil/FunctionSelector.h>
 #include <libsolutil/CommonData.h>
 
@@ -27,7 +29,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/range/algorithm_ext/for_each.hpp>
 
 #include <fstream>
@@ -123,6 +124,21 @@ bool isTuple(string const& _type)
 bool isFixedTupleArray(string const& _type)
 {
 	return regex_match(_type, regex{"tuple\\[\\d+\\]"});
+}
+
+optional<ABIType> isFixedPoint(string const& type)
+{
+	optional<ABIType> fixedPointType;
+	smatch matches;
+	if (regex_match(type, matches, regex{"(u?)fixed(\\d+)x(\\d+)"}))
+	{
+		ABIType abiType(ABIType::SignedFixedPoint);
+		if (matches[1].str() == "u")
+			abiType.type = ABIType::UnsignedFixedPoint;
+		abiType.fractionalDigits = static_cast<unsigned>(std::stoi(matches[3].str()));
+		fixedPointType = abiType;
+	}
+	return fixedPointType;
 }
 
 string functionSignatureFromABI(Json::Value const& _functionABI)
@@ -246,6 +262,8 @@ bool ContractABIUtils::appendTypesFromName(
 			_dynamicTypes.push_back(ABIType{ABIType::String, ABIType::AlignLeft});
 		}
 	}
+	else if (optional<ABIType> fixedPointType = isFixedPoint(type))
+		_inplaceTypes.push_back(*fixedPointType);
 	else if (isBytes(type))
 		return false;
 	else if (isFixedTupleArray(type))
@@ -262,15 +280,17 @@ void ContractABIUtils::overwriteParameters(
 	solidity::frontend::test::ParameterList const& _sourceParameters
 )
 {
+	using namespace placeholders;
 	boost::for_each(
 		_sourceParameters,
 		_targetParameters,
-		boost::bind<void>(
+		std::bind<void>(
 			[&](Parameter _a, Parameter& _b) -> void
 			{
 				if (
 					_a.abiType.size != _b.abiType.size ||
-					_a.abiType.type != _b.abiType.type
+					_a.abiType.type != _b.abiType.type ||
+					_a.abiType.fractionalDigits != _b.abiType.fractionalDigits
 				)
 				{
 					_errorReporter.warning("Type or size of parameter(s) does not match.");

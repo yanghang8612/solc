@@ -26,60 +26,58 @@
 # ------------------------------------------------------------------------------
 set -e
 
-REPODIR="$(realpath $(dirname $0)/..)"
+REPODIR="$(realpath "$(dirname "$0")"/..)"
 
-EVM_VALUES=(homestead byzantium constantinople petersburg istanbul)
+# shellcheck source=scripts/common.sh
+source "${REPODIR}/scripts/common.sh"
+
+# NOTE: If you add/remove values, remember to update `parallelism` setting in CircleCI config.
+EVM_VALUES=(homestead byzantium constantinople petersburg istanbul berlin london)
+DEFAULT_EVM=london
+[[ " ${EVM_VALUES[*]} " =~ $DEFAULT_EVM ]]
 OPTIMIZE_VALUES=(0 1)
-STEPS=$(( 2 + ${#EVM_VALUES[@]} * ${#OPTIMIZE_VALUES[@]} ))
+STEPS=$(( 1 + ${#EVM_VALUES[@]} * ${#OPTIMIZE_VALUES[@]} ))
 
-if (( $CIRCLE_NODE_TOTAL )) && (( $CIRCLE_NODE_TOTAL > 1 ))
-then
-    # Run step 1 as the only step on the first executor
-    # and evenly distribute the other steps among
-    # the other executors.
-    # The first step takes much longer than the other steps.
-    if (( $CIRCLE_NODE_INDEX == 0 ))
-    then
-        RUN_STEPS="1"
-    else
-        export CIRCLE_NODE_INDEX=$(($CIRCLE_NODE_INDEX - 1))
-        export CIRCLE_NODE_TOTAL=$(($CIRCLE_NODE_TOTAL - 1))
-        RUN_STEPS=$(seq 2 "$STEPS" | circleci tests split)
-    fi
-else
-    RUN_STEPS=$(seq "$STEPS")
-fi
-
-# turn newlines into spaces
-RUN_STEPS=$(echo $RUN_STEPS)
-
-echo "Running steps $RUN_STEPS..."
+RUN_STEPS=$(circleci_select_steps "$(seq "$STEPS")")
+printTask "Running steps $RUN_STEPS..."
 
 STEP=1
 
-# Run SMTChecker tests separately, as the heaviest expected run.
-[[ " $RUN_STEPS " =~ " $STEP " ]] && EVM=istanbul OPTIMIZE=1 ABI_ENCODER_V1=1 BOOST_TEST_ARGS="-t smtCheckerTests/*" "${REPODIR}/.circleci/soltest.sh"
-STEP=$(($STEP + 1))
 
-# Run without SMTChecker tests.
-[[ " $RUN_STEPS " =~ " $STEP " ]] && EVM=istanbul OPTIMIZE=1 ABI_ENCODER_V1=1 BOOST_TEST_ARGS="-t !smtCheckerTests" "${REPODIR}/.circleci/soltest.sh"
-STEP=$(($STEP + 1))
+# Run for ABI encoder v1, without SMTChecker tests.
+if circleci_step_selected "$RUN_STEPS" "$STEP"
+then
+    EVM="${DEFAULT_EVM}" \
+    OPTIMIZE=1 \
+    ABI_ENCODER_V1=1 \
+    BOOST_TEST_ARGS="-t !smtCheckerTests" \
+    "${REPODIR}/.circleci/soltest.sh"
+fi
+((++STEP))
 
-for OPTIMIZE in ${OPTIMIZE_VALUES[@]}
+for OPTIMIZE in "${OPTIMIZE_VALUES[@]}"
 do
-    for EVM in ${EVM_VALUES[@]}
+    for EVM in "${EVM_VALUES[@]}"
     do
         # run tests against hera ewasm evmc vm, only if OPTIMIZE == 0 and evm version is byzantium
         EWASM_ARGS=""
         [ "${EVM}" = "byzantium" ] && [ "${OPTIMIZE}" = "0" ] && EWASM_ARGS="--ewasm"
+        ENFORCE_GAS_ARGS=""
+        [ "${EVM}" = "${DEFAULT_EVM}" ] && ENFORCE_GAS_ARGS="--enforce-gas-cost"
+        # Run SMTChecker tests only when OPTIMIZE == 0
+        DISABLE_SMTCHECKER=""
+        [ "${OPTIMIZE}" != "0" ] && DISABLE_SMTCHECKER="-t !smtCheckerTests"
 
-        [[ " $RUN_STEPS " =~ " $STEP " ]] && EVM="$EVM" OPTIMIZE="$OPTIMIZE" SOLTEST_FLAGS="$SOLTEST_FLAGS $EWASM_ARGS" BOOST_TEST_ARGS="-t !@nooptions" "${REPODIR}/.circleci/soltest.sh"
-        STEP=$(($STEP + 1))
+        if circleci_step_selected "$RUN_STEPS" "$STEP"
+        then
+            EVM="$EVM" \
+            OPTIMIZE="$OPTIMIZE" \
+            SOLTEST_FLAGS="$SOLTEST_FLAGS $ENFORCE_GAS_ARGS $EWASM_ARGS" \
+            BOOST_TEST_ARGS="-t !@nooptions $DISABLE_SMTCHECKER" \
+            "${REPODIR}/.circleci/soltest.sh"
+        fi
+        ((++STEP))
     done
 done
 
-if (($STEP != $STEPS + 1))
-then
-    echo "Step counter not properly adjusted!" >&2
-    exit 1
-fi
+((STEP == STEPS + 1)) || assertFail "Step counter not properly adjusted!"

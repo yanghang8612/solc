@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C{
     uint x;
 	constructor(uint y) {
@@ -19,5 +17,8 @@ contract C{
 		--x;
 	}
 }
+// ====
+// SMTEngine: all
 // ----
-// Warning 5667: (70-76): Unused function parameter. Remove or comment out the variable name to silence this warning.
+// Warning 5667: (37-43): Unused function parameter. Remove or comment out the variable name to silence this warning.
+// Info 1180: Contract invariant(s) for :C:\n!(x <= 0)\n!(x >= 2)\n(!(x <= 0) && !(x >= 2))\n

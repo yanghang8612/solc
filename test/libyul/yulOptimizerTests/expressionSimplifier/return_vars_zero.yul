@@ -10,7 +10,7 @@
 // step: expressionSimplifier
 //
 // {
+//     { let t, v := f() }
 //     function f() -> c, d
-//     { sstore(d, 7) }
-//     let t, v := f()
+//     { sstore(0, 7) }
 // }

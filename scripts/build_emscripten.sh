@@ -34,6 +34,7 @@ else
     BUILD_DIR="$1"
 fi
 
-docker run -v $(pwd):/root/project -w /root/project \
-    solbuildpackpusher/solidity-buildpack-deps@sha256:23dad3b34deae8107c8551804ef299f6a89c23ed506e8118fac151e2bdc9018c\
-    ./scripts/ci/build_emscripten.sh $BUILD_DIR
+# solbuildpackpusher/solidity-buildpack-deps:emscripten-8
+docker run -v "$(pwd):/root/project" -w /root/project \
+    solbuildpackpusher/solidity-buildpack-deps@sha256:842d6074e0e7e5355c89122c1cafc1fdb59696596750e7d56e5f35c0d883ad59 \
+    ./scripts/ci/build_emscripten.sh "$BUILD_DIR"

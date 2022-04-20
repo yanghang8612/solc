@@ -129,13 +129,14 @@ WasmDialect::WasmDialect()
 	m_functions["unreachable"_yulstring].sideEffects.storage = SideEffects::None;
 	m_functions["unreachable"_yulstring].sideEffects.memory = SideEffects::None;
 	m_functions["unreachable"_yulstring].sideEffects.otherState = SideEffects::None;
-	m_functions["unreachable"_yulstring].controlFlowSideEffects.terminates = true;
-	m_functions["unreachable"_yulstring].controlFlowSideEffects.reverts = true;
+	m_functions["unreachable"_yulstring].controlFlowSideEffects.canTerminate = false;
+	m_functions["unreachable"_yulstring].controlFlowSideEffects.canRevert = true;
+	m_functions["unreachable"_yulstring].controlFlowSideEffects.canContinue = false;
 
 	addFunction("datasize", {i64}, {i64}, true, {LiteralKind::String});
 	addFunction("dataoffset", {i64}, {i64}, true, {LiteralKind::String});
 
-	addEthereumExternals();
+	addExternals();
 }
 
 BuiltinFunction const* WasmDialect::builtin(YulString _name) const
@@ -172,7 +173,7 @@ WasmDialect const& WasmDialect::instance()
 	return *dialect;
 }
 
-void WasmDialect::addEthereumExternals()
+void WasmDialect::addExternals()
 {
 	// These are not YulStrings because that would be too complicated with regards
 	// to the YulStringRepository reset.
@@ -181,48 +182,56 @@ void WasmDialect::addEthereumExternals()
 	static string const i32ptr{"i32"}; // Uses "i32" on purpose.
 	struct External
 	{
+		string module;
 		string name;
 		vector<string> parameters;
 		vector<string> returns;
 		ControlFlowSideEffects controlFlowSideEffects = ControlFlowSideEffects{};
 	};
 	static vector<External> externals{
-		{"getAddress", {i32ptr}, {}},
-		{"getExternalBalance", {i32ptr, i32ptr}, {}},
-		{"getBlockHash", {i64, i32ptr}, {i32}},
-		{"call", {i64, i32ptr, i32ptr, i32ptr, i32}, {i32}},
-		{"callDataCopy", {i32ptr, i32, i32}, {}},
-		{"getCallDataSize", {}, {i32}},
-		{"callCode", {i64, i32ptr, i32ptr, i32ptr, i32}, {i32}},
-		{"callDelegate", {i64, i32ptr, i32ptr, i32}, {i32}},
-		{"callStatic", {i64, i32ptr, i32ptr, i32}, {i32}},
-		{"storageStore", {i32ptr, i32ptr}, {}},
-		{"storageLoad", {i32ptr, i32ptr}, {}},
-		{"getCaller", {i32ptr}, {}},
-		{"getCallValue", {i32ptr}, {}},
-		{"codeCopy", {i32ptr, i32, i32}, {}},
-		{"getCodeSize", {}, {i32}},
-		{"getBlockCoinbase", {i32ptr}, {}},
-		{"create", {i32ptr, i32ptr, i32, i32ptr}, {i32}},
-		{"getBlockDifficulty", {i32ptr}, {}},
-		{"externalCodeCopy", {i32ptr, i32ptr, i32, i32}, {}},
-		{"getExternalCodeSize", {i32ptr}, {i32}},
-		{"getGasLeft", {}, {i64}},
-		{"getBlockGasLimit", {}, {i64}},
-		{"getTxGasPrice", {i32ptr}, {}},
-		{"log", {i32ptr, i32, i32, i32ptr, i32ptr, i32ptr, i32ptr}, {}},
-		{"getBlockNumber", {}, {i64}},
-		{"getTxOrigin", {i32ptr}, {}},
-		{"finish", {i32ptr, i32}, {}, ControlFlowSideEffects{true, false}},
-		{"revert", {i32ptr, i32}, {}, ControlFlowSideEffects{true, true}},
-		{"getReturnDataSize", {}, {i32}},
-		{"returnDataCopy", {i32ptr, i32, i32}, {}},
-		{"selfDestruct", {i32ptr}, {}, ControlFlowSideEffects{true, false}},
-		{"getBlockTimestamp", {}, {i64}}
+		{"eth", "getAddress", {i32ptr}, {}},
+		{"eth", "getExternalBalance", {i32ptr, i32ptr}, {}},
+		{"eth", "getBlockBaseFee", {i32ptr}, {}},
+		{"eth", "getBlockHash", {i64, i32ptr}, {i32}},
+		{"eth", "call", {i64, i32ptr, i32ptr, i32ptr, i32}, {i32}},
+		{"eth", "callDataCopy", {i32ptr, i32, i32}, {}},
+		{"eth", "getCallDataSize", {}, {i32}},
+		{"eth", "callCode", {i64, i32ptr, i32ptr, i32ptr, i32}, {i32}},
+		{"eth", "callDelegate", {i64, i32ptr, i32ptr, i32}, {i32}},
+		{"eth", "callStatic", {i64, i32ptr, i32ptr, i32}, {i32}},
+		{"eth", "storageStore", {i32ptr, i32ptr}, {}},
+		{"eth", "storageLoad", {i32ptr, i32ptr}, {}},
+		{"eth", "getCaller", {i32ptr}, {}},
+		{"eth", "getCallValue", {i32ptr}, {}},
+		{"eth", "codeCopy", {i32ptr, i32, i32}, {}},
+		{"eth", "getCodeSize", {}, {i32}},
+		{"eth", "getBlockCoinbase", {i32ptr}, {}},
+		{"eth", "create", {i32ptr, i32ptr, i32, i32ptr}, {i32}},
+		{"eth", "getBlockDifficulty", {i32ptr}, {}},
+		{"eth", "externalCodeCopy", {i32ptr, i32ptr, i32, i32}, {}},
+		{"eth", "getExternalCodeSize", {i32ptr}, {i32}},
+		{"eth", "getGasLeft", {}, {i64}},
+		{"eth", "getBlockGasLimit", {}, {i64}},
+		{"eth", "getTxGasPrice", {i32ptr}, {}},
+		{"eth", "log", {i32ptr, i32, i32, i32ptr, i32ptr, i32ptr, i32ptr}, {}},
+		{"eth", "getBlockNumber", {}, {i64}},
+		{"eth", "getTxOrigin", {i32ptr}, {}},
+		{"eth", "finish", {i32ptr, i32}, {}, ControlFlowSideEffects{true, false, false}},
+		{"eth", "revert", {i32ptr, i32}, {}, ControlFlowSideEffects{false, true, false}},
+		{"eth", "getReturnDataSize", {}, {i32}},
+		{"eth", "returnDataCopy", {i32ptr, i32, i32}, {}},
+		{"eth", "selfDestruct", {i32ptr}, {}, ControlFlowSideEffects{false, true, false}},
+		{"eth", "getBlockTimestamp", {}, {i64}},
+		{"debug", "print32", {i32}, {}},
+		{"debug", "print64", {i64}, {}},
+		{"debug", "printMem", {i32, i32}, {}},
+		{"debug", "printMemHex", {i32, i32}, {}},
+		{"debug", "printStorage", {i32}, {}},
+		{"debug", "printStorageHex", {i32}, {}},
 	};
 	for (External const& ext: externals)
 	{
-		YulString name{"eth." + ext.name};
+		YulString name{ext.module + "." + ext.name};
 		BuiltinFunction& f = m_functions[name];
 		f.name = name;
 		for (string const& p: ext.parameters)
@@ -232,7 +241,7 @@ void WasmDialect::addEthereumExternals()
 		// TODO some of them are side effect free.
 		f.sideEffects = SideEffects::worst();
 		f.sideEffects.cannotLoop = true;
-		f.sideEffects.movableApartFromEffects = !ext.controlFlowSideEffects.terminates;
+		f.sideEffects.movableApartFromEffects = !ext.controlFlowSideEffects.terminatesOrReverts();
 		f.controlFlowSideEffects = ext.controlFlowSideEffects;
 		f.isMSize = false;
 		f.literalArguments.clear();

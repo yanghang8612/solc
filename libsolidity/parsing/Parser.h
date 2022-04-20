@@ -29,7 +29,7 @@
 
 namespace solidity::langutil
 {
-class Scanner;
+class CharStream;
 }
 
 namespace solidity::frontend
@@ -47,7 +47,7 @@ public:
 		m_evmVersion(_evmVersion)
 	{}
 
-	ASTPointer<SourceUnit> parse(std::shared_ptr<langutil::Scanner> const& _scanner);
+	ASTPointer<SourceUnit> parse(langutil::CharStream& _charStream);
 
 private:
 	class ASTNodeFactory;
@@ -95,6 +95,7 @@ private:
 	ASTPointer<ASTNode> parseFunctionDefinition(bool _freeFunction = false);
 	ASTPointer<StructDefinition> parseStructDefinition();
 	ASTPointer<EnumDefinition> parseEnumDefinition();
+	ASTPointer<UserDefinedValueTypeDefinition> parseUserDefinedValueTypeDefinition();
 	ASTPointer<EnumValue> parseEnumValue();
 	ASTPointer<VariableDeclaration> parseVariableDeclaration(
 		VarDeclParserOptions const& _options = {},
@@ -102,9 +103,11 @@ private:
 	);
 	ASTPointer<ModifierDefinition> parseModifierDefinition();
 	ASTPointer<EventDefinition> parseEventDefinition();
+	ASTPointer<ErrorDefinition> parseErrorDefinition();
 	ASTPointer<UsingForDirective> parseUsingDirective();
 	ASTPointer<ModifierInvocation> parseModifierInvocation();
 	ASTPointer<Identifier> parseIdentifier();
+	ASTPointer<Identifier> parseIdentifierOrAddress();
 	ASTPointer<UserDefinedTypeName> parseUserDefinedTypeName();
 	ASTPointer<IdentifierPath> parseIdentifierPath();
 	ASTPointer<TypeName> parseTypeNameSuffix(ASTPointer<TypeName> type, ASTNodeFactory& nodeFactory);
@@ -125,6 +128,7 @@ private:
 	ASTPointer<WhileStatement> parseDoWhileStatement(ASTPointer<ASTString> const& _docString);
 	ASTPointer<ForStatement> parseForStatement(ASTPointer<ASTString> const& _docString);
 	ASTPointer<EmitStatement> parseEmitStatement(ASTPointer<ASTString> const& docString);
+	ASTPointer<RevertStatement> parseRevertStatement(ASTPointer<ASTString> const& docString);
 	/// A "simple statement" can be a variable declaration statement or an expression statement.
 	ASTPointer<Statement> parseSimpleStatement(ASTPointer<ASTString> const& _docString);
 	ASTPointer<VariableDeclarationStatement> parseVariableDeclarationStatement(
@@ -151,6 +155,7 @@ private:
 	std::vector<ASTPointer<Expression>> parseFunctionCallListArguments();
 	std::pair<std::vector<ASTPointer<Expression>>, std::vector<ASTPointer<ASTString>>> parseFunctionCallArguments();
 	std::pair<std::vector<ASTPointer<Expression>>, std::vector<ASTPointer<ASTString>>> parseNamedArguments();
+	std::pair<ASTPointer<ASTString>, langutil::SourceLocation> expectIdentifierWithLocation();
 	///@}
 
 	///@{
@@ -200,6 +205,7 @@ private:
 	ASTPointer<Expression> expressionFromIndexAccessStructure(IndexAccessedPath const& _pathAndIndices);
 
 	ASTPointer<ASTString> expectIdentifierToken();
+	ASTPointer<ASTString> expectIdentifierTokenOrAddress();
 	ASTPointer<ASTString> getLiteralAndAdvance();
 	///@}
 

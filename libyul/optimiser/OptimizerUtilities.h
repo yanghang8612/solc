@@ -26,14 +26,26 @@
 #include <libyul/Dialect.h>
 #include <libyul/YulString.h>
 
+#include <optional>
+
+namespace solidity::evmasm
+{
+enum class Instruction: uint8_t;
+}
+
 namespace solidity::yul
 {
 
 /// Removes statements that are just empty blocks (non-recursive).
+/// If this is run on the outermost block, the FunctionGrouper should be run afterwards to keep
+/// the canonical form.
 void removeEmptyBlocks(Block& _block);
 
 /// Returns true if a given literal can not be used as an identifier.
 /// This includes Yul keywords and builtins of the given dialect.
 bool isRestrictedIdentifier(Dialect const& _dialect, YulString const& _identifier);
+
+/// Helper function that returns the instruction, if the `_name` is a BuiltinFunction
+std::optional<evmasm::Instruction> toEVMInstruction(Dialect const& _dialect, YulString const& _name);
 
 }

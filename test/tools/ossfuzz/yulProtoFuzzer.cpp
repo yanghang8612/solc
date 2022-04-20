@@ -19,18 +19,27 @@
 #include <fstream>
 
 #include <test/tools/ossfuzz/yulProto.pb.h>
-#include <test/tools/fuzzer_common.h>
 #include <test/tools/ossfuzz/protoToYul.h>
-#include <src/libfuzzer/libfuzzer_macro.h>
+
+#include <test/tools/fuzzer_common.h>
+
+#include <test/libyul/YulOptimizerTestCommon.h>
 
 #include <libyul/AssemblyStack.h>
-#include <liblangutil/EVMVersion.h>
 #include <libyul/Exceptions.h>
 
+#include <libyul/backends/evm/EVMDialect.h>
+
+#include <liblangutil/DebugInfoSelection.h>
+#include <liblangutil/EVMVersion.h>
+
+#include <src/libfuzzer/libfuzzer_macro.h>
+
 using namespace solidity;
-using namespace solidity::yul;
-using namespace solidity::yul::test::yul_fuzzer;
 using namespace solidity::langutil;
+using namespace solidity::yul;
+using namespace solidity::yul::test;
+using namespace solidity::yul::test::yul_fuzzer;
 using namespace std;
 
 DEFINE_PROTO_FUZZER(Program const& _input)
@@ -56,7 +65,8 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 	AssemblyStack stack(
 		version,
 		AssemblyStack::Language::StrictAssembly,
-		solidity::frontend::OptimiserSettings::full()
+		solidity::frontend::OptimiserSettings::full(),
+		DebugInfoSelection::All()
 	);
 
 	// Parse protobuf mutated YUL code
@@ -64,10 +74,16 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 		!stack.parseAndAnalyze("source", yul_source) ||
 		!stack.parserResult()->code ||
 		!stack.parserResult()->analysisInfo ||
-		!Error::containsOnlyWarnings(stack.errors())
+		Error::containsErrors(stack.errors())
 	)
 		yulAssert(false, "Proto fuzzer generated malformed program");
 
 	// Optimize
-	stack.optimize();
+	YulOptimizerTestCommon optimizerTest(
+		stack.parserResult(),
+		EVMDialect::strictAssemblyForEVMObjects(version)
+	);
+	optimizerTest.setStep(optimizerTest.randomOptimiserStep(_input.step()));
+	shared_ptr<solidity::yul::Block> astBlock = optimizerTest.run();
+	yulAssert(astBlock != nullptr, "Optimiser error.");
 }

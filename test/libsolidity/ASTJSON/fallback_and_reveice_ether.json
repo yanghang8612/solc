@@ -14,6 +14,7 @@
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "C",
       "contractDependencies": [],
       "contractKind": "contract",
       "fullyImplemented": true,
@@ -23,6 +24,7 @@
         9
       ],
       "name": "C",
+      "nameLocation": "9:1:1",
       "nodeType": "ContractDefinition",
       "nodes":
       [
@@ -39,6 +41,7 @@
           "kind": "receive",
           "modifiers": [],
           "name": "",
+          "nameLocation": "-1:-1:-1",
           "nodeType": "FunctionDefinition",
           "parameters":
           {
@@ -73,6 +76,7 @@
           "kind": "fallback",
           "modifiers": [],
           "name": "",
+          "nameLocation": "-1:-1:-1",
           "nodeType": "FunctionDefinition",
           "parameters":
           {
@@ -96,7 +100,8 @@
         }
       ],
       "scope": 10,
-      "src": "0:85:1"
+      "src": "0:85:1",
+      "usedErrors": []
     }
   ],
   "src": "0:86:1"

@@ -37,7 +37,13 @@
 
 #include <functional>
 
+#include <boost/rational.hpp>
 #include <boost/test/unit_test.hpp>
+
+namespace solidity::frontend::test
+{
+struct LogRecord;
+} // namespace solidity::frontend::test
 
 namespace solidity::test
 {
@@ -60,7 +66,8 @@ public:
 		u256 const& _value = 0,
 		std::string const& _contractName = "",
 		bytes const& _arguments = {},
-		std::map<std::string, util::h160> const& _libraryAddresses = {}
+		std::map<std::string, util::h160> const& _libraryAddresses = {},
+		std::optional<std::string> const& _sourceName = std::nullopt
 	) = 0;
 
 	bytes const& compileAndRun(
@@ -164,7 +171,7 @@ public:
 	static bytes encode(size_t _value) { return encode(u256(_value)); }
 	static bytes encode(char const* _value) { return encode(std::string(_value)); }
 	static bytes encode(uint8_t _value) { return bytes(31, 0) + bytes{_value}; }
-	static bytes encode(u256 const& _value) { return util::toBigEndian(_value); }
+	static bytes encode(u256 const& _value) { return toBigEndian(_value); }
 	/// @returns the fixed-point encoding of a rational number with a given
 	/// number of fractional bits.
 	static bytes encode(std::pair<rational, int> const& _valueAndPrecision)
@@ -240,6 +247,18 @@ public:
 		return result;
 	}
 
+	util::h160 setAccount(size_t _accountNumber)
+	{
+		m_sender = account(_accountNumber);
+		return m_sender;
+	}
+
+	size_t numLogs() const;
+	size_t numLogTopics(size_t _logIdx) const;
+	util::h256 logTopic(size_t _logIdx, size_t _topicIdx) const;
+	util::h160 logAddress(size_t _logIdx) const;
+	bytes logData(size_t _logIdx) const;
+
 private:
 	template <class CppFunction, class... Args>
 	auto callCppAndEncodeResult(CppFunction const& _cppFunction, Args const&... _arguments)
@@ -256,6 +275,8 @@ private:
 	}
 
 protected:
+	u256 const InitialGas = 100000000;
+
 	void selectVM(evmc_capabilities _cap = evmc_capabilities::EVMC_CAPABILITY_EVM1);
 	void reset();
 
@@ -267,15 +288,11 @@ protected:
 	/// @returns the (potentially newly created) _ith address.
 	util::h160 account(size_t _i);
 
-	u256 balanceAt(util::h160 const& _addr);
-	bool storageEmpty(util::h160 const& _addr);
-	bool addressHasCode(util::h160 const& _addr);
+	u256 balanceAt(util::h160 const& _addr) const;
+	bool storageEmpty(util::h160 const& _addr) const;
+	bool addressHasCode(util::h160 const& _addr) const;
 
-	size_t numLogs() const;
-	size_t numLogTopics(size_t _logIdx) const;
-	util::h256 logTopic(size_t _logIdx, size_t _topicIdx) const;
-	util::h160 logAddress(size_t _logIdx) const;
-	bytes logData(size_t _logIdx) const;
+	std::vector<frontend::test::LogRecord> recordedLogs() const;
 
 	langutil::EVMVersion m_evmVersion;
 	solidity::frontend::RevertStrings m_revertStrings = solidity::frontend::RevertStrings::Default;

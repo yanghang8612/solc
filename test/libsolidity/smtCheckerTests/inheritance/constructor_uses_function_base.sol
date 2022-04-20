@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract A {
 	uint x;
 	constructor() {
@@ -17,3 +15,7 @@ contract C is B {
 		assert(y == 42);
 	}
 }
+// ====
+// SMTEngine: all
+// ----
+// Info 1180: Contract invariant(s) for :C:\n(!(y <= 41) && !(y >= 43))\n

@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	struct S {
 		uint x;
@@ -25,5 +23,8 @@ contract C {
 			s2.x = _x;
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (402-438): CHC: Assertion violation happens here.\nCounterexample:\ns1 = {x: 0, a: []}, s2 = {x: 0, a: []}\nb = false\n\n\nTransaction trace:\nconstructor()\nState: s1 = {x: 0, a: []}, s2 = {x: 0, a: []}\nf(false)
+// Warning 6328: (369-405): CHC: Assertion violation happens here.

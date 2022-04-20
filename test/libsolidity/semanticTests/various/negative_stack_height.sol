@@ -58,7 +58,12 @@ contract C {
         )
     {}
 }
+
+// via yul disabled because of stack issues.
+
 // ====
 // compileViaYul: false
 // ----
 // constructor() ->
+// gas legacy: 588138
+// gas legacyOptimized: 349636

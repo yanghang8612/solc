@@ -14,6 +14,7 @@
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "C",
       "contractDependencies": [],
       "contractKind": "contract",
       "fullyImplemented": true,
@@ -23,6 +24,7 @@
         3
       ],
       "name": "C",
+      "nameLocation": "9:1:1",
       "nodeType": "ContractDefinition",
       "nodes":
       [
@@ -30,6 +32,7 @@
           "anonymous": false,
           "id": 2,
           "name": "E",
+          "nameLocation": "19:1:1",
           "nodeType": "EventDefinition",
           "parameters":
           {
@@ -42,7 +45,8 @@
         }
       ],
       "scope": 4,
-      "src": "0:25:1"
+      "src": "0:25:1",
+      "usedErrors": []
     }
   ],
   "src": "0:26:1"

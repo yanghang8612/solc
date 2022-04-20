@@ -101,21 +101,25 @@ bytes compileFirstExpression(
 )
 {
 	string sourceCode = "pragma solidity >=0.0; // SPDX-License-Identifier: GPL-3\n" + _sourceCode;
+	CharStream stream(sourceCode, "");
 
 	ASTPointer<SourceUnit> sourceUnit;
 	try
 	{
 		ErrorList errors;
 		ErrorReporter errorReporter(errors);
-		sourceUnit = Parser(errorReporter, solidity::test::CommonOptions::get().evmVersion()).parse(
-			make_shared<Scanner>(CharStream(sourceCode, ""))
-		);
+		sourceUnit = Parser(errorReporter, solidity::test::CommonOptions::get().evmVersion()).parse(stream);
 		if (!sourceUnit)
 			return bytes();
 	}
-	catch(boost::exception const& _e)
+	catch (boost::exception const& _e)
 	{
-		auto msg = std::string("Parsing source code failed with: \n") + boost::diagnostic_information(_e);
+		string msg = "Parsing source code failed with:\n" + boost::diagnostic_information(_e);
+		BOOST_FAIL(msg);
+	}
+	catch (...)
+	{
+		string msg = "Parsing source code failed with:\n" + boost::current_exception_diagnostic_information();
 		BOOST_FAIL(msg);
 	}
 
@@ -162,6 +166,12 @@ bytes compileFirstExpression(
 				context << context.functionEntryLabel(dynamic_cast<FunctionDefinition const&>(
 					resolveDeclaration(*sourceUnit, function, resolver)
 				));
+
+			context.appendMissingLowLevelFunctions();
+			// NOTE: We intentionally disable optimisations for utility functions to simplfy the tests
+			context.appendYulUtilityFunctions({});
+			BOOST_REQUIRE(context.appendYulUtilityFunctionsRan());
+
 			BOOST_REQUIRE(context.assemblyPtr());
 			LinkerObject const& object = context.assemblyPtr()->assemble();
 			BOOST_REQUIRE(object.immutableReferences.empty());
@@ -336,7 +346,10 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 	bytes code = compileFirstExpression(sourceCode, {}, {{"test", "f", "y"}});
 
 	bytes panic =
-		bytes{uint8_t(Instruction::PUSH32)} +
+		bytes{
+			uint8_t(Instruction::JUMPDEST),
+			uint8_t(Instruction::PUSH32)
+		} +
 		fromHex("4E487B7100000000000000000000000000000000000000000000000000000000") +
 		bytes{
 			uint8_t(Instruction::PUSH1), 0x0,
@@ -346,7 +359,10 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 			uint8_t(Instruction::MSTORE),
 			uint8_t(Instruction::PUSH1), 0x24,
 			uint8_t(Instruction::PUSH1), 0x0,
-			uint8_t(Instruction::REVERT)
+			uint8_t(Instruction::REVERT),
+			uint8_t(Instruction::JUMPDEST),
+			uint8_t(Instruction::JUMP),
+			uint8_t(Instruction::JUMPDEST)
 		};
 
 	bytes expectation;
@@ -368,22 +384,30 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x48,
-			uint8_t(Instruction::JUMPI)
-		} + panic + bytes{
+			uint8_t(Instruction::PUSH1), 0x20,
+			uint8_t(Instruction::JUMPI),
+			uint8_t(Instruction::PUSH1), 0x1f,
+			uint8_t(Instruction::PUSH1), 0x36,
+			uint8_t(Instruction::JUMP),
+			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::MOD),
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x7e,
-			uint8_t(Instruction::JUMPI)
-		} + panic + bytes{
+			uint8_t(Instruction::PUSH1), 0x2e,
+			uint8_t(Instruction::JUMPI),
+			uint8_t(Instruction::PUSH1), 0x2d,
+			uint8_t(Instruction::PUSH1), 0x36,
+			uint8_t(Instruction::JUMP),
+			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::DIV),
 			uint8_t(Instruction::PUSH1), 0x1,
-			uint8_t(Instruction::MUL)
-		};
+			uint8_t(Instruction::MUL),
+			uint8_t(Instruction::PUSH1), 0x67,
+			uint8_t(Instruction::JUMP)
+		} + panic;
 	else
 		expectation = bytes{
 			uint8_t(Instruction::PUSH1), 0x1,
@@ -403,21 +427,29 @@ BOOST_AUTO_TEST_CASE(arithmetic)
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x4a,
-			uint8_t(Instruction::JUMPI)
-		} + panic + bytes{
+			uint8_t(Instruction::PUSH1), 0x22,
+			uint8_t(Instruction::JUMPI),
+			uint8_t(Instruction::PUSH1), 0x21,
+			uint8_t(Instruction::PUSH1), 0x36,
+			uint8_t(Instruction::JUMP),
+			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::MOD),
 			uint8_t(Instruction::DUP2),
 			uint8_t(Instruction::ISZERO),
 			uint8_t(Instruction::ISZERO),
-			uint8_t(Instruction::PUSH1), 0x80,
-			uint8_t(Instruction::JUMPI)
-		} + panic + bytes{
+			uint8_t(Instruction::PUSH1), 0x30,
+			uint8_t(Instruction::JUMPI),
+			uint8_t(Instruction::PUSH1), 0x2f,
+			uint8_t(Instruction::PUSH1), 0x36,
+			uint8_t(Instruction::JUMP),
+			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::JUMPDEST),
 			uint8_t(Instruction::DIV),
-			uint8_t(Instruction::MUL)
-		};
+			uint8_t(Instruction::MUL),
+			uint8_t(Instruction::PUSH1), 0x67,
+			uint8_t(Instruction::JUMP)
+		} + panic;
 
 	BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());
 }
@@ -635,7 +667,7 @@ BOOST_AUTO_TEST_CASE(selfbalance)
 
 	bytes code = compileFirstExpression(sourceCode, {}, {});
 
-	if (solidity::test::CommonOptions::get().evmVersion() == EVMVersion::istanbul())
+	if (solidity::test::CommonOptions::get().evmVersion().hasSelfBalance())
 	{
 		bytes expectation({uint8_t(Instruction::SELFBALANCE)});
 		BOOST_CHECK_EQUAL_COLLECTIONS(code.begin(), code.end(), expectation.begin(), expectation.end());

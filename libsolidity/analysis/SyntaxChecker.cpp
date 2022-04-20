@@ -30,9 +30,6 @@
 
 #include <libsolutil/UTF8.h>
 
-#include <boost/algorithm/string.hpp>
-
-#include <memory>
 #include <string>
 
 using namespace std;
@@ -44,7 +41,7 @@ using namespace solidity::util;
 bool SyntaxChecker::checkSyntax(ASTNode const& _astRoot)
 {
 	_astRoot.accept(*this);
-	return Error::containsOnlyWarnings(m_errorReporter.errors());
+	return !Error::containsErrors(m_errorReporter.errors());
 }
 
 bool SyntaxChecker::visit(SourceUnit const& _sourceUnit)
@@ -71,7 +68,7 @@ void SyntaxChecker::endVisit(SourceUnit const& _sourceUnit)
 				string(";\"");
 
 		// when reporting the warning, print the source name only
-		m_errorReporter.warning(3420_error, {-1, -1, _sourceUnit.location().source}, errorString);
+		m_errorReporter.warning(3420_error, {-1, -1, _sourceUnit.location().sourceName}, errorString);
 	}
 	if (!m_sourceUnit->annotation().useABICoderV2.set())
 		m_sourceUnit->annotation().useABICoderV2 = true;
@@ -160,8 +157,10 @@ bool SyntaxChecker::visit(PragmaDirective const& _pragma)
 		vector<string> literals(_pragma.literals().begin() + 1, _pragma.literals().end());
 		SemVerMatchExpressionParser parser(tokens, literals);
 		auto matchExpression = parser.parse();
+		// An unparsable version pragma is an unrecoverable fatal error in the parser.
+		solAssert(matchExpression.has_value(), "");
 		static SemVerVersion const currentVersion{string(VersionString)};
-		if (!matchExpression.matches(currentVersion))
+		if (!matchExpression->matches(currentVersion))
 			m_errorReporter.syntaxError(
 				3997_error,
 				_pragma.location(),

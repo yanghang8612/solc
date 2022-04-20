@@ -9,7 +9,8 @@ Trx Units
 
 A literal number can take a suffix of ``sun`` or ``trx`` to convert between the subdenominations of Trx, where Trx currency numbers without a postfix are assumed to be sun, e.g. ``2 trx == 2000000 sun`` evaluates to ``true``.
 
-::
+.. code-block:: solidity
+    :force:
 
     assert(1 wei == 1);
     assert(1 gwei == 1e9);
@@ -31,11 +32,11 @@ Suffixes like ``seconds``, ``minutes``, ``hours``, ``days`` and ``weeks``
 after literal numbers can be used to specify units of time where seconds are the base
 unit and units are considered naively in the following way:
 
- * ``1 == 1 seconds``
- * ``1 minutes == 60 seconds``
- * ``1 hours == 60 minutes``
- * ``1 days == 24 hours``
- * ``1 weeks == 7 days``
+* ``1 == 1 seconds``
+* ``1 minutes == 60 seconds``
+* ``1 hours == 60 minutes``
+* ``1 days == 24 hours``
+* ``1 weeks == 7 days``
 
 Take care if you perform calendar calculations using these units, because
 not every year equals 365 days and not even every day has 24 hours
@@ -47,7 +48,9 @@ library has to be updated by an external oracle.
     The suffix ``years`` has been removed in version 0.5.0 due to the reasons above.
 
 These suffixes cannot be applied to variables. For example, if you want to
-interpret a function parameter in days, you can in the following way::
+interpret a function parameter in days, you can in the following way:
+
+.. code-block:: solidity
 
     function f(uint start, uint daysAfter) public {
         if (block.timestamp >= start + daysAfter * 1 days) {
@@ -70,7 +73,8 @@ or are general-use utility functions.
 Block and Transaction Properties
 --------------------------------
 
-- ``blockhash(uint blockNumber) returns (bytes32)``: hash of the given block - only works for 256 most recent, excluding current, blocks
+- ``blockhash(uint blockNumber) returns (bytes32)``: hash of the given block when ``blocknumber`` is one of the 256 most recent blocks; otherwise returns zero
+- ``block.basefee`` (``uint``): current block's base fee (`EIP-3198 <https://eips.ethereum.org/EIPS/eip-3198>`_ and `EIP-1559 <https://eips.ethereum.org/EIPS/eip-1559>`_)
 - ``block.chainid`` (``uint``): current chain id
 - ``block.coinbase`` (``address payable``): current block miner's address
 - ``block.difficulty`` (``uint``): current block difficulty
@@ -79,16 +83,22 @@ Block and Transaction Properties
 - ``block.timestamp`` (``uint``): current block timestamp as seconds since unix epoch
 - ``gasleft() returns (uint256)``: remaining gas
 - ``msg.data`` (``bytes calldata``): complete calldata
-- ``msg.sender`` (``address payable``): sender of the message (current call)
+- ``msg.sender`` (``address``): sender of the message (current call)
 - ``msg.sig`` (``bytes4``): first four bytes of the calldata (i.e. function identifier)
 - ``msg.value`` (``uint``): number of sun sent with the message
 - ``tx.gasprice`` (``uint``): gas price of the transaction
-- ``tx.origin`` (``address payable``): sender of the transaction (full call chain)
+- ``tx.origin`` (``address``): sender of the transaction (full call chain)
 
 .. note::
     The values of all members of ``msg``, including ``msg.sender`` and
     ``msg.value`` can change for every **external** function call.
     This includes calls to library functions.
+
+.. note::
+    When contracts are evaluated off-chain rather than in context of a transaction included in a
+    block, you should not assume that ``block.*`` and ``tx.*`` refer to values from any specific
+    block or transaction. These values are provided by the EVM implementation that executes the
+    contract and can be arbitrary.
 
 .. note::
     Do not rely on ``block.timestamp`` or ``blockhash`` as a source of randomness,
@@ -127,7 +137,8 @@ ABI Encoding and Decoding Functions
 - ``abi.encode(...) returns (bytes memory)``: ABI-encodes the given arguments
 - ``abi.encodePacked(...) returns (bytes memory)``: Performs :ref:`packed encoding <abi_packed_mode>` of the given arguments. Note that packed encoding can be ambiguous!
 - ``abi.encodeWithSelector(bytes4 selector, ...) returns (bytes memory)``: ABI-encodes the given arguments starting from the second and prepends the given four-byte selector
-- ``abi.encodeWithSignature(string memory signature, ...) returns (bytes memory)``: Equivalent to ``abi.encodeWithSelector(bytes4(keccak256(bytes(signature))), ...)```
+- ``abi.encodeWithSignature(string memory signature, ...) returns (bytes memory)``: Equivalent to ``abi.encodeWithSelector(bytes4(keccak256(bytes(signature))), ...)``
+- ``abi.encodeCall(function functionPointer, (...)) returns (bytes memory)``: ABI-encodes a call to ``functionPointer`` with the arguments found in the tuple. Performs a full type-check, ensuring the types match the function signature. Result equals ``abi.encodeWithSelector(functionPointer.selector, (...))``
 
 .. note::
     These encoding functions can be used to craft data for external function calls without actually
@@ -137,6 +148,13 @@ ABI Encoding and Decoding Functions
 
 See the documentation about the :ref:`ABI <ABI>` and the
 :ref:`tightly packed encoding <abi_packed_mode>` for details about the encoding.
+
+.. index:: bytes members
+
+Members of bytes
+----------------
+
+- ``bytes.concat(...) returns (bytes memory)``: :ref:`Concatenates variable number of bytes and bytes1, ..., bytes32 arguments to one byte array<bytes-concat>`
 
 .. index:: assert, revert, require
 
@@ -256,6 +274,16 @@ For more information, see the section on :ref:`address`.
     (this can always be forced by the caller) and it also fails if the recipient runs out of gas. So in order
     to make safe Trx transfers, always check the return value of ``send``, use ``transfer`` or even better:
     Use a pattern where the recipient withdraws the money.
+
+.. warning::
+    Due to the fact that the EVM considers a call to a non-existing contract to always succeed,
+    Solidity includes an extra check using the ``extcodesize`` opcode when performing external calls.
+    This ensures that the contract that is about to be called either actually exists (it contains code)
+    or an exception is raised.
+
+    The low-level calls which operate on addresses rather than contract instances (i.e. ``.call()``,
+    ``.delegatecall()``, ``.staticcall()``, ``.send()`` and ``.transfer()``) **do not** include this
+    check, which makes them cheaper in terms of gas but also less safe.
 
 .. note::
    Prior to version 0.5.0, Solidity allowed address members to be accessed by a contract instance, for example ``this.balance``.

@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract State {
 	uint x;
 	function f() public returns (uint) {
@@ -33,5 +31,9 @@ contract C {
 		assert(owner == address(0) || y != z);
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (528-565): CHC: Assertion violation happens here.\nCounterexample:\nowner = 1, y = 0, z = 0, s = 0\n\n\n\nTransaction trace:\nconstructor()\nState: owner = 1, y = 0, z = 0, s = 0\ninv()
+// Warning 6328: (495-532): CHC: Assertion violation happens here.
+// Info 1180: Reentrancy property(ies) for :C:\n(((owner + ((- 1) * owner')) <= 0) && !(<errorCode> = 1) && ((owner + ((- 1) * owner')) >= 0))\n<errorCode> = 0 -> no errors\n<errorCode> = 1 -> Assertion failed at assert(prevOwner == owner)\n<errorCode> = 3 -> Assertion failed at assert(owner == address(0) || y != z)\n

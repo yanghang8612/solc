@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C
 {
     uint public x;
@@ -12,4 +10,7 @@ contract C
         x = 2;
     }
 }
+// ====
+// SMTEngine: all
 // ----
+// Info 1180: Contract invariant(s) for :C:\n((x = 0) || (x = 2))\n

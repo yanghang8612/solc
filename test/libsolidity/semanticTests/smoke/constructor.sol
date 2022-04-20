@@ -14,7 +14,11 @@ contract C {
 // compileViaYul: also
 // ----
 // constructor(), 2 wei: 3 ->
+// gas irOptimized: 111723
+// gas legacy: 151416
+// gas legacyOptimized: 108388
 // state() -> 3
 // balance() -> 2
+// balance -> 2
 // update(uint256): 4
 // state() -> 4

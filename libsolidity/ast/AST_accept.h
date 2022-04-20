@@ -164,6 +164,26 @@ void EnumValue::accept(ASTConstVisitor& _visitor) const
 	_visitor.endVisit(*this);
 }
 
+void UserDefinedValueTypeDefinition::accept(ASTConstVisitor& _visitor) const
+{
+	if (_visitor.visit(*this))
+	{
+		if (m_underlyingType)
+			m_underlyingType->accept(_visitor);
+	}
+	_visitor.endVisit(*this);
+}
+
+void UserDefinedValueTypeDefinition::accept(ASTVisitor& _visitor)
+{
+	if (_visitor.visit(*this))
+	{
+		if (m_underlyingType)
+			m_underlyingType->accept(_visitor);
+	}
+	_visitor.endVisit(*this);
+}
+
 void UsingForDirective::accept(ASTVisitor& _visitor)
 {
 	if (_visitor.visit(*this))
@@ -356,6 +376,28 @@ void EventDefinition::accept(ASTVisitor& _visitor)
 }
 
 void EventDefinition::accept(ASTConstVisitor& _visitor) const
+{
+	if (_visitor.visit(*this))
+	{
+		if (m_documentation)
+			m_documentation->accept(_visitor);
+		m_parameters->accept(_visitor);
+	}
+	_visitor.endVisit(*this);
+}
+
+void ErrorDefinition::accept(ASTVisitor& _visitor)
+{
+	if (_visitor.visit(*this))
+	{
+		if (m_documentation)
+			m_documentation->accept(_visitor);
+		m_parameters->accept(_visitor);
+	}
+	_visitor.endVisit(*this);
+}
+
+void ErrorDefinition::accept(ASTConstVisitor& _visitor) const
 {
 	if (_visitor.visit(*this))
 	{
@@ -657,6 +699,20 @@ void Throw::accept(ASTVisitor& _visitor)
 void Throw::accept(ASTConstVisitor& _visitor) const
 {
 	_visitor.visit(*this);
+	_visitor.endVisit(*this);
+}
+
+void RevertStatement::accept(ASTVisitor& _visitor)
+{
+	if (_visitor.visit(*this))
+		m_errorCall->accept(_visitor);
+	_visitor.endVisit(*this);
+}
+
+void RevertStatement::accept(ASTConstVisitor& _visitor) const
+{
+	if (_visitor.visit(*this))
+		m_errorCall->accept(_visitor);
 	_visitor.endVisit(*this);
 }
 

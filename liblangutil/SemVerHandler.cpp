@@ -23,11 +23,20 @@
 
 #include <liblangutil/SemVerHandler.h>
 
+#include <liblangutil/Exceptions.h>
+
 #include <functional>
+#include <limits>
 
 using namespace std;
 using namespace solidity;
 using namespace solidity::langutil;
+
+SemVerMatchExpressionParser::SemVerMatchExpressionParser(vector<Token> _tokens, vector<string> _literals):
+	m_tokens(std::move(_tokens)), m_literals(std::move(_literals))
+{
+	solAssert(m_tokens.size() == m_literals.size(), "");
+}
 
 SemVerVersion::SemVerVersion(string const& _versionString)
 {
@@ -43,7 +52,7 @@ SemVerVersion::SemVerVersion(string const& _versionString)
 		if (level < 2)
 		{
 			if (i == end || *i != '.')
-				throw SemVerError();
+				BOOST_THROW_EXCEPTION(SemVerError());
 			else
 				++i;
 		}
@@ -61,7 +70,7 @@ SemVerVersion::SemVerVersion(string const& _versionString)
 		build = string(buildStart, i);
 	}
 	if (i != end)
-		throw SemVerError();
+		BOOST_THROW_EXCEPTION(SemVerError());
 }
 
 bool SemVerMatchExpression::MatchComponent::matches(SemVerVersion const& _version) const
@@ -147,9 +156,12 @@ bool SemVerMatchExpression::matches(SemVerVersion const& _version) const
 	return false;
 }
 
-SemVerMatchExpression SemVerMatchExpressionParser::parse()
+optional<SemVerMatchExpression> SemVerMatchExpressionParser::parse()
 {
 	reset();
+
+	if (m_tokens.empty())
+		return nullopt;
 
 	try
 	{
@@ -159,13 +171,14 @@ SemVerMatchExpression SemVerMatchExpressionParser::parse()
 			if (m_pos >= m_tokens.size())
 				break;
 			if (currentToken() != Token::Or)
-				throw SemVerError();
+				BOOST_THROW_EXCEPTION(SemVerError());
 			nextToken();
 		}
 	}
 	catch (SemVerError const&)
 	{
 		reset();
+		return nullopt;
 	}
 
 	return m_expression;
@@ -252,14 +265,14 @@ unsigned SemVerMatchExpressionParser::parseVersionPart()
 		{
 			c = currentChar();
 			if (v * 10 < v || v * 10 + static_cast<unsigned>(c - '0') < v * 10)
-				throw SemVerError();
+				BOOST_THROW_EXCEPTION(SemVerError());
 			v = v * 10 + static_cast<unsigned>(c - '0');
 			nextChar();
 		}
 		return v;
 	}
 	else
-		throw SemVerError();
+		BOOST_THROW_EXCEPTION(SemVerError());
 }
 
 char SemVerMatchExpressionParser::currentChar() const

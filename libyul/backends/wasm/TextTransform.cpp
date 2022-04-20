@@ -25,13 +25,15 @@
 #include <libyul/Exceptions.h>
 
 #include <libsolutil/CommonData.h>
+#include <libsolutil/Numeric.h>
 #include <libsolutil/Keccak256.h>
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Visitor.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/range/adaptor/transformed.hpp>
+
+#include <range/v3/view/transform.hpp>
 
 using namespace std;
 using namespace solidity;
@@ -53,7 +55,7 @@ string TextTransform::run(wasm::Module const& _module)
 			"    ;; (@custom \"" +
 			name +
 			"\" \"" +
-			toHex(BinaryTransform::run(module)) +
+			util::toHex(BinaryTransform::run(module)) +
 			"\")\n";
 	for (auto const& [name, data]: _module.customSections)
 		ret +=
@@ -61,13 +63,13 @@ string TextTransform::run(wasm::Module const& _module)
 			"    ;; (@custom \"" +
 			name +
 			"\" \"" +
-			toHex(data) +
+			util::toHex(data) +
 			"\")\n";
 	for (wasm::FunctionImport const& imp: _module.imports)
 	{
 		ret += "    (import \"" + imp.module + "\" \"" + imp.externalName + "\" (func $" + imp.internalName;
 		if (!imp.paramTypes.empty())
-			ret += " (param" + joinHumanReadablePrefixed(imp.paramTypes | boost::adaptors::transformed(encodeType), " ", " ") + ")";
+			ret += " (param" + joinHumanReadablePrefixed(imp.paramTypes | ranges::views::transform(encodeType), " ", " ") + ")";
 		if (imp.returnType)
 			ret += " (result " + encodeType(*imp.returnType) + ")";
 		ret += "))\n";

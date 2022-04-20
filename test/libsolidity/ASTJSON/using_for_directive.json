@@ -18,6 +18,7 @@
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "L",
       "contractDependencies": [],
       "contractKind": "library",
       "fullyImplemented": true,
@@ -27,14 +28,17 @@
         1
       ],
       "name": "L",
+      "nameLocation": "8:1:1",
       "nodeType": "ContractDefinition",
       "nodes": [],
       "scope": 6,
-      "src": "0:12:1"
+      "src": "0:12:1",
+      "usedErrors": []
     },
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "C",
       "contractDependencies": [],
       "contractKind": "contract",
       "fullyImplemented": true,
@@ -44,6 +48,7 @@
         5
       ],
       "name": "C",
+      "nameLocation": "22:1:1",
       "nodeType": "ContractDefinition",
       "nodes":
       [
@@ -74,7 +79,8 @@
         }
       ],
       "scope": 6,
-      "src": "13:32:1"
+      "src": "13:32:1",
+      "usedErrors": []
     }
   ],
   "src": "0:46:1"

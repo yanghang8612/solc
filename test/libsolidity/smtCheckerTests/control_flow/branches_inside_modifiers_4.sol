@@ -1,4 +1,3 @@
-pragma experimental SMTChecker;
 contract C {
     uint x;
     modifier m(uint z) {
@@ -20,5 +19,9 @@ contract C {
         assert(x == 6);
     }
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (365-379): CHC: Assertion violation happens here.\nCounterexample:\nx = 7\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0\ng()
+// Warning 6328: (333-347): CHC: Assertion violation happens here.
+// Info 1180: Contract invariant(s) for :C:\n((x = 0) || (x = 7))\n

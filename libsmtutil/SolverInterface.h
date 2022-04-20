@@ -22,12 +22,17 @@
 #include <libsmtutil/Sorts.h>
 
 #include <libsolutil/Common.h>
+#include <libsolutil/Numeric.h>
+#include <libsolutil/CommonData.h>
 
-#include <boost/noncopyable.hpp>
+#include <range/v3/algorithm/all_of.hpp>
+#include <range/v3/view.hpp>
+
 #include <cstdio>
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -37,16 +42,72 @@ namespace solidity::smtutil
 struct SMTSolverChoice
 {
 	bool cvc4 = false;
+	bool smtlib2 = false;
 	bool z3 = false;
 
-	static constexpr SMTSolverChoice All() { return {true, true}; }
-	static constexpr SMTSolverChoice CVC4() { return {true, false}; }
-	static constexpr SMTSolverChoice Z3() { return {false, true}; }
-	static constexpr SMTSolverChoice None() { return {false, false}; }
+	static constexpr SMTSolverChoice All() noexcept { return {true, true, true}; }
+	static constexpr SMTSolverChoice CVC4() noexcept { return {true, false, false}; }
+	static constexpr SMTSolverChoice SMTLIB2() noexcept { return {false, true, false}; }
+	static constexpr SMTSolverChoice Z3() noexcept { return {false, false, true}; }
+	static constexpr SMTSolverChoice None() noexcept { return {false, false, false}; }
 
-	bool none() { return !some(); }
-	bool some() { return cvc4 || z3; }
-	bool all() { return cvc4 && z3; }
+	static std::optional<SMTSolverChoice> fromString(std::string const& _solvers)
+	{
+		SMTSolverChoice solvers;
+		if (_solvers == "all")
+		{
+			smtAssert(solvers.setSolver("cvc4"), "");
+			smtAssert(solvers.setSolver("smtlib2"), "");
+			smtAssert(solvers.setSolver("z3"), "");
+		}
+		else
+			for (auto&& s: _solvers | ranges::views::split(',') | ranges::to<std::vector<std::string>>())
+				if (!solvers.setSolver(s))
+					return {};
+
+		return solvers;
+	}
+
+	SMTSolverChoice& operator&=(SMTSolverChoice const& _other)
+	{
+		cvc4 &= _other.cvc4;
+		smtlib2 &= _other.smtlib2;
+		z3 &= _other.z3;
+		return *this;
+	}
+
+	SMTSolverChoice operator&(SMTSolverChoice _other) const noexcept
+	{
+		_other &= *this;
+		return _other;
+	}
+
+	bool operator!=(SMTSolverChoice const& _other) const noexcept { return !(*this == _other); }
+
+	bool operator==(SMTSolverChoice const& _other) const noexcept
+	{
+		return cvc4 == _other.cvc4 &&
+			smtlib2 == _other.smtlib2 &&
+			z3 == _other.z3;
+	}
+
+	bool setSolver(std::string const& _solver)
+	{
+		static std::set<std::string> const solvers{"cvc4", "smtlib2", "z3"};
+		if (!solvers.count(_solver))
+			return false;
+		if (_solver == "cvc4")
+			cvc4 = true;
+		else if (_solver == "smtlib2")
+			smtlib2 = true;
+		else if (_solver == "z3")
+			z3 = true;
+		return true;
+	}
+
+	bool none() const noexcept { return !some(); }
+	bool some() const noexcept { return cvc4 || smtlib2 || z3; }
+	bool all() const noexcept { return cvc4 && smtlib2 && z3; }
 };
 
 enum class CheckResult
@@ -65,8 +126,20 @@ public:
 		name(std::move(_name)), arguments(std::move(_arguments)), sort(std::move(_sort)) {}
 	Expression(size_t _number): Expression(std::to_string(_number), {}, SortProvider::sintSort) {}
 	Expression(u256 const& _number): Expression(_number.str(), {}, SortProvider::sintSort) {}
-	Expression(s256 const& _number): Expression(_number.str(), {}, SortProvider::sintSort) {}
-	Expression(bigint const& _number): Expression(_number.str(), {}, SortProvider::sintSort) {}
+	Expression(s256 const& _number): Expression(
+		_number >= 0 ? _number.str() : "-",
+		_number >= 0 ?
+			std::vector<Expression>{} :
+			std::vector<Expression>{Expression(size_t(0)), bigint(-_number)},
+		SortProvider::sintSort
+	) {}
+	Expression(bigint const& _number): Expression(
+		_number >= 0 ? _number.str() : "-",
+		_number >= 0 ?
+			std::vector<Expression>{} :
+			std::vector<Expression>{Expression(size_t(0)), bigint(-_number)},
+		SortProvider::sintSort
+	) {}
 
 	Expression(Expression const&) = default;
 	Expression(Expression&&) = default;
@@ -87,7 +160,7 @@ public:
 			{"not", 1},
 			{"and", 2},
 			{"or", 2},
-			{"implies", 2},
+			{"=>", 2},
 			{"=", 2},
 			{"<", 2},
 			{"<=", 2},
@@ -96,7 +169,7 @@ public:
 			{"+", 2},
 			{"-", 2},
 			{"*", 2},
-			{"/", 2},
+			{"div", 2},
 			{"mod", 2},
 			{"bvnot", 1},
 			{"bvand", 2},
@@ -127,7 +200,7 @@ public:
 	static Expression implies(Expression _a, Expression _b)
 	{
 		return Expression(
-			"implies",
+			"=>",
 			std::move(_a),
 			std::move(_b),
 			Kind::Bool
@@ -234,6 +307,64 @@ public:
 		);
 	}
 
+	static bool sameSort(std::vector<Expression> const& _args)
+	{
+		if (_args.empty())
+			return true;
+
+		auto sort = _args.front().sort;
+		return ranges::all_of(
+			_args,
+			[&](auto const& _expr){ return _expr.sort->kind == sort->kind; }
+		);
+	}
+
+	static Expression mkAnd(std::vector<Expression> _args)
+	{
+		smtAssert(!_args.empty(), "");
+		smtAssert(sameSort(_args), "");
+
+		auto sort = _args.front().sort;
+		if (sort->kind == Kind::BitVector)
+			return Expression("bvand", std::move(_args), sort);
+
+		smtAssert(sort->kind == Kind::Bool, "");
+		return Expression("and", std::move(_args), Kind::Bool);
+	}
+
+	static Expression mkOr(std::vector<Expression> _args)
+	{
+		smtAssert(!_args.empty(), "");
+		smtAssert(sameSort(_args), "");
+
+		auto sort = _args.front().sort;
+		if (sort->kind == Kind::BitVector)
+			return Expression("bvor", std::move(_args), sort);
+
+		smtAssert(sort->kind == Kind::Bool, "");
+		return Expression("or", std::move(_args), Kind::Bool);
+	}
+
+	static Expression mkPlus(std::vector<Expression> _args)
+	{
+		smtAssert(!_args.empty(), "");
+		smtAssert(sameSort(_args), "");
+
+		auto sort = _args.front().sort;
+		smtAssert(sort->kind == Kind::BitVector || sort->kind == Kind::Int, "");
+		return Expression("+", std::move(_args), sort);
+	}
+
+	static Expression mkMul(std::vector<Expression> _args)
+	{
+		smtAssert(!_args.empty(), "");
+		smtAssert(sameSort(_args), "");
+
+		auto sort = _args.front().sort;
+		smtAssert(sort->kind == Kind::BitVector || sort->kind == Kind::Int, "");
+		return Expression("*", std::move(_args), sort);
+	}
+
 	friend Expression operator!(Expression _a)
 	{
 		if (_a.sort->kind == Kind::BitVector)
@@ -260,6 +391,7 @@ public:
 	}
 	friend Expression operator==(Expression _a, Expression _b)
 	{
+		smtAssert(_a.sort->kind == _b.sort->kind, "Trying to create an 'equal' expression with different sorts");
 		return Expression("=", std::move(_a), std::move(_b), Kind::Bool);
 	}
 	friend Expression operator!=(Expression _a, Expression _b)
@@ -300,7 +432,7 @@ public:
 	friend Expression operator/(Expression _a, Expression _b)
 	{
 		auto intSort = _a.sort;
-		return Expression("/", {std::move(_a), std::move(_b)}, intSort);
+		return Expression("div", {std::move(_a), std::move(_b)}, intSort);
 	}
 	friend Expression operator%(Expression _a, Expression _b)
 	{

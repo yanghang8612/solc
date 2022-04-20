@@ -1,17 +1,14 @@
 Solidity
 ========
 
-.. image:: logo.svg
-    :width: 120px
-    :alt: Solidity logo
-    :align: center
-
 Solidity is an object-oriented, high-level language for implementing smart
 contracts. Smart contracts are programs which govern the behaviour of accounts
 within the Ethereum state.
 
-Solidity was influenced by C++, Python and JavaScript and is designed to target
-the Ethereum Virtual Machine (EVM).
+Solidity is a `curly-bracket language <https://en.wikipedia.org/wiki/List_of_programming_languages_by_type#Curly-bracket_languages>`_.
+It is influenced by C++, Python and JavaScript, and is designed to target the Ethereum Virtual Machine (EVM).
+You can find more details about which languages Solidity has been inspired by in
+the :doc:`language influences <language-influences>` section.
 
 Solidity is statically typed, supports inheritance, libraries and complex
 user-defined types among other features.
@@ -20,9 +17,11 @@ With Solidity you can create contracts for uses such as voting, crowdfunding, bl
 and multi-signature wallets.
 
 When deploying contracts, you should use the latest released
-version of Solidity. This is because breaking changes as well as
-new features and bug fixes are introduced regularly. We currently use
-a 0.x version number `to indicate this fast pace of change <https://semver.org/#spec-item-4>`_.
+version of Solidity. Apart from exceptional cases, only the latest version receives
+`security fixes <https://github.com/ethereum/solidity/security/policy#supported-versions>`_.
+Furthermore, breaking changes as well as
+new features are introduced regularly. We currently use
+a 0.y.z version number `to indicate this fast pace of change <https://semver.org/#spec-item-4>`_.
 
 .. warning::
 
@@ -31,6 +30,12 @@ a 0.x version number `to indicate this fast pace of change <https://semver.org/#
 
 Ideas for improving Solidity or this documentation are always welcome,
 read our :doc:`contributors guide <contributing>` for more details.
+
+.. Hint::
+
+  You can download this documentation as PDF, HTML or Epub by clicking on the versions
+  flyout menu in the bottom-left corner and selecting the preferred download format.
+
 
 Getting Started
 ---------------
@@ -89,6 +94,12 @@ Community volunteers help translate this documentation into several languages.
 They have varying degrees of completeness and up-to-dateness. The English
 version stands as a reference.
 
+.. note::
+
+   We recently set up a new GitHub organization and translation workflow to help streamline the
+   community efforts. Please refer to the `translation guide <https://github.com/solidity-docs/translation-guide>`_
+   for information on how to contribute to the community translations moving forward.
+
 * `French <https://solidity-fr.readthedocs.io>`_ (in progress)
 * `Italian <https://github.com/damianoazzolini/solidity>`_ (in progress)
 * `Japanese <https://solidity-jp.readthedocs.io>`_
@@ -127,6 +138,14 @@ Contents
 
 .. toctree::
    :maxdepth: 2
+   :caption: Compiler
+
+   using-the-compiler.rst
+   analysing-compilation-output.rst
+   ir-breaking-changes.rst
+
+.. toctree::
+   :maxdepth: 2
    :caption: Internals
 
    internals/layout_in_storage.rst
@@ -134,7 +153,7 @@ Contents
    internals/layout_in_calldata.rst
    internals/variable_cleanup.rst
    internals/source_mappings.rst
-   internals/optimiser.rst
+   internals/optimizer.rst
    metadata.rst
    abi-spec.rst
 
@@ -148,11 +167,13 @@ Contents
    080-breaking-changes.rst
    natspec-format.rst
    security-considerations.rst
+   smtchecker.rst
    resources.rst
-   using-the-compiler.rst
+   path-resolution.rst
    yul.rst
    style-guide.rst
    common-patterns.rst
    bugs.rst
    contributing.rst
    brand-guide.rst
+   language-influences.rst

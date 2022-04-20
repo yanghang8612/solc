@@ -24,6 +24,9 @@
 #pragma once
 
 #include <libsolidity/interface/CompilerStack.h>
+#include <libsolutil/JSON.h>
+
+#include <liblangutil/DebugInfoSelection.h>
 
 #include <optional>
 #include <utility>
@@ -36,14 +39,20 @@ namespace solidity::frontend
  * Standard JSON compiler interface, which expects a JSON input and returns a JSON output.
  * See docs/using-the-compiler#compiler-input-and-output-json-description.
  */
-class StandardCompiler: boost::noncopyable
+class StandardCompiler
 {
 public:
+	/// Noncopyable.
+	StandardCompiler(StandardCompiler const&) = delete;
+	StandardCompiler& operator=(StandardCompiler const&) = delete;
+
 	/// Creates a new StandardCompiler.
 	/// @param _readFile callback used to read files for import statements. Must return
 	/// and must not emit exceptions.
-	explicit StandardCompiler(ReadCallback::Callback _readFile = ReadCallback::Callback()):
-		m_readFile(std::move(_readFile))
+	explicit StandardCompiler(ReadCallback::Callback _readFile = ReadCallback::Callback(),
+		util::JsonFormat const& _format = {}):
+		m_readFile(std::move(_readFile)),
+		m_jsonPrintingFormat(std::move(_format))
 	{
 	}
 
@@ -53,6 +62,10 @@ public:
 	/// Parses input as JSON and peforms the above processing steps, returning a serialized JSON
 	/// output. Parsing errors are returned as regular errors.
 	std::string compile(std::string const& _input) noexcept;
+
+	static Json::Value formatFunctionDebugData(
+		std::map<std::string, evmasm::LinkerObject::FunctionDebugData> const& _debugInfo
+	);
 
 private:
 	struct InputsAndSettings
@@ -64,9 +77,10 @@ private:
 		std::map<std::string, std::string> sources;
 		std::map<util::h256, std::string> smtLib2Responses;
 		langutil::EVMVersion evmVersion;
-		std::vector<CompilerStack::Remapping> remappings;
+		std::vector<ImportRemapper::Remapping> remappings;
 		RevertStrings revertStrings = RevertStrings::Default;
 		OptimiserSettings optimiserSettings = OptimiserSettings::minimal();
+		std::optional<langutil::DebugInfoSelection> debugInfoSelection;
 		std::map<std::string, util::h160> libraries;
 		bool metadataLiteralSources = false;
 		CompilerStack::MetadataHash metadataHash = CompilerStack::MetadataHash::IPFS;
@@ -83,6 +97,8 @@ private:
 	Json::Value compileYul(InputsAndSettings _inputsAndSettings);
 
 	ReadCallback::Callback m_readFile;
+
+	util::JsonFormat m_jsonPrintingFormat;
 };
 
 }

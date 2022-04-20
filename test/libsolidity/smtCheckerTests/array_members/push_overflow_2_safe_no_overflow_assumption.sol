@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	uint256[] x;
 	function f(uint256 l) public {
@@ -11,5 +9,7 @@ contract C {
 		assert(x[0] == 42);
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreOS: macos
 // ----
-// Warning 4984: (174-177): CHC: Overflow (resulting value larger than 2**256 - 1) might happen here.

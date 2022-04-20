@@ -24,15 +24,17 @@
 #pragma once
 
 #include <liblangutil/Token.h>
+#include <libsolutil/Assertions.h>
 
 #include <string>
+#include <optional>
 #include <utility>
 #include <vector>
 
 namespace solidity::langutil
 {
 
-class SemVerError: util::Exception
+class SemVerError: public util::Exception
 {
 };
 
@@ -83,10 +85,10 @@ struct SemVerMatchExpression
 class SemVerMatchExpressionParser
 {
 public:
-	SemVerMatchExpressionParser(std::vector<Token>  _tokens, std::vector<std::string>  _literals):
-		m_tokens(std::move(_tokens)), m_literals(std::move(_literals))
-	{}
-	SemVerMatchExpression parse();
+	SemVerMatchExpressionParser(std::vector<Token> _tokens, std::vector<std::string> _literals);
+
+	/// Returns an expression if it was parseable, or nothing otherwise.
+	std::optional<SemVerMatchExpression> parse();
 
 private:
 	void reset();

@@ -22,6 +22,7 @@
 
 #include <libyul/optimiser/ExpressionJoiner.h>
 
+#include <libyul/optimiser/FunctionGrouper.h>
 #include <libyul/optimiser/NameCollector.h>
 #include <libyul/optimiser/OptimizerUtilities.h>
 #include <libyul/Exceptions.h>
@@ -29,15 +30,18 @@
 
 #include <libsolutil/CommonData.h>
 
-#include <boost/range/adaptor/reversed.hpp>
+#include <range/v3/view/reverse.hpp>
+
+#include <limits>
 
 using namespace std;
 using namespace solidity;
 using namespace solidity::yul;
 
-void ExpressionJoiner::run(OptimiserStepContext&, Block& _ast)
+void ExpressionJoiner::run(OptimiserStepContext& _context, Block& _ast)
 {
 	ExpressionJoiner{_ast}(_ast);
+	FunctionGrouper::run(_context, _ast);
 }
 
 
@@ -94,7 +98,7 @@ void ExpressionJoiner::handleArguments(vector<Expression>& _arguments)
 	// on the right is an identifier or literal.
 
 	size_t i = _arguments.size();
-	for (Expression const& arg: _arguments | boost::adaptors::reversed)
+	for (Expression const& arg: _arguments | ranges::views::reverse)
 	{
 		--i;
 		if (!holds_alternative<Identifier>(arg) && !holds_alternative<Literal>(arg))

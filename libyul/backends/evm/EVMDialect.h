@@ -52,9 +52,10 @@ struct BuiltinFunctionForEVM: public BuiltinFunction
 {
 	std::optional<evmasm::Instruction> instruction;
 	/// Function to generate code for the given function call and append it to the abstract
-	/// assembly. The fourth parameter is called to visit (and generate code for) the given
-	/// argument.
-	std::function<void(FunctionCall const&, AbstractAssembly&, BuiltinContext&, std::function<void(Expression const&)>)> generateCode;
+	/// assembly. Expects all non-literal arguments of the call to be on stack in reverse order
+	/// (i.e. right-most argument pushed first).
+	/// Expects the caller to set the source location.
+	std::function<void(FunctionCall const&, AbstractAssembly&, BuiltinContext&)> generateCode;
 };
 
 
@@ -81,6 +82,7 @@ struct EVMDialect: public Dialect
 	BuiltinFunctionForEVM const* memoryLoadFunction(YulString /*_type*/) const override { return builtin("mload"_yulstring); }
 	BuiltinFunctionForEVM const* storageStoreFunction(YulString /*_type*/) const override { return builtin("sstore"_yulstring); }
 	BuiltinFunctionForEVM const* storageLoadFunction(YulString /*_type*/) const override { return builtin("sload"_yulstring); }
+	YulString hashFunction(YulString /*_type*/) const override { return "keccak256"_yulstring; }
 
 	static EVMDialect const& strictAssemblyForEVM(langutil::EVMVersion _version);
 	static EVMDialect const& strictAssemblyForEVMObjects(langutil::EVMVersion _version);
@@ -92,9 +94,12 @@ struct EVMDialect: public Dialect
 	static SideEffects sideEffectsOfInstruction(evmasm::Instruction _instruction);
 
 protected:
+	BuiltinFunctionForEVM const* verbatimFunction(size_t _arguments, size_t _returnVariables) const;
+
 	bool const m_objectAccess;
 	langutil::EVMVersion const m_evmVersion;
 	std::map<YulString, BuiltinFunctionForEVM> m_functions;
+	std::map<std::pair<size_t, size_t>, std::shared_ptr<BuiltinFunctionForEVM const>> mutable m_verbatimFunctions;
 	std::set<YulString> m_reserved;
 };
 

@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <liblangutil/CharStreamProvider.h>
+#include <liblangutil/DebugInfoSelection.h>
 #include <liblangutil/ErrorReporter.h>
 #include <liblangutil/EVMVersion.h>
 
@@ -34,6 +36,11 @@
 
 #include <memory>
 #include <string>
+
+namespace solidity::evmasm
+{
+class Assembly;
+}
 
 namespace solidity::langutil
 {
@@ -56,24 +63,36 @@ struct MachineAssemblyObject
  * Full assembly stack that can support EVM-assembly and Yul as input and EVM, EVM1.5 and
  * Ewasm as output.
  */
-class AssemblyStack
+class AssemblyStack: public langutil::CharStreamProvider
 {
 public:
 	enum class Language { Yul, Assembly, StrictAssembly, Ewasm };
-	enum class Machine { EVM, EVM15, Ewasm };
+	enum class Machine { EVM, Ewasm };
 
 	AssemblyStack():
-		AssemblyStack(langutil::EVMVersion{}, Language::Assembly, solidity::frontend::OptimiserSettings::none())
+		AssemblyStack(
+			langutil::EVMVersion{},
+			Language::Assembly,
+			solidity::frontend::OptimiserSettings::none(),
+			langutil::DebugInfoSelection::Default()
+		)
 	{}
-	AssemblyStack(langutil::EVMVersion _evmVersion, Language _language, solidity::frontend::OptimiserSettings _optimiserSettings):
+
+	AssemblyStack(
+		langutil::EVMVersion _evmVersion,
+		Language _language,
+		solidity::frontend::OptimiserSettings _optimiserSettings,
+		langutil::DebugInfoSelection const& _debugInfoSelection
+	):
 		m_language(_language),
 		m_evmVersion(_evmVersion),
 		m_optimiserSettings(std::move(_optimiserSettings)),
+		m_debugInfoSelection(_debugInfoSelection),
 		m_errorReporter(m_errors)
 	{}
 
-	/// @returns the scanner used during parsing
-	langutil::Scanner const& scanner() const;
+	/// @returns the char stream used during parsing
+	langutil::CharStream const& charStream(std::string const& _sourceName) const override;
 
 	/// Runs parsing and analysis steps, returns false if input cannot be assembled.
 	/// Multiple calls overwrite the previous state.
@@ -91,15 +110,28 @@ public:
 
 	/// Run the assembly step (should only be called after parseAndAnalyze).
 	/// In addition to the value returned by @a assemble, returns
-	/// a second object that is guessed to be the runtime code.
+	/// a second object that is the runtime code.
 	/// Only available for EVM.
-	std::pair<MachineAssemblyObject, MachineAssemblyObject> assembleAndGuessRuntime() const;
+	std::pair<MachineAssemblyObject, MachineAssemblyObject>
+	assembleWithDeployed(
+		std::optional<std::string_view> _deployName = {}
+	) const;
+
+	/// Run the assembly step (should only be called after parseAndAnalyze).
+	/// Similar to @a assemblyWithDeployed, but returns EVM assembly objects.
+	/// Only available for EVM.
+	std::pair<std::shared_ptr<evmasm::Assembly>, std::shared_ptr<evmasm::Assembly>>
+	assembleEVMWithDeployed(
+		std::optional<std::string_view> _deployName = {}
+	) const;
 
 	/// @returns the errors generated during parsing, analysis (and potentially assembly).
 	langutil::ErrorList const& errors() const { return m_errors; }
 
 	/// Pretty-print the input after having parsed it.
-	std::string print() const;
+	std::string print(
+		langutil::CharStreamProvider const* _soliditySourceProvider = nullptr
+	) const;
 
 	/// Return the parsed and analyzed object.
 	std::shared_ptr<Object> parserResult() const;
@@ -108,15 +140,16 @@ private:
 	bool analyzeParsed();
 	bool analyzeParsed(yul::Object& _object);
 
-	void compileEVM(yul::AbstractAssembly& _assembly, bool _evm15, bool _optimize) const;
+	void compileEVM(yul::AbstractAssembly& _assembly, bool _optimize) const;
 
 	void optimize(yul::Object& _object, bool _isCreation);
 
 	Language m_language = Language::Assembly;
 	langutil::EVMVersion m_evmVersion;
 	solidity::frontend::OptimiserSettings m_optimiserSettings;
+	langutil::DebugInfoSelection m_debugInfoSelection{};
 
-	std::shared_ptr<langutil::Scanner> m_scanner;
+	std::unique_ptr<langutil::CharStream> m_charStream;
 
 	bool m_analysisSuccessful = false;
 	std::shared_ptr<yul::Object> m_parserResult;

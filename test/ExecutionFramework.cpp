@@ -27,6 +27,8 @@
 
 #include <test/evmc/evmc.hpp>
 
+#include <test/libsolidity/util/SoltestTypes.h>
+
 #include <libsolutil/CommonIO.h>
 #include <libsolutil/FunctionSelector.h>
 
@@ -34,13 +36,17 @@
 
 #include <boost/test/framework.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <range/v3/range.hpp>
+#include <range/v3/view/transform.hpp>
 
 #include <cstdlib>
+#include <limits>
 
 using namespace std;
 using namespace solidity;
 using namespace solidity::util;
 using namespace solidity::test;
+using namespace solidity::frontend::test;
 
 ExecutionFramework::ExecutionFramework():
 	ExecutionFramework(solidity::test::CommonOptions::get().evmVersion(), solidity::test::CommonOptions::get().vmPaths)
@@ -97,8 +103,8 @@ std::pair<bool, string> ExecutionFramework::compareAndCreateMessage(
 	std::string message =
 			"Invalid encoded data\n"
 			"   Result                                                           Expectation\n";
-	auto resultHex = boost::replace_all_copy(toHex(_result), "0", ".");
-	auto expectedHex = boost::replace_all_copy(toHex(_expectation), "0", ".");
+	auto resultHex = boost::replace_all_copy(util::toHex(_result), "0", ".");
+	auto expectedHex = boost::replace_all_copy(util::toHex(_expectation), "0", ".");
 	for (size_t i = 0; i < std::max(resultHex.size(), expectedHex.size()); i += 0x40)
 	{
 		std::string result{i >= resultHex.size() ? string{} : resultHex.substr(i, 0x40)};
@@ -117,7 +123,7 @@ bytes ExecutionFramework::panicData(util::PanicCode _code)
 {
 	return
 		m_evmVersion.supportsReturndata() ?
-		toCompactBigEndian(selectorFromSignature32("Panic(uint256)"), 4) + encode(u256(_code)) :
+		toCompactBigEndian(selectorFromSignature32("Panic(uint256)"), 4) + encode(u256(static_cast<unsigned>(_code))) :
 		bytes();
 }
 
@@ -158,7 +164,7 @@ void ExecutionFramework::sendMessage(bytes const& _data, bool _isCreation, u256 
 			cout << "CALL   " << m_sender.hex() << " -> " << m_contractAddress.hex() << ":" << endl;
 		if (_value > 0)
 			cout << " value: " << _value << endl;
-		cout << " in:      " << toHex(_data) << endl;
+		cout << " in:      " << util::toHex(_data) << endl;
 	}
 	evmc_message message = {};
 	message.input_data = _data.data();
@@ -176,7 +182,7 @@ void ExecutionFramework::sendMessage(bytes const& _data, bool _isCreation, u256 
 		message.kind = EVMC_CALL;
 		message.destination = EVMHost::convertToEVMC(m_contractAddress);
 	}
-	message.gas = m_gas.convert_to<int64_t>();
+	message.gas = InitialGas.convert_to<int64_t>();
 
 	evmc::result result = m_evmcHost->call(message);
 
@@ -184,12 +190,12 @@ void ExecutionFramework::sendMessage(bytes const& _data, bool _isCreation, u256 
 	if (_isCreation)
 		m_contractAddress = EVMHost::convertFromEVMC(result.create_address);
 
-	m_gasUsed = m_gas - result.gas_left;
+	m_gasUsed = InitialGas - result.gas_left;
 	m_transactionSuccessful = (result.status_code == EVMC_SUCCESS);
 
 	if (m_showMessages)
 	{
-		cout << " out:     " << toHex(m_output) << endl;
+		cout << " out:     " << util::toHex(m_output) << endl;
 		cout << " result: " << static_cast<size_t>(result.status_code) << endl;
 		cout << " gas used: " << m_gasUsed.str() << endl;
 	}
@@ -210,7 +216,7 @@ void ExecutionFramework::sendEther(h160 const& _addr, u256 const& _amount)
 	message.value = EVMHost::convertToEVMC(_amount);
 	message.kind = EVMC_CALL;
 	message.destination = EVMHost::convertToEVMC(_addr);
-	message.gas = m_gas.convert_to<int64_t>();
+	message.gas = InitialGas.convert_to<int64_t>();
 
 	m_evmcHost->call(message);
 }
@@ -233,7 +239,7 @@ h160 ExecutionFramework::account(size_t _idx)
 	return h160(h256(u256{"0x1212121212121212121212121212120000000012"} + _idx * 0x1000), h160::AlignRight);
 }
 
-bool ExecutionFramework::addressHasCode(h160 const& _addr)
+bool ExecutionFramework::addressHasCode(h160 const& _addr) const
 {
 	return m_evmcHost->get_code_size(EVMHost::convertToEVMC(_addr)) != 0;
 }
@@ -266,12 +272,12 @@ bytes ExecutionFramework::logData(size_t _logIdx) const
 	return {data.begin(), data.end()};
 }
 
-u256 ExecutionFramework::balanceAt(h160 const& _addr)
+u256 ExecutionFramework::balanceAt(h160 const& _addr) const
 {
 	return u256(EVMHost::convertFromEVMC(m_evmcHost->get_balance(EVMHost::convertToEVMC(_addr))));
 }
 
-bool ExecutionFramework::storageEmpty(h160 const& _addr)
+bool ExecutionFramework::storageEmpty(h160 const& _addr) const
 {
 	const auto it = m_evmcHost->accounts.find(EVMHost::convertToEVMC(_addr));
 	if (it != m_evmcHost->accounts.end())
@@ -281,4 +287,16 @@ bool ExecutionFramework::storageEmpty(h160 const& _addr)
 				return false;
 	}
 	return true;
+}
+
+vector<solidity::frontend::test::LogRecord> ExecutionFramework::recordedLogs() const
+{
+	vector<LogRecord> logs;
+	for (evmc::MockedHost::log_record const& logRecord: m_evmcHost->recorded_logs)
+		logs.emplace_back(
+			EVMHost::convertFromEVMC(logRecord.creator),
+			bytes{logRecord.data.begin(), logRecord.data.end()},
+			logRecord.topics | ranges::views::transform([](evmc::bytes32 _bytes) { return EVMHost::convertFromEVMC(_bytes); }) | ranges::to<vector>
+		);
+	return logs;
 }
