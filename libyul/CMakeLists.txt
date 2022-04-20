@@ -30,31 +30,39 @@ add_library(yul
 	AsmParser.h
 	AsmPrinter.cpp
 	AsmPrinter.h
-	AsmScope.cpp
-	AsmScope.h
-	AsmScopeFiller.cpp
-	AsmScopeFiller.h
 	AssemblyStack.h
 	AssemblyStack.cpp
 	CompilabilityChecker.cpp
 	CompilabilityChecker.h
+	ControlFlowSideEffects.h
+	ControlFlowSideEffectsCollector.cpp
+	ControlFlowSideEffectsCollector.h
 	Dialect.cpp
 	Dialect.h
 	Exceptions.h
+	FunctionReferenceResolver.cpp
+	FunctionReferenceResolver.h
 	Object.cpp
 	Object.h
 	ObjectParser.cpp
 	ObjectParser.h
+	Scope.cpp
+	Scope.h
+	ScopeFiller.cpp
+	ScopeFiller.h
 	Utilities.cpp
 	Utilities.h
 	YulString.h
 	backends/evm/AbstractAssembly.h
-	backends/evm/AsmCodeGen.h
 	backends/evm/AsmCodeGen.cpp
+	backends/evm/AsmCodeGen.h
 	backends/evm/ConstantOptimiser.cpp
 	backends/evm/ConstantOptimiser.h
-	backends/evm/EVMAssembly.cpp
-	backends/evm/EVMAssembly.h
+	backends/evm/ControlFlowGraph.h
+	backends/evm/ControlFlowGraphBuilder.cpp
+	backends/evm/ControlFlowGraphBuilder.h
+	backends/evm/EthAssemblyAdapter.cpp
+	backends/evm/EthAssemblyAdapter.h
 	backends/evm/EVMCodeTransform.cpp
 	backends/evm/EVMCodeTransform.h
 	backends/evm/EVMDialect.cpp
@@ -65,6 +73,13 @@ add_library(yul
 	backends/evm/EVMMetrics.h
 	backends/evm/NoOutputAssembly.h
 	backends/evm/NoOutputAssembly.cpp
+	backends/evm/OptimizedEVMCodeTransform.cpp
+	backends/evm/OptimizedEVMCodeTransform.h
+	backends/evm/StackHelpers.h
+	backends/evm/StackLayoutGenerator.cpp
+	backends/evm/StackLayoutGenerator.h
+	backends/evm/VariableReferenceCounter.h
+	backends/evm/VariableReferenceCounter.cpp
 	backends/wasm/EVMToEwasmTranslator.cpp
 	backends/wasm/EVMToEwasmTranslator.h
 	backends/wasm/BinaryTransform.cpp
@@ -131,6 +146,8 @@ add_library(yul
 	optimiser/FunctionGrouper.h
 	optimiser/FunctionHoister.cpp
 	optimiser/FunctionHoister.h
+	optimiser/FunctionSpecializer.cpp
+	optimiser/FunctionSpecializer.h
 	optimiser/InlinableExpressionFunctionFinder.cpp
 	optimiser/InlinableExpressionFunctionFinder.h
 	optimiser/KnowledgeBase.cpp
@@ -156,10 +173,14 @@ add_library(yul
 	optimiser/OptimizerUtilities.h
 	optimiser/ReasoningBasedSimplifier.cpp
 	optimiser/ReasoningBasedSimplifier.h
-	optimiser/RedundantAssignEliminator.cpp
-	optimiser/RedundantAssignEliminator.h
+	optimiser/UnusedAssignEliminator.cpp
+	optimiser/UnusedAssignEliminator.h
+	optimiser/UnusedStoreBase.cpp
+	optimiser/UnusedStoreBase.h
 	optimiser/Rematerialiser.cpp
 	optimiser/Rematerialiser.h
+	optimiser/SMTSolver.cpp
+	optimiser/SMTSolver.h
 	optimiser/SSAReverser.cpp
 	optimiser/SSAReverser.h
 	optimiser/SSATransform.cpp
@@ -198,4 +219,4 @@ add_library(yul
 	optimiser/VarNameCleaner.h
 )
 
-target_link_libraries(yul PUBLIC evmasm solutil langutil smtutil)
+target_link_libraries(yul PUBLIC evmasm solutil langutil smtutil fmt::fmt-header-only)

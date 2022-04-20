@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 abstract contract D {
     function d() public virtual ;
 }
@@ -22,5 +20,9 @@ contract C {
         x = 3;
     }
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreOS: macos
 // ----
-// Warning 2072: (288-294): Unused local variable.
+// Warning 2072: (255-261): Unused local variable.
+// Info 1180: Reentrancy property(ies) for :C:\n((!(x' >= 3) || (a' = a)) && (!(x' <= 0) || !(x >= 2)) && (<errorCode> <= 0) && (!(x <= 2) || !(x' >= 3)))\n<errorCode> = 0 -> no errors\n<errorCode> = 1 -> Assertion failed at assert(x == 2 || x == 1)\n

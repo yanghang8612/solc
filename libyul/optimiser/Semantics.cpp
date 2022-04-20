@@ -21,15 +21,17 @@
 
 #include <libyul/optimiser/Semantics.h>
 
+#include <libyul/optimiser/OptimizerUtilities.h>
 #include <libyul/Exceptions.h>
 #include <libyul/AST.h>
 #include <libyul/Dialect.h>
-#include <libyul/backends/evm/EVMDialect.h>
 
 #include <libevmasm/SemanticInformation.h>
 
 #include <libsolutil/CommonData.h>
 #include <libsolutil/Algorithms.h>
+
+#include <limits>
 
 using namespace std;
 using namespace solidity;
@@ -125,21 +127,23 @@ map<YulString, SideEffects> SideEffectsPropagator::sideEffects(
 	{
 		YulString funName = call.first;
 		SideEffects sideEffects;
-		util::BreadthFirstSearch<YulString>{call.second, {funName}}.run(
-			[&](YulString _function, auto&& _addChild) {
-				if (sideEffects == SideEffects::worst())
-					return;
-				if (BuiltinFunction const* f = _dialect.builtin(_function))
-					sideEffects += f->sideEffects;
-				else
-				{
-					if (ret.count(_function))
-						sideEffects += ret[_function];
-					for (YulString callee: _directCallGraph.functionCalls.at(_function))
-						_addChild(callee);
-				}
+		auto _visit = [&, visited = std::set<YulString>{}](YulString _function, auto&& _recurse) mutable {
+			if (!visited.insert(_function).second)
+				return;
+			if (sideEffects == SideEffects::worst())
+				return;
+			if (BuiltinFunction const* f = _dialect.builtin(_function))
+				sideEffects += f->sideEffects;
+			else
+			{
+				if (ret.count(_function))
+					sideEffects += ret[_function];
+				for (YulString callee: _directCallGraph.functionCalls.at(_function))
+					_recurse(callee, _recurse);
 			}
-		);
+		};
+		for (auto const& _v: call.second)
+			_visit(_v, _visit);
 		ret[funName] += sideEffects;
 	}
 	return ret;
@@ -178,8 +182,19 @@ pair<TerminationFinder::ControlFlow, size_t> TerminationFinder::firstUncondition
 TerminationFinder::ControlFlow TerminationFinder::controlFlowKind(Statement const& _statement)
 {
 	if (
+		holds_alternative<VariableDeclaration>(_statement) &&
+		std::get<VariableDeclaration>(_statement).value &&
+		containsNonContinuingFunctionCall(*std::get<VariableDeclaration>(_statement).value)
+	)
+		return ControlFlow::Terminate;
+	else if (
+		holds_alternative<Assignment>(_statement) &&
+		containsNonContinuingFunctionCall(*std::get<Assignment>(_statement).value)
+	)
+		return ControlFlow::Terminate;
+	else if (
 		holds_alternative<ExpressionStatement>(_statement) &&
-		isTerminatingBuiltin(std::get<ExpressionStatement>(_statement))
+		containsNonContinuingFunctionCall(std::get<ExpressionStatement>(_statement).expression)
 	)
 		return ControlFlow::Terminate;
 	else if (holds_alternative<Break>(_statement))
@@ -192,12 +207,18 @@ TerminationFinder::ControlFlow TerminationFinder::controlFlowKind(Statement cons
 		return ControlFlow::FlowOut;
 }
 
-bool TerminationFinder::isTerminatingBuiltin(ExpressionStatement const& _exprStmnt)
+bool TerminationFinder::containsNonContinuingFunctionCall(Expression const& _expr)
 {
-	if (holds_alternative<FunctionCall>(_exprStmnt.expression))
-		if (auto const* dialect = dynamic_cast<EVMDialect const*>(&m_dialect))
-			if (auto const* builtin = dialect->builtin(std::get<FunctionCall>(_exprStmnt.expression).functionName.name))
-				if (builtin->instruction)
-					return evmasm::SemanticInformation::terminatesControlFlow(*builtin->instruction);
+	if (auto functionCall = std::get_if<FunctionCall>(&_expr))
+	{
+		for (auto const& arg: functionCall->arguments)
+			if (containsNonContinuingFunctionCall(arg))
+				return true;
+
+		if (auto builtin = m_dialect.builtin(functionCall->functionName.name))
+			return !builtin->controlFlowSideEffects.canContinue;
+		else if (m_functionSideEffects && m_functionSideEffects->count(functionCall->functionName.name))
+			return !m_functionSideEffects->at(functionCall->functionName.name).canContinue;
+	}
 	return false;
 }

@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract Crypto {
 	function hash(bytes32) external pure returns (bytes32) {
 		return bytes32(0);
@@ -28,6 +26,8 @@ contract C {
 	}
 }
 // ====
+// SMTEngine: all
 // SMTIgnoreCex: yes
 // ----
-// Warning 6328: (431-453): CHC: Assertion violation happens here.
+// Warning 6328: (398-420): CHC: Assertion violation happens here.
+// Info 1180: Reentrancy property(ies) for :C:\n!(<errorCode> = 1)\n<errorCode> = 0 -> no errors\n<errorCode> = 1 -> Assertion failed at assert(prevOwner == owner)\n<errorCode> = 3 -> Assertion failed at assert(sig_1 == sig_2)\n

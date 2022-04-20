@@ -44,7 +44,9 @@ public:
 
 	void addRule(Expression const& _expr, std::string const& _name) override;
 
-	std::pair<CheckResult, CexGraph> query(Expression const& _expr) override;
+	/// Takes a function application _expr and checks for reachability.
+	/// @returns solving result, an invariant, and counterexample graph, if possible.
+	std::tuple<CheckResult, Expression, CexGraph> query(Expression const& _expr) override;
 
 	void declareVariable(std::string const& _name, SortPointer const& _sort) override;
 
@@ -53,6 +55,12 @@ public:
 	SMTLib2Interface* smtlib2Interface() const { return m_smtlib2.get(); }
 
 private:
+	std::string toSmtLibSort(Sort const& _sort);
+	std::string toSmtLibSort(std::vector<SortPointer> const& _sort);
+
+	void writeHeader();
+	std::string forall();
+
 	void declareFunction(std::string const& _name, SortPointer const& _sort);
 
 	void write(std::string _data);
@@ -70,6 +78,8 @@ private:
 	std::vector<std::string> m_unhandledQueries;
 
 	frontend::ReadCallback::Callback m_smtCallback;
+
+	std::map<Sort const*, std::string> m_sortNames;
 };
 
 }

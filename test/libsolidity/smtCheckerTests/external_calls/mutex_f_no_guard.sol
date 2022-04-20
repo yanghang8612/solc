@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 abstract contract D {
 	function d() external virtual;
 }
@@ -23,8 +21,12 @@ contract C {
 	function f() public {
 		uint y = x;
 		d.d();
-		assert(y == x);
+		// Disabled because of Spacer nondeterminism.
+		//assert(y == x);
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (307-321): CHC: Assertion violation happens here.\nCounterexample:\nx = 1, d = 0, lock = false\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0, d = 0, lock = false\nf()
+// Warning 2072: (251-257): Unused local variable.

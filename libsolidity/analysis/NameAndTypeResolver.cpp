@@ -76,16 +76,8 @@ bool NameAndTypeResolver::performImports(SourceUnit& _sourceUnit, map<string, So
 		if (auto imp = dynamic_cast<ImportDirective const*>(node.get()))
 		{
 			string const& path = *imp->annotation().absolutePath;
-			if (!_sourceUnits.count(path))
-			{
-				m_errorReporter.declarationError(
-					5073_error,
-					imp->location(),
-					"Import \"" + path + "\" (referenced as \"" + imp->path() + "\") not found."
-				);
-				error = true;
-				continue;
-			}
+			// The import resolution in CompilerStack enforces this.
+			solAssert(_sourceUnits.count(path), "");
 			auto scope = m_scopes.find(_sourceUnits.at(path));
 			solAssert(scope != end(m_scopes), "");
 			if (!imp->symbolAliases().empty())
@@ -110,7 +102,12 @@ bool NameAndTypeResolver::performImports(SourceUnit& _sourceUnit, map<string, So
 					else
 						for (Declaration const* declaration: declarations)
 							if (!DeclarationRegistrationHelper::registerDeclaration(
-								target, *declaration, alias.alias.get(), &alias.location, false, m_errorReporter
+								target,
+								*declaration,
+								alias.alias ? alias.alias.get() : &alias.symbol->name(),
+								&alias.location,
+								false,
+								m_errorReporter
 							))
 								error = true;
 				}
@@ -190,7 +187,13 @@ vector<Declaration const*> NameAndTypeResolver::nameFromCurrentScope(ASTString c
 Declaration const* NameAndTypeResolver::pathFromCurrentScope(vector<ASTString> const& _path) const
 {
 	solAssert(!_path.empty(), "");
-	vector<Declaration const*> candidates = m_currentScope->resolveName(_path.front(), true);
+	vector<Declaration const*> candidates = m_currentScope->resolveName(
+		_path.front(),
+		/* _recursive */ true,
+		/* _alsoInvisible */ false,
+		/* _onlyVisibleAsUnqualifiedNames */ true
+	);
+
 	for (size_t i = 1; i < _path.size() && candidates.size() == 1; i++)
 	{
 		if (!m_scopes.count(candidates.front()))
@@ -201,27 +204,6 @@ Declaration const* NameAndTypeResolver::pathFromCurrentScope(vector<ASTString> c
 		return candidates.front();
 	else
 		return nullptr;
-}
-
-void NameAndTypeResolver::warnVariablesNamedLikeInstructions() const
-{
-	for (auto const& instruction: evmasm::c_instructions)
-	{
-		string const instructionName{boost::algorithm::to_lower_copy(instruction.first)};
-		auto declarations = nameFromCurrentScope(instructionName, true);
-		for (Declaration const* const declaration: declarations)
-		{
-			solAssert(!!declaration, "");
-			if (dynamic_cast<MagicVariableDeclaration const* const>(declaration))
-				// Don't warn the user for what the user did not.
-				continue;
-			m_errorReporter.warning(
-				8261_error,
-				declaration->location(),
-				"Variable is shadowed in inline assembly by an instruction of the same name"
-			);
-		}
-	}
 }
 
 void NameAndTypeResolver::warnHomonymDeclarations() const
@@ -418,7 +400,6 @@ void NameAndTypeResolver::linearizeBaseContracts(ContractDefinition& _contract)
 	if (result.empty())
 		m_errorReporter.fatalTypeError(5005_error, _contract.location(), "Linearization of inheritance graph impossible");
 	_contract.annotation().linearizedBaseContracts = result;
-	_contract.annotation().contractDependencies.insert(result.begin() + 1, result.end());
 }
 
 template <class T>
@@ -544,9 +525,9 @@ bool DeclarationRegistrationHelper::registerDeclaration(
 		Declaration const* conflictingDeclaration = _container.conflictingDeclaration(_declaration, _name);
 		solAssert(conflictingDeclaration, "");
 		bool const comparable =
-			_errorLocation->source &&
-			conflictingDeclaration->location().source &&
-			_errorLocation->source->name() == conflictingDeclaration->location().source->name();
+			_errorLocation->sourceName &&
+			conflictingDeclaration->location().sourceName &&
+			*_errorLocation->sourceName == *conflictingDeclaration->location().sourceName;
 		if (comparable && _errorLocation->start < conflictingDeclaration->location().start)
 		{
 			firstDeclarationLocation = *_errorLocation;
@@ -631,13 +612,31 @@ bool DeclarationRegistrationHelper::visitNode(ASTNode& _node)
 
 	if (auto* declaration = dynamic_cast<Declaration*>(&_node))
 		registerDeclaration(*declaration);
+
+	if (auto* annotation = dynamic_cast<TypeDeclarationAnnotation*>(&_node.annotation()))
+	{
+		string canonicalName = dynamic_cast<Declaration const&>(_node).name();
+		solAssert(!canonicalName.empty(), "");
+
+		for (
+			ASTNode const* scope = m_currentScope;
+			scope != nullptr;
+			scope = m_scopes[scope]->enclosingNode()
+		)
+			if (auto decl = dynamic_cast<Declaration const*>(scope))
+			{
+				solAssert(!decl->name().empty(), "");
+				canonicalName = decl->name() + "." + canonicalName;
+			}
+
+		annotation->canonicalName = canonicalName;
+	}
+
 	if (dynamic_cast<ScopeOpener const*>(&_node))
 		enterNewSubScope(_node);
 
 	if (auto* variableScope = dynamic_cast<VariableScope*>(&_node))
 		m_currentFunction = variableScope;
-	if (auto* annotation = dynamic_cast<TypeDeclarationAnnotation*>(&_node.annotation()))
-		annotation->canonicalName = currentCanonicalName();
 
 	return true;
 }
@@ -657,7 +656,10 @@ void DeclarationRegistrationHelper::enterNewSubScope(ASTNode& _subScope)
 		solAssert(dynamic_cast<SourceUnit const*>(&_subScope), "Unexpected scope type.");
 	else
 	{
-		bool newlyAdded = m_scopes.emplace(&_subScope, make_shared<DeclarationContainer>(m_currentScope, m_scopes[m_currentScope].get())).second;
+		bool newlyAdded = m_scopes.emplace(
+			&_subScope,
+			make_shared<DeclarationContainer>(m_currentScope, m_scopes[m_currentScope].get())
+		).second;
 		solAssert(newlyAdded, "Unable to add new scope.");
 	}
 	m_currentScope = &_subScope;
@@ -682,25 +684,6 @@ void DeclarationRegistrationHelper::registerDeclaration(Declaration& _declaratio
 
 	solAssert(_declaration.annotation().scope == m_currentScope, "");
 	solAssert(_declaration.annotation().contract == m_currentContract, "");
-}
-
-string DeclarationRegistrationHelper::currentCanonicalName() const
-{
-	string ret;
-	for (
-		ASTNode const* scope = m_currentScope;
-		scope != nullptr;
-		scope = m_scopes[scope]->enclosingNode()
-	)
-	{
-		if (auto decl = dynamic_cast<Declaration const*>(scope))
-		{
-			if (!ret.empty())
-				ret = "." + ret;
-			ret = decl->name() + ret;
-		}
-	}
-	return ret;
 }
 
 }

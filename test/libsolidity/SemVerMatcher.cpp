@@ -43,7 +43,8 @@ namespace
 
 SemVerMatchExpression parseExpression(string const& _input)
 {
-	Scanner scanner{CharStream(_input, "")};
+	CharStream stream(_input, "");
+	Scanner scanner{stream};
 	vector<string> literals;
 	vector<Token> tokens;
 	while (scanner.currentToken() != Token::EOS)
@@ -58,11 +59,12 @@ SemVerMatchExpression parseExpression(string const& _input)
 	}
 
 	auto expression = SemVerMatchExpressionParser(tokens, literals).parse();
+	BOOST_REQUIRE(expression.has_value());
 	BOOST_CHECK_MESSAGE(
-		expression.isValid(),
+		expression->isValid(),
 		"Expression \"" + _input + "\" did not parse properly."
 	);
-	return expression;
+	return *expression;
 }
 
 }
@@ -169,6 +171,8 @@ BOOST_AUTO_TEST_CASE(negative_range)
 {
 	// Negative range tests
 	vector<pair<string, string>> tests = {
+		{"^0^1", "0.0.0"},
+		{"^0^1", "1.0.0"},
 		{"1.0.0 - 2.0.0", "2.2.3"},
 		{"1.0", "1.0.0-pre"},
 		{"1", "1.0.0-pre"},

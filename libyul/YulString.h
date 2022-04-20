@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <boost/noncopyable.hpp>
+#include <fmt/format.h>
 
 #include <unordered_map>
 #include <memory>
@@ -167,4 +167,34 @@ inline YulString operator "" _yulstring(char const* _string, std::size_t _size)
 	return YulString(std::string(_string, _size));
 }
 
+}
+
+namespace fmt
+{
+template <>
+struct formatter<solidity::yul::YulString>
+{
+	template <typename ParseContext>
+	constexpr auto parse(ParseContext& _context)
+	{
+		return _context.begin();
+	}
+
+	template <typename FormatContext>
+	auto format(solidity::yul::YulString _value, FormatContext& _context)
+	{
+		return format_to(_context.out(), "{}", _value.str());
+	}
+};
+}
+
+namespace std
+{
+template<> struct hash<solidity::yul::YulString>
+{
+	size_t operator()(solidity::yul::YulString const& x) const
+	{
+		return static_cast<size_t>(x.hash());
+	}
+};
 }

@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	uint[] arr;
 	function f() public view {
@@ -8,3 +6,7 @@ contract C {
 	function g() internal pure returns (uint[] memory) {
 	}
 }
+// ====
+// SMTEngine: all
+// ----
+// Info 1180: Contract invariant(s) for :C:\n(arr.length <= 0)\n

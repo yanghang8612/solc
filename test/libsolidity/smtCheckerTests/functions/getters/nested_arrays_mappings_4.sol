@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	mapping (uint => mapping (uint => uint[])) public m;
 
@@ -16,5 +14,9 @@ contract C {
 		assert(y == 1); // should fail
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (293-307): CHC: Assertion violation happens here.
+// Warning 6328: (260-274): CHC: Assertion violation happens here.
+// Info 1180: Contract invariant(s) for :C:\n!(m[0][1].length <= 2)\n

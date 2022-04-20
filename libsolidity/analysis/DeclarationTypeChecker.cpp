@@ -26,7 +26,7 @@
 
 #include <libsolutil/Algorithms.h>
 
-#include <boost/range/adaptor/transformed.hpp>
+#include <range/v3/view/transform.hpp>
 
 using namespace std;
 using namespace solidity::langutil;
@@ -100,7 +100,6 @@ bool DeclarationTypeChecker::visit(StructDefinition const& _struct)
 		m_recursiveStructSeen = false;
 		member->accept(*this);
 		solAssert(member->annotation().type, "");
-		solAssert(member->annotation().type->canBeStored(), "Type cannot be used in struct.");
 		if (m_recursiveStructSeen)
 			hasRecursiveChild = true;
 	}
@@ -140,6 +139,30 @@ bool DeclarationTypeChecker::visit(StructDefinition const& _struct)
 	return false;
 }
 
+void DeclarationTypeChecker::endVisit(UserDefinedValueTypeDefinition const& _userDefined)
+{
+	TypeName const* typeName = _userDefined.underlyingType();
+	solAssert(typeName, "");
+	if (!dynamic_cast<ElementaryTypeName const*>(typeName))
+		m_errorReporter.fatalTypeError(
+			8657_error,
+			typeName->location(),
+			"The underlying type for a user defined value type has to be an elementary value type."
+		);
+
+	Type const* type = typeName->annotation().type;
+	solAssert(type, "");
+	solAssert(!dynamic_cast<UserDefinedValueType const*>(type), "");
+	if (!type->isValueType())
+		m_errorReporter.typeError(
+			8129_error,
+			_userDefined.location(),
+			"The underlying type of the user defined value type \"" +
+			_userDefined.name() +
+			"\" is not a value type."
+		);
+}
+
 void DeclarationTypeChecker::endVisit(UserDefinedTypeName const& _typeName)
 {
 	if (_typeName.annotation().type)
@@ -158,6 +181,8 @@ void DeclarationTypeChecker::endVisit(UserDefinedTypeName const& _typeName)
 		_typeName.annotation().type = TypeProvider::enumType(*enumDef);
 	else if (ContractDefinition const* contract = dynamic_cast<ContractDefinition const*>(declaration))
 		_typeName.annotation().type = TypeProvider::contract(*contract);
+	else if (auto userDefinedValueType = dynamic_cast<UserDefinedValueTypeDefinition const*>(declaration))
+		_typeName.annotation().type = TypeProvider::userDefinedValueType(*userDefinedValueType);
 	else
 	{
 		_typeName.annotation().type = TypeProvider::emptyTuple();
@@ -227,20 +252,21 @@ void DeclarationTypeChecker::endVisit(Mapping const& _mapping)
 		{
 			case Type::Category::Enum:
 			case Type::Category::Contract:
+			case Type::Category::UserDefinedValueType:
 				break;
 			default:
 				m_errorReporter.fatalTypeError(
 					7804_error,
 					typeName->location(),
-					"Only elementary types, contract types or enums are allowed as mapping keys."
+					"Only elementary types, user defined value types, contract types or enums are allowed as mapping keys."
 				);
 				break;
 		}
 	else
 		solAssert(dynamic_cast<ElementaryTypeName const*>(&_mapping.keyType()), "");
 
-	TypePointer keyType = _mapping.keyType().annotation().type;
-	TypePointer valueType = _mapping.valueType().annotation().type;
+	Type const* keyType = _mapping.keyType().annotation().type;
+	Type const* valueType = _mapping.valueType().annotation().type;
 
 	// Convert key type to memory.
 	keyType = TypeProvider::withLocationIfReference(DataLocation::Memory, keyType);
@@ -255,14 +281,13 @@ void DeclarationTypeChecker::endVisit(ArrayTypeName const& _typeName)
 	if (_typeName.annotation().type)
 		return;
 
-	TypePointer baseType = _typeName.baseType().annotation().type;
+	Type const* baseType = _typeName.baseType().annotation().type;
 	if (!baseType)
 	{
 		solAssert(!m_errorReporter.errors().empty(), "");
 		return;
 	}
 
-	solAssert(baseType->storageBytes() != 0, "Illegal base type of storage size zero for array.");
 	if (Expression const* length = _typeName.length())
 	{
 		optional<rational> lengthValue;
@@ -344,7 +369,7 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 		{
 			errorString = "Data location must be " +
 				util::joinHumanReadable(
-					allowedDataLocations | boost::adaptors::transformed(locationToString),
+					allowedDataLocations | ranges::views::transform(locationToString),
 					", ",
 					" or "
 				);
@@ -368,7 +393,7 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 	}
 
 	// Find correct data location.
-	if (_variable.isEventParameter())
+	if (_variable.isEventOrErrorParameter())
 	{
 		solAssert(varLoc == Location::Unspecified, "");
 		typeLoc = DataLocation::Memory;
@@ -405,12 +430,23 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 				solAssert(!_variable.hasReferenceOrMappingType(), "Data location not properly set.");
 		}
 
-	TypePointer type = _variable.typeName().annotation().type;
+	Type const* type = _variable.typeName().annotation().type;
 	if (auto ref = dynamic_cast<ReferenceType const*>(type))
 	{
 		bool isPointer = !_variable.isStateVariable();
 		type = TypeProvider::withLocation(ref, typeLoc, isPointer);
 	}
+
+	if (
+		_variable.isConstant() &&
+		!dynamic_cast<UserDefinedValueType const*>(type) &&
+		type->containsNestedMapping()
+	)
+		m_errorReporter.fatalDeclarationError(
+			3530_error,
+			_variable.location(),
+			"The type contains a (nested) mapping and therefore cannot be a constant."
+		);
 
 	_variable.annotation().type = type;
 }

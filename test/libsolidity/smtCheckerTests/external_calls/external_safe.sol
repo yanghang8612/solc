@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 abstract contract D {
 	function d() external virtual;
 }
@@ -16,6 +14,7 @@ contract C {
 		assert(x < 11);
 	}
 }
+// ====
+// SMTEngine: all
 // ----
-// Warning 6328: (200-214): CHC: Assertion violation might happen here.
-// Warning 4661: (200-214): BMC: Assertion violation happens here.
+// Info 1180: Contract invariant(s) for :C:\n!(x >= 11)\nReentrancy property(ies) for :C:\n!(<errorCode> = 1)\n((!(x <= 10) || !(<errorCode> >= 3)) && (!(x <= 10) || !(x' >= 11)))\n<errorCode> = 0 -> no errors\n<errorCode> = 1 -> Overflow at ++x\n<errorCode> = 3 -> Assertion failed at assert(x < 11)\n

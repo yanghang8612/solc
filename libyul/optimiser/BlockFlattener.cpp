@@ -19,7 +19,6 @@
 #include <libyul/optimiser/BlockFlattener.h>
 #include <libyul/AST.h>
 
-#include <libsolutil/Visitor.h>
 #include <libsolutil/CommonData.h>
 
 #include <functional>
@@ -43,4 +42,16 @@ void BlockFlattener::operator()(Block& _block)
 				return {};
 		}
 	);
+}
+
+void BlockFlattener::run(OptimiserStepContext&, Block& _ast)
+{
+	BlockFlattener flattener;
+	for (auto& statement: _ast.statements)
+		if (auto* block = get_if<Block>(&statement))
+			flattener(*block);
+		else if (auto* function = get_if<FunctionDefinition>(&statement))
+			flattener(function->body);
+		else
+			yulAssert(false, "BlockFlattener requires the FunctionGrouper.");
 }

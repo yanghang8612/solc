@@ -18,14 +18,17 @@
 #
 # (c) 2019 solidity contributors.
 #------------------------------------------------------------------------------
+
+set -e
+
 source scripts/common.sh
 source test/externalTests/common.sh
 
-verify_version_input "$1" "$2"
 SOLJSON="$1"
 VERSION="$2"
 
-function install_fn { echo "Nothing to install."; }
+[[ $SOLJSON != "" && -f "$SOLJSON" && $VERSION != "" ]] || fail "Usage: $0 <path to soljson.js> <version>"
+
 function compile_fn { echo "Nothing to compile."; }
 function test_fn { npm test; }
 
@@ -35,7 +38,8 @@ function solcjs_test
     SOLCJS_INPUT_DIR="$TEST_DIR"/test/externalTests/solc-js
 
     # set up solc-js on the branch specified
-    setup "$SOLJSON" master
+    setup_solc "$DIR" solcjs "$SOLJSON" master solc/
+    cd solc/
 
     printLog "Updating index.js file..."
     echo "require('./determinism.js');" >> test/index.js
@@ -47,8 +51,10 @@ function solcjs_test
     cp -Rf "$SOLCJS_INPUT_DIR/DAO" test/
 
     printLog "Copying SMTChecker tests..."
-    cp -Rf "$TEST_DIR"/test/libsolidity/smtCheckerTests test/
-    rm -rf test/smtCheckerTests/imports
+    # We do not copy all tests because that takes too long.
+    cp -Rf "$TEST_DIR"/test/libsolidity/smtCheckerTests/external_calls test/smtCheckerTests/
+    cp -Rf "$TEST_DIR"/test/libsolidity/smtCheckerTests/loops test/smtCheckerTests/
+    cp -Rf "$TEST_DIR"/test/libsolidity/smtCheckerTests/invariants test/smtCheckerTests/
 
     # Update version (needed for some tests)
     echo "Updating package.json to version $VERSION"

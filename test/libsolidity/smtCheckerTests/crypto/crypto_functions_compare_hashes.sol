@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	function f(bytes memory data) public pure {
 		bytes32 k = keccak256(data);
@@ -10,7 +8,16 @@ contract C {
 		assert(r == k);
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (183-197): CHC: Assertion violation happens here.\nCounterexample:\n\ndata = [7, 7]\n\n\nTransaction trace:\nconstructor()\nf([7, 7])
-// Warning 6328: (201-215): CHC: Assertion violation happens here.\nCounterexample:\n\ndata = [9, 9]\n\n\nTransaction trace:\nconstructor()\nf([9, 9])
-// Warning 6328: (219-233): CHC: Assertion violation happens here.\nCounterexample:\n\ndata = [7, 7]\n\n\nTransaction trace:\nconstructor()\nf([7, 7])
+// Warning 1218: (150-164): CHC: Error trying to invoke SMT solver.
+// Warning 1218: (168-182): CHC: Error trying to invoke SMT solver.
+// Warning 1218: (186-200): CHC: Error trying to invoke SMT solver.
+// Warning 6328: (150-164): CHC: Assertion violation might happen here.
+// Warning 6328: (168-182): CHC: Assertion violation might happen here.
+// Warning 6328: (186-200): CHC: Assertion violation might happen here.
+// Warning 4661: (150-164): BMC: Assertion violation happens here.
+// Warning 4661: (168-182): BMC: Assertion violation happens here.
+// Warning 4661: (186-200): BMC: Assertion violation happens here.

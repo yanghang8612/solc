@@ -1,4 +1,3 @@
-pragma experimental SMTChecker;
 contract C
 {
 	uint a;
@@ -21,4 +20,7 @@ contract C
 			assert(a == 0);
 	}
 }
+// ====
+// SMTEngine: all
 // ----
+// Info 1180: Contract invariant(s) for :C:\n(a <= 0)\n

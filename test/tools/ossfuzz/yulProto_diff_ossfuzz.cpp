@@ -21,12 +21,16 @@
 #include <test/tools/ossfuzz/yulProto.pb.h>
 #include <test/tools/fuzzer_common.h>
 #include <test/tools/ossfuzz/protoToYul.h>
+
+#include <test/libyul/YulOptimizerTestCommon.h>
+
 #include <src/libfuzzer/libfuzzer_macro.h>
 
 #include <libyul/AssemblyStack.h>
 #include <libyul/backends/evm/EVMDialect.h>
 #include <libyul/Exceptions.h>
 
+#include <liblangutil/DebugInfoSelection.h>
 #include <liblangutil/EVMVersion.h>
 #include <liblangutil/SourceReferenceFormatter.h>
 
@@ -39,20 +43,6 @@ using namespace solidity::langutil;
 using namespace solidity::yul;
 using namespace solidity::yul::test;
 using namespace solidity::yul::test::yul_fuzzer;
-
-namespace
-{
-void printErrors(ostream& _stream, ErrorList const& _errors)
-{
-	SourceReferenceFormatter formatter(_stream, false, false);
-
-	for (auto const& error: _errors)
-		formatter.printExceptionInformation(
-			*error,
-			(error->type() == Error::Type::Warning) ? "Warning" : "Error"
-		);
-}
-}
 
 DEFINE_PROTO_FUZZER(Program const& _input)
 {
@@ -74,7 +64,8 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 	AssemblyStack stack(
 		version,
 		AssemblyStack::Language::StrictAssembly,
-		solidity::frontend::OptimiserSettings::full()
+		solidity::frontend::OptimiserSettings::full(),
+		DebugInfoSelection::All()
 	);
 
 	// Parse protobuf mutated YUL code
@@ -82,10 +73,16 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 		!stack.parseAndAnalyze("source", yul_source) ||
 		!stack.parserResult()->code ||
 		!stack.parserResult()->analysisInfo ||
-		!Error::containsOnlyWarnings(stack.errors())
+		Error::containsErrors(stack.errors())
 	)
 	{
-		printErrors(std::cout, stack.errors());
+		SourceReferenceFormatter formatter(std::cout, stack, false, false);
+
+		for (auto const& error: stack.errors())
+			formatter.printExceptionInformation(
+				*error,
+				(error->type() == Error::Type::Warning) ? "Warning" : "Error"
+			);
 		yulAssert(false, "Proto fuzzer generated malformed program");
 	}
 
@@ -97,24 +94,22 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 		EVMDialect::strictAssemblyForEVMObjects(version)
 	);
 
-	if (
-		termReason == yulFuzzerUtil::TerminationReason::StepLimitReached ||
-		termReason == yulFuzzerUtil::TerminationReason::TraceLimitReached ||
-		termReason == yulFuzzerUtil::TerminationReason::ExpresionNestingLimitReached
-	)
+	if (yulFuzzerUtil::resourceLimitsExceeded(termReason))
 		return;
 
-	stack.optimize();
-	termReason = yulFuzzerUtil::interpret(
-		os2,
-		stack.parserResult()->code,
+	YulOptimizerTestCommon optimizerTest(
+		stack.parserResult(),
 		EVMDialect::strictAssemblyForEVMObjects(version)
 	);
-	if (
-		termReason == yulFuzzerUtil::TerminationReason::StepLimitReached ||
-		termReason == yulFuzzerUtil::TerminationReason::TraceLimitReached ||
-		termReason == yulFuzzerUtil::TerminationReason::ExpresionNestingLimitReached
-	)
+	optimizerTest.setStep(optimizerTest.randomOptimiserStep(_input.step()));
+	shared_ptr<solidity::yul::Block> astBlock = optimizerTest.run();
+	yulAssert(astBlock != nullptr, "Optimiser error.");
+	termReason = yulFuzzerUtil::interpret(
+		os2,
+		astBlock,
+		EVMDialect::strictAssemblyForEVMObjects(version)
+	);
+	if (yulFuzzerUtil::resourceLimitsExceeded(termReason))
 		return;
 
 	bool isTraceEq = (os1.str() == os2.str());

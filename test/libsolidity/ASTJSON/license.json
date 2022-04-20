@@ -15,6 +15,7 @@
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "C",
       "contractDependencies": [],
       "contractKind": "contract",
       "fullyImplemented": true,
@@ -24,10 +25,12 @@
         1
       ],
       "name": "C",
+      "nameLocation": "45:1:1",
       "nodeType": "ContractDefinition",
       "nodes": [],
       "scope": 2,
-      "src": "36:13:1"
+      "src": "36:13:1",
+      "usedErrors": []
     }
   ],
   "src": "36:14:1"

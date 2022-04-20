@@ -12,8 +12,14 @@ contract C {
     function g() public view returns (uint) { return address(0).code.length; }
     function h() public view returns (uint) { return address(1).code.length; }
 }
+// ====
+// compileToEwasm: also
+// compileViaYul: also
 // ----
 // constructor() ->
+// gas irOptimized: 199687
+// gas legacy: 241124
+// gas legacyOptimized: 155549
 // initCode() -> 0x20, 0
 // f() -> true
 // g() -> 0

@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C {
 	bytes1 public x;
 	bytes3 public y;
@@ -13,6 +11,8 @@ contract C {
 		assert(y == "abc"); // should fail
 	}
 }
+// ====
+// SMTEngine: all
 // ----
-// Warning 6328: (192-208): CHC: Assertion violation happens here.\nCounterexample:\nx = 0, y = 0\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0, y = 0\nf()
-// Warning 6328: (260-278): CHC: Assertion violation happens here.\nCounterexample:\nx = 0, y = 0\n\n\n\nTransaction trace:\nconstructor()\nState: x = 0, y = 0\nf()
+// Warning 6328: (159-175): CHC: Assertion violation happens here.\nCounterexample:\nx = 0x0, y = 0x0\na = 0x0\nb = 0x0\n\nTransaction trace:\nC.constructor()\nState: x = 0x0, y = 0x0\nC.f()
+// Warning 6328: (227-245): CHC: Assertion violation happens here.\nCounterexample:\nx = 0x0, y = 0x0\na = 0x0\nb = 0x0\n\nTransaction trace:\nC.constructor()\nState: x = 0x0, y = 0x0\nC.f()

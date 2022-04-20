@@ -1,5 +1,3 @@
-pragma experimental SMTChecker;
-
 contract C
 {
 	uint x;
@@ -12,11 +10,16 @@ contract C
 		assert(success);
 		assert(x == 0);
 		assert(map[0] == 0);
-		assert(localMap[0] == 0);
+		// Disabled because of Spacer's seg fault
+		//assert(localMap[0] == 0);
 	}
 }
 // ====
 // EVMVersion: >spuriousDragon
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 2072: (224-240): Unused local variable.
-// Warning 6328: (266-281): CHC: Assertion violation happens here.\nCounterexample:\nx = 0\na = 0\ndata = [10, 10]\n\n\nTransaction trace:\nconstructor()\nState: x = 0\nf(0, [10, 10])
+// Warning 2072: (127-166): Unused local variable.
+// Warning 2072: (191-207): Unused local variable.
+// Warning 6328: (233-248): CHC: Assertion violation happens here.
+// Info 1180: Reentrancy property(ies) for :C:\n!(<errorCode> >= 2)\n!(<errorCode> >= 3)\n<errorCode> = 0 -> no errors\n<errorCode> = 1 -> Assertion failed at assert(success)\n<errorCode> = 2 -> Assertion failed at assert(x == 0)\n<errorCode> = 3 -> Assertion failed at assert(map[0] == 0)\n

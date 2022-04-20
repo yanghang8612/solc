@@ -1,4 +1,3 @@
-pragma experimental SMTChecker;
 contract C {
 	int[][] array2d;
 	function l() public {
@@ -14,5 +13,9 @@ contract C {
 		return array2d[2];
 	}
 }
+// ====
+// SMTEngine: all
+// SMTIgnoreCex: yes
 // ----
-// Warning 6328: (184-213): CHC: Assertion violation happens here.\nCounterexample:\narray2d = [[], [], []]\n\n\n\nTransaction trace:\nconstructor()\nState: array2d = []\nl()
+// Warning 6368: (159-169): CHC: Out of bounds access happens here.
+// Warning 6328: (152-181): CHC: Assertion violation happens here.

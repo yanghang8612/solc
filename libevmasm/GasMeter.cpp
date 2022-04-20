@@ -47,7 +47,6 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 	case Push:
 	case PushTag:
 	case PushData:
-	case PushString:
 	case PushSub:
 	case PushSubSize:
 	case PushProgramSize:
@@ -71,9 +70,9 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 				m_state->storageContent().count(slot) &&
 				classes.knownNonZero(m_state->storageContent().at(slot))
 			))
-				gas = GasCosts::sstoreResetGas; //@todo take refunds into account
+				gas = GasCosts::totalSstoreResetGas(m_evmVersion); //@todo take refunds into account
 			else
-				gas = GasCosts::sstoreSetGas;
+				gas = GasCosts::totalSstoreSetGas(m_evmVersion);
 			break;
 		}
 		case Instruction::SLOAD:
@@ -207,6 +206,12 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
         case Instruction::NATIVEFREEZEEXPIRETIME:
             gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME);
             break;
+		case Instruction::NATIVEVOTE:
+			gas = runGas(Instruction::NATIVEVOTE);
+			break;
+		case Instruction::NATIVEWITHDRAWREWARD:
+			gas = runGas(Instruction::NATIVEWITHDRAWREWARD);
+			break;
 		case Instruction::CHAINID:
 			gas = runGas(Instruction::CHAINID);
 			break;
@@ -295,6 +300,14 @@ u256 GasMeter::dataGas(bytes const& _data, bool _inCreation, langutil::EVMVersio
 	}
 	else
 		gas = bigint(GasCosts::createDataGas) * _data.size();
+	assertThrow(gas < bigint(u256(-1)), OptimizerException, "Gas cost exceeds 256 bits.");
+	return u256(gas);
+}
+
+
+u256 GasMeter::dataGas(uint64_t _length, bool _inCreation, langutil::EVMVersion _evmVersion)
+{
+	bigint gas = bigint(_length) * (_inCreation ? GasCosts::txDataNonZeroGas(_evmVersion) : GasCosts::createDataGas);
 	assertThrow(gas < bigint(u256(-1)), OptimizerException, "Gas cost exceeds 256 bits.");
 	return u256(gas);
 }

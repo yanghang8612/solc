@@ -14,6 +14,7 @@
     {
       "abstract": false,
       "baseContracts": [],
+      "canonicalName": "C",
       "contractDependencies": [],
       "contractKind": "contract",
       "fullyImplemented": true,
@@ -23,6 +24,7 @@
         5
       ],
       "name": "C",
+      "nameLocation": "9:1:1",
       "nodeType": "ContractDefinition",
       "nodes":
       [
@@ -43,6 +45,7 @@
           },
           "id": 4,
           "name": "M",
+          "nameLocation": "22:1:1",
           "nodeType": "ModifierDefinition",
           "parameters":
           {
@@ -57,7 +60,8 @@
         }
       ],
       "scope": 6,
-      "src": "0:32:1"
+      "src": "0:32:1",
+      "usedErrors": []
     }
   ],
   "src": "0:33:1"

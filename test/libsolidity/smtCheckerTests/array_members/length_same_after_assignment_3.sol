@@ -1,8 +1,18 @@
-pragma experimental SMTChecker;
-
 contract C {
 	uint[][] arr;
-	uint[][] arr2;
+
+	constructor() {
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+		arr.push();
+	}
+
 	function f() public {
 		uint x = arr[2].length;
 		uint y = arr[3].length;
@@ -15,3 +25,7 @@ contract C {
 		assert(arr[5].length == t);
 	}
 }
+// ====
+// SMTEngine: all
+// ----
+// Info 1180: Contract invariant(s) for :C:\n!(arr.length <= 7)\n!(arr.length <= 8)\n((arr[5].length <= 0) && (arr[8].length <= 0))\n
