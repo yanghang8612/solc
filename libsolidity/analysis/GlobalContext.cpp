@@ -179,13 +179,8 @@ void GlobalContext::addVerifyMintProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyMintProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -222,13 +217,8 @@ void GlobalContext::addVerifyBurnProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyBurnProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)));
+			nullptr)));
 
 }
 
@@ -279,13 +269,8 @@ void GlobalContext::addVerifyTransferProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyTransferProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -316,14 +301,9 @@ void GlobalContext::addPedersenHashMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::pedersenHash,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)));
-
+			nullptr)
+	));
 }
 
 
@@ -349,13 +329,8 @@ void GlobalContext::addBatchValidateSignMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::BatchValidateSign,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -384,13 +359,8 @@ void GlobalContext::addValidateMultiSignMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::ValidateMultiSign,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -413,13 +383,8 @@ void GlobalContext::addVoteMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::vote,
-		false,
 		StateMutability::NonPayable,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -438,13 +403,8 @@ void GlobalContext::addRewardBalanceMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::rewardBalance,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -466,13 +426,8 @@ void GlobalContext::addIsSRCandidateMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::isSrCandidate,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -496,13 +451,8 @@ void GlobalContext::addVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::voteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -524,13 +474,8 @@ void GlobalContext::addTotalVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::totalVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -552,13 +497,8 @@ void GlobalContext::addReceivedVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::receivedVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -580,13 +520,8 @@ void GlobalContext::addUsedVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::usedVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 

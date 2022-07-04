@@ -3637,7 +3637,7 @@ Type const* FunctionType::copyAndSetCallOptions(bool _setGas, bool _setValue, bo
 	Options options = Options::fromFunctionType(*this);
 	if (_setGas) options.gasSet = true;
 	if (_setValue) options.valueSet = true;
-	if（_setToken) options.tokenSet = true;
+	if (_setToken) options.tokenSet = true;
 	if (_setSalt) options.saltSet = true;
 	return TypeProvider::function(
 		m_parameterTypes,

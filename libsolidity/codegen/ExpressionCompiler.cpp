@@ -801,11 +801,9 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 					FunctionType::Kind::BareCall,
 					StateMutability::NonPayable,
 					nullptr,
-					callOptions
-				),
+					callOptions),
 				{},
-				false
-			);
+				false);
 			if (function.kind() == FunctionType::Kind::Transfer)
 			{
 				// Check if zero (out of stack or not enough balance).
@@ -814,16 +812,15 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				m_context.appendConditionalRevert(true);
 			}
 			break;
+		}
 		case FunctionType::Kind::TransferToken:
+		{
 			_functionCall.expression().accept(*this);
 			// Provide the gas stipend manually at first because we may send zero trx.
 			// Will be zeroed if we send more than zero trx.
 			m_context << u256(evmasm::GasCosts::callStipend);
 			arguments.front()->accept(*this);
-			utils().convertType(
-				*arguments.front()->annotation().type,
-				*function.parameterTypes().front(), true
-			);
+			utils().convertType(*arguments.front()->annotation().type, *function.parameterTypes().front(), true);
 			// gas <- gas * !value
 			m_context << Instruction::SWAP1 << Instruction::DUP2;
 			m_context << Instruction::ISZERO << Instruction::MUL << Instruction::SWAP1;
@@ -839,6 +836,10 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			m_context << Instruction::LT << Instruction::ISZERO;
 			m_context.appendConditionalRevert(false);
 
+			FunctionType::Options callOptions;
+			callOptions.valueSet = true;
+			callOptions.tokenSet = true;
+			callOptions.gasSet = true;
 			// now on Stack:
 			// tokenId
 			// value
@@ -850,21 +851,18 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 					strings(),
 					strings(),
 					FunctionType::Kind::BareCall,
-					false,
 					StateMutability::NonPayable,
 					nullptr,
-					true,
-					true,
-					true
-				),
+					callOptions),
 				{},
-			    false
-			);
+				false);
 
 			m_context << Instruction::ISZERO;
 			m_context.appendConditionalRevert(true);
 			break;
+		}
 		case FunctionType::Kind::TokenBalance:
+		{
 			// stack layout: address token_id
 			_functionCall.expression().accept(*this);
 			arguments[0]->accept(*this);
