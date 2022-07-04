@@ -32,6 +32,7 @@
 #include <libyul/optimiser/DeadCodeEliminator.h>
 #include <libyul/optimiser/FunctionGrouper.h>
 #include <libyul/optimiser/FunctionHoister.h>
+#include <libyul/optimiser/EqualStoreEliminator.h>
 #include <libyul/optimiser/EquivalentFunctionCombiner.h>
 #include <libyul/optimiser/ExpressionSplitter.h>
 #include <libyul/optimiser/ExpressionJoiner.h>
@@ -56,6 +57,7 @@
 #include <libyul/optimiser/StructuralSimplifier.h>
 #include <libyul/optimiser/SyntacticalEquality.h>
 #include <libyul/optimiser/UnusedAssignEliminator.h>
+#include <libyul/optimiser/UnusedStoreEliminator.h>
 #include <libyul/optimiser/VarNameCleaner.h>
 #include <libyul/optimiser/LoadResolver.h>
 #include <libyul/optimiser/LoopInvariantCodeMotion.h>
@@ -204,6 +206,7 @@ map<string, unique_ptr<OptimiserStep>> const& OptimiserSuite::allSteps()
 			ConditionalUnsimplifier,
 			ControlFlowSimplifier,
 			DeadCodeEliminator,
+			EqualStoreEliminator,
 			EquivalentFunctionCombiner,
 			ExpressionInliner,
 			ExpressionJoiner,
@@ -220,6 +223,7 @@ map<string, unique_ptr<OptimiserStep>> const& OptimiserSuite::allSteps()
 			LoadResolver,
 			LoopInvariantCodeMotion,
 			UnusedAssignEliminator,
+			UnusedStoreEliminator,
 			ReasoningBasedSimplifier,
 			Rematerialiser,
 			SSAReverser,
@@ -244,6 +248,7 @@ map<string, char> const& OptimiserSuite::stepNameToAbbreviationMap()
 		{ConditionalUnsimplifier::name,       'U'},
 		{ControlFlowSimplifier::name,         'n'},
 		{DeadCodeEliminator::name,            'D'},
+		{EqualStoreEliminator::name,          'E'},
 		{EquivalentFunctionCombiner::name,    'v'},
 		{ExpressionInliner::name,             'e'},
 		{ExpressionJoiner::name,              'j'},
@@ -261,6 +266,7 @@ map<string, char> const& OptimiserSuite::stepNameToAbbreviationMap()
 		{LoopInvariantCodeMotion::name,       'M'},
 		{ReasoningBasedSimplifier::name,      'R'},
 		{UnusedAssignEliminator::name,        'r'},
+		{UnusedStoreEliminator::name,         'S'},
 		{Rematerialiser::name,                'm'},
 		{SSAReverser::name,                   'V'},
 		{SSATransform::name,                  'a'},

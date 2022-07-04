@@ -33,7 +33,7 @@ the team and contributors are working on, you can join our public team calls:
 - Mondays at 3pm CET/CEST.
 - Wednesdays at 2pm CET/CEST.
 
-Both calls take place on `Jitsi <https://meet.komputing.org/solidity>`_.
+Both calls take place on `Jitsi <https://meet.ethereum.org/solidity>`_.
 
 How to Report Issues
 ====================
@@ -93,6 +93,13 @@ dependencies (`evmone <https://github.com/ethereum/evmone/releases>`_,
 
 On macOS some of the testing scripts expect GNU coreutils to be installed.
 This can be easiest accomplished using Homebrew: ``brew install coreutils``.
+
+On Windows systems make sure that you have a privilege to create symlinks,
+otherwise several tests may fail.
+Administrators should have that privilege, but you may also
+`grant it to other users <https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/create-symbolic-links#policy-management>`_
+or
+`enable Developer Mode <https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development>`_.
 
 Running the Tests
 -----------------

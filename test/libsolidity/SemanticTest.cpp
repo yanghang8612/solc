@@ -70,10 +70,10 @@ SemanticTest::SemanticTest(
 	static set<string> const legacyRunTriggers{"also", "false", "default"};
 
 	string compileViaYul = m_reader.stringSetting("compileViaYul", "default");
-	if (!contains(compileViaYulAllowedValues, compileViaYul))
+	if (!util::contains(compileViaYulAllowedValues, compileViaYul))
 		BOOST_THROW_EXCEPTION(runtime_error("Invalid compileViaYul value: " + compileViaYul + "."));
-	m_testCaseWantsYulRun = contains(yulRunTriggers, compileViaYul);
-	m_testCaseWantsLegacyRun = contains(legacyRunTriggers, compileViaYul);
+	m_testCaseWantsYulRun = util::contains(yulRunTriggers, compileViaYul);
+	m_testCaseWantsLegacyRun = util::contains(legacyRunTriggers, compileViaYul);
 
 	// Do not enforce via yul and ewasm, if via yul was explicitly denied.
 	if (compileViaYul == "false")
@@ -189,7 +189,7 @@ vector<SideEffectHook> SemanticTest::makeSideEffectHooks() const
 			{
 				vector<string> result;
 				for (auto const& argument: _call.arguments.parameters)
-					result.emplace_back(toHex(argument.rawBytes));
+					result.emplace_back(util::toHex(argument.rawBytes));
 				return result;
 			}
 			return {};
@@ -435,7 +435,7 @@ TestCase::TestResult SemanticTest::runTest(
 			{
 				soltestAssert(
 					m_allowNonExistingFunctions ||
-					m_compiler.methodIdentifiers(m_compiler.lastContractName(m_sources.mainSourceFile)).isMember(test.call().signature),
+					m_compiler.interfaceSymbols(m_compiler.lastContractName(m_sources.mainSourceFile))["methods"].isMember(test.call().signature),
 					"The function " + test.call().signature + " is not known to the compiler"
 				);
 

@@ -1,11 +1,4 @@
 Optimized IR:
-/*=====================================================*
- *                       WARNING                       *
- *  Solidity to Yul compilation is still EXPERIMENTAL  *
- *       It can result in LOSS OF FUNDS or worse       *
- *                !USE AT YOUR OWN RISK!               *
- *=====================================================*/
-
 /// @use-src 0:"name_simplifier/input.sol"
 object "C_59" {
     code {
@@ -50,7 +43,7 @@ object "C_59" {
                         for { } lt(src, srcEnd) { src := add(src, _2) }
                         {
                             if slt(sub(calldatasize(), src), _2) { revert(_1, _1) }
-                            let value := allocate_memory_1172()
+                            let value := allocate_memory_1307()
                             mstore(value, calldataload(src))
                             mstore(dst, value)
                             dst := add(dst, _2)
@@ -68,7 +61,7 @@ object "C_59" {
                 mstore(4, 0x41)
                 revert(0, 0x24)
             }
-            function allocate_memory_1172() -> memPtr
+            function allocate_memory_1307() -> memPtr
             {
                 memPtr := mload(64)
                 let newFreePtr := add(memPtr, 32)

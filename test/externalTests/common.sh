@@ -20,27 +20,48 @@
 #------------------------------------------------------------------------------
 set -e
 
-# Requires "${REPO_ROOT}/scripts/common.sh" to be included before.
+# Requires $REPO_ROOT to be defined and "${REPO_ROOT}/scripts/common.sh" to be included before.
 
 CURRENT_EVM_VERSION=london
 
-function print_optimizer_levels_or_exit
+AVAILABLE_PRESETS=(
+    legacy-no-optimize
+    ir-no-optimize
+    legacy-optimize-evm-only
+    ir-optimize-evm-only
+    legacy-optimize-evm+yul
+    ir-optimize-evm+yul
+)
+
+function print_presets_or_exit
 {
-    local selected_levels="$1"
+    local selected_presets="$1"
 
-    [[ $selected_levels != "" ]] || { printWarning "No steps to run. Exiting."; exit 0; }
+    [[ $selected_presets != "" ]] || { printWarning "No presets to run. Exiting."; exit 0; }
 
-    printLog "Selected optimizer levels: ${selected_levels}"
+    printLog "Selected settings presets: ${selected_presets}"
 }
 
 function verify_input
 {
     local binary_type="$1"
     local binary_path="$2"
+    local selected_presets="$3"
 
-    (( $# == 2 )) || fail "Usage: $0 native|solcjs <path to solc or soljson.js>"
+    (( $# >= 2 && $# <= 3 )) || fail "Usage: $0 native|solcjs <path to solc or soljson.js> [preset]"
     [[ $binary_type == native || $binary_type == solcjs ]] || fail "Invalid binary type: '${binary_type}'. Must be either 'native' or 'solcjs'."
     [[ -f "$binary_path" ]] || fail "The compiler binary does not exist at '${binary_path}'"
+
+    if [[ $selected_presets != "" ]]
+    then
+        for preset in $selected_presets
+        do
+            if [[ " ${AVAILABLE_PRESETS[*]} " != *" $preset "* ]]
+            then
+                fail "Preset '${preset}' does not exist. Available presets: ${AVAILABLE_PRESETS[*]}."
+            fi
+        done
+    fi
 }
 
 function setup_solc
@@ -50,20 +71,29 @@ function setup_solc
     local binary_path="$3"
     local solcjs_branch="${4:-master}"
     local install_dir="${5:-solc/}"
+    local solcjs_dir="$6"
 
     [[ $binary_type == native || $binary_type == solcjs ]] || assertFail
+    [[ $binary_type == solcjs || $solcjs_dir == "" ]] || assertFail
 
     cd "$test_dir"
 
     if [[ $binary_type == solcjs ]]
     then
         printLog "Setting up solc-js..."
-        git clone --depth 1 -b "$solcjs_branch" https://github.com/ethereum/solc-js.git "$install_dir"
+        if [[ $solcjs_dir == "" ]]; then
+            printLog "Cloning branch ${solcjs_branch}..."
+            git clone --depth 1 -b "$solcjs_branch" https://github.com/ethereum/solc-js.git "$install_dir"
+        else
+            printLog "Using local solc-js from ${solcjs_dir}..."
+            cp -ra "$solcjs_dir" solc
+        fi
 
         pushd "$install_dir"
         npm install
         cp "$binary_path" soljson.js
-        SOLCVERSION=$(./solcjs --version)
+        npm run build
+        SOLCVERSION=$(dist/solc.js --version)
         popd
     else
         printLog "Setting up solc..."
@@ -77,12 +107,24 @@ function setup_solc
 function download_project
 {
     local repo="$1"
-    local solcjs_branch="$2"
-    local test_dir="$3"
+    local ref_type="$2"
+    local solcjs_ref="$3"
+    local test_dir="$4"
 
-    printLog "Cloning $solcjs_branch of $repo..."
-    git clone --depth 1 "$repo" -b "$solcjs_branch" "$test_dir/ext"
-    cd ext
+    [[ $ref_type == commit || $ref_type == branch || $ref_type == tag ]] || assertFail
+
+    printLog "Cloning ${ref_type} ${solcjs_ref} of ${repo}..."
+    if [[ $ref_type == commit ]]; then
+        mkdir ext
+        cd ext
+        git init
+        git remote add origin "$repo"
+        git fetch --depth 1 origin "$solcjs_ref"
+        git reset --hard FETCH_HEAD
+    else
+        git clone --depth 1 "$repo" -b "$solcjs_ref" "$test_dir/ext"
+        cd ext
+    fi
     echo "Current commit hash: $(git rev-parse HEAD)"
 }
 
@@ -117,6 +159,19 @@ function neutralize_package_json_hooks
     sed -i 's|"prepare": *".*"|"prepare": ""|g' package.json
 }
 
+function neutralize_packaged_contracts
+{
+    # Frameworks will build contracts from any package that contains a configuration file.
+    # This is both unnecessary (any files imported from these packages will get compiled again as a
+    # part of the main project anyway) and trips up our version check because it won't use our
+    # custom compiler binary.
+    printLog "Removing framework config and artifacts from npm packages..."
+    find node_modules/ -type f '(' -name 'hardhat.config.*' -o -name 'truffle-config.*' ')' -delete
+
+    # Some npm packages also come packaged with pre-built artifacts.
+    find node_modules/ -path '*artifacts/build-info/*.json' -delete
+}
+
 function force_solc_modules
 {
     local custom_solcjs_path="${1:-solc/}"
@@ -141,7 +196,7 @@ function force_truffle_compiler_settings
     local config_file="$1"
     local binary_type="$2"
     local solc_path="$3"
-    local level="$4"
+    local preset="$4"
     local evm_version="${5:-"$CURRENT_EVM_VERSION"}"
 
     [[ $binary_type == native || $binary_type == solcjs ]] || assertFail
@@ -153,14 +208,59 @@ function force_truffle_compiler_settings
     echo "Config file: $config_file"
     echo "Binary type: $binary_type"
     echo "Compiler path: $solc_path"
-    echo "Optimization level: $level"
-    echo "Optimizer settings: $(optimizer_settings_for_level "$level")"
+    echo "Settings preset: ${preset}"
+    echo "Settings: $(settings_from_preset "$preset" "$evm_version")"
     echo "EVM version: $evm_version"
+    echo "Compiler version: ${SOLCVERSION_SHORT}"
+    echo "Compiler version (full): ${SOLCVERSION}"
     echo "-------------------------------------"
 
-    # Forcing the settings should always work by just overwriting the solc object. Forcing them by using a
-    # dedicated settings objects should only be the fallback.
-    echo "module.exports['compilers'] = $(truffle_compiler_settings "$solc_path" "$level" "$evm_version");" >> "$config_file"
+    local compiler_settings gas_reporter_settings
+    compiler_settings=$(truffle_compiler_settings "$solc_path" "$preset" "$evm_version")
+    gas_reporter_settings=$(eth_gas_reporter_settings "$preset")
+
+    {
+        echo "require('eth-gas-reporter');"
+        echo "module.exports['mocha'] = {"
+        echo "    reporter: 'eth-gas-reporter',"
+        echo "    reporterOptions: ${gas_reporter_settings}"
+        echo "};"
+
+        echo "module.exports['compilers'] = ${compiler_settings};"
+    } >> "$config_file"
+}
+
+function name_hardhat_default_export
+{
+    local config_file="$1"
+
+    local import="import {HardhatUserConfig} from 'hardhat/types';"
+    local config="const config: HardhatUserConfig = {"
+    sed -i "s|^\s*export\s*default\s*{|${import}\n${config}|g" "$config_file"
+    echo "export default config;" >> "$config_file"
+}
+
+function force_hardhat_timeout
+{
+    local config_file="$1"
+    local config_var_name="$2"
+    local new_timeout="$3"
+
+    printLog "Configuring Hardhat..."
+    echo "-------------------------------------"
+    echo "Timeout: ${new_timeout}"
+    echo "-------------------------------------"
+
+    if [[ $config_file == *\.js ]]; then
+        [[ $config_var_name == "" ]] || assertFail
+        echo "module.exports.mocha = module.exports.mocha || {timeout: ${new_timeout}}"
+        echo "module.exports.mocha.timeout =  ${new_timeout}"
+    else
+        [[ $config_file == *\.ts ]] || assertFail
+        [[ $config_var_name != "" ]] || assertFail
+        echo "${config_var_name}.mocha = ${config_var_name}.mocha ?? {timeout: ${new_timeout}};"
+        echo "${config_var_name}.mocha!.timeout = ${new_timeout}"
+    fi >> "$config_file"
 }
 
 function force_hardhat_compiler_binary
@@ -174,29 +274,65 @@ function force_hardhat_compiler_binary
     echo "Config file: ${config_file}"
     echo "Binary type: ${binary_type}"
     echo "Compiler path: ${solc_path}"
-    hardhat_solc_build_subtask "$SOLCVERSION_SHORT" "$SOLCVERSION" "$binary_type" "$solc_path" >> "$config_file"
+
+    local language="${config_file##*.}"
+    hardhat_solc_build_subtask "$SOLCVERSION_SHORT" "$SOLCVERSION" "$binary_type" "$solc_path" "$language" >> "$config_file"
+}
+
+function force_hardhat_unlimited_contract_size
+{
+    local config_file="$1"
+    local config_var_name="$2"
+
+    printLog "Configuring Hardhat..."
+    echo "-------------------------------------"
+    echo "Allow unlimited contract size: true"
+    echo "-------------------------------------"
+
+    if [[ $config_file == *\.js ]]; then
+        [[ $config_var_name == "" ]] || assertFail
+        echo "module.exports.networks.hardhat = module.exports.networks.hardhat || {allowUnlimitedContractSize: undefined}"
+        echo "module.exports.networks.hardhat.allowUnlimitedContractSize = true"
+    else
+        [[ $config_file == *\.ts ]] || assertFail
+        [[ $config_var_name != "" ]] || assertFail
+        echo "${config_var_name}.networks!.hardhat = ${config_var_name}.networks!.hardhat ?? {allowUnlimitedContractSize: undefined};"
+        echo "${config_var_name}.networks!.hardhat!.allowUnlimitedContractSize = true"
+    fi >> "$config_file"
 }
 
 function force_hardhat_compiler_settings
 {
     local config_file="$1"
-    local level="$2"
-    local evm_version="${3:-"$CURRENT_EVM_VERSION"}"
+    local preset="$2"
+    local config_var_name="$3"
+    local evm_version="${4:-"$CURRENT_EVM_VERSION"}"
 
     printLog "Configuring Hardhat..."
     echo "-------------------------------------"
     echo "Config file: ${config_file}"
-    echo "Optimization level: ${level}"
-    echo "Optimizer settings: $(optimizer_settings_for_level "$level")"
+    echo "Settings preset: ${preset}"
+    echo "Settings: $(settings_from_preset "$preset" "$evm_version")"
     echo "EVM version: ${evm_version}"
     echo "Compiler version: ${SOLCVERSION_SHORT}"
     echo "Compiler version (full): ${SOLCVERSION}"
     echo "-------------------------------------"
 
-    {
-        echo -n 'module.exports["solidity"] = '
-        hardhat_compiler_settings "$SOLCVERSION_SHORT" "$level" "$evm_version"
-    } >> "$config_file"
+    local compiler_settings gas_reporter_settings
+    compiler_settings=$(hardhat_compiler_settings "$SOLCVERSION_SHORT" "$preset" "$evm_version")
+    gas_reporter_settings=$(eth_gas_reporter_settings "$preset")
+    if [[ $config_file == *\.js ]]; then
+        [[ $config_var_name == "" ]] || assertFail
+        echo "require('hardhat-gas-reporter');"
+        echo "module.exports.gasReporter = ${gas_reporter_settings};"
+        echo "module.exports.solidity = ${compiler_settings};"
+    else
+        [[ $config_file == *\.ts ]] || assertFail
+        [[ $config_var_name != "" ]] || assertFail
+        echo 'import "hardhat-gas-reporter";'
+        echo "${config_var_name}.gasReporter = ${gas_reporter_settings};"
+        echo "${config_var_name}.solidity = {compilers: [${compiler_settings}]};"
+    fi >> "$config_file"
 }
 
 function truffle_verify_compiler_version
@@ -214,8 +350,12 @@ function hardhat_verify_compiler_version
     local full_solc_version="$2"
 
     printLog "Verify that the correct version (${solc_version}/${full_solc_version}) of the compiler was used to compile the contracts..."
-    grep '"solcVersion": "'"${solc_version}"'"' --with-filename artifacts/build-info/*.json || fail "Wrong compiler version detected."
-    grep '"solcLongVersion": "'"${full_solc_version}"'"' --with-filename artifacts/build-info/*.json || fail "Wrong compiler version detected."
+    local build_info_files
+    build_info_files=$(find . -path '*artifacts/build-info/*.json')
+    for build_info_file in $build_info_files; do
+        grep '"solcVersion": "'"${solc_version}"'"' --with-filename "$build_info_file" || fail "Wrong compiler version detected in ${build_info_file}."
+        grep '"solcLongVersion": "'"${full_solc_version}"'"' --with-filename "$build_info_file" || fail "Wrong compiler version detected in ${build_info_file}."
+    done
 }
 
 function truffle_clean
@@ -225,33 +365,26 @@ function truffle_clean
 
 function hardhat_clean
 {
-    rm -rf artifacts/ cache/
+    rm -rf build/ artifacts/ cache/
 }
 
-function run_test
+function settings_from_preset
 {
-    local compile_fn="$1"
-    local test_fn="$2"
+    local preset="$1"
+    local evm_version="$2"
 
-    replace_version_pragmas
+    [[ " ${AVAILABLE_PRESETS[*]} " == *" $preset "* ]] || assertFail
 
-    printLog "Running compile function..."
-    $compile_fn
-
-    printLog "Running test function..."
-    $test_fn
-}
-
-function optimizer_settings_for_level
-{
-    local level="$1"
-
-    case "$level" in
-        1) echo "{enabled: false}" ;;
-        2) echo "{enabled: true, details: {yul: false}}" ;;
-        3) echo "{enabled: true, details: {yul: true}}" ;;
+    case "$preset" in
+        # NOTE: Remember to update `parallelism` of `t_ems_ext` job in CI config if you add/remove presets
+        legacy-no-optimize)       echo "{evmVersion: '${evm_version}', viaIR: false, optimizer: {enabled: false}}" ;;
+        ir-no-optimize)           echo "{evmVersion: '${evm_version}', viaIR: true,  optimizer: {enabled: false}}" ;;
+        legacy-optimize-evm-only) echo "{evmVersion: '${evm_version}', viaIR: false, optimizer: {enabled: true, details: {yul: false}}}" ;;
+        ir-optimize-evm-only)     echo "{evmVersion: '${evm_version}', viaIR: true,  optimizer: {enabled: true, details: {yul: false}}}" ;;
+        legacy-optimize-evm+yul)  echo "{evmVersion: '${evm_version}', viaIR: false, optimizer: {enabled: true, details: {yul: true}}}" ;;
+        ir-optimize-evm+yul)      echo "{evmVersion: '${evm_version}', viaIR: true,  optimizer: {enabled: true, details: {yul: true}}}" ;;
         *)
-            fail "Optimizer level not found. Please define OPTIMIZER_LEVEL=[1, 2, 3]"
+            fail "Unknown settings preset: '${preset}'."
             ;;
     esac
 }
@@ -266,19 +399,31 @@ function replace_global_solc
     export PATH="$PWD:$PATH"
 }
 
+function eth_gas_reporter_settings
+{
+    local preset="$1"
+
+    echo "{"
+    echo "    enabled: true,"
+    echo "    gasPrice: 1,"                           # Gas price does not matter to us at all. Set to whatever to avoid API call.
+    echo "    noColors: true,"
+    echo "    showTimeSpent: false,"                  # We're not interested in test timing
+    echo "    onlyCalledMethods: true,"               # Exclude entries with no gas for shorter report
+    echo "    showMethodSig: true,"                   # Should make diffs more stable if there are overloaded functions
+    echo "    outputFile: \"$(gas_report_path "$preset")\""
+    echo "}"
+}
+
 function truffle_compiler_settings
 {
     local solc_path="$1"
-    local level="$2"
+    local preset="$2"
     local evm_version="$3"
 
     echo "{"
     echo "    solc: {"
     echo "        version: \"${solc_path}\","
-    echo "        settings: {"
-    echo "            optimizer: $(optimizer_settings_for_level "$level"),"
-    echo "            evmVersion: \"${evm_version}\""
-    echo "        }"
+    echo "        settings: $(settings_from_preset "$preset" "$evm_version")"
     echo "    }"
     echo "}"
 }
@@ -288,16 +433,27 @@ function hardhat_solc_build_subtask {
     local full_solc_version="$2"
     local binary_type="$3"
     local solc_path="$4"
+    local language="$5"
 
     [[ $binary_type == native || $binary_type == solcjs ]] || assertFail
 
     [[ $binary_type == native ]] && local is_solcjs=false
     [[ $binary_type == solcjs ]] && local is_solcjs=true
 
-    echo "const {TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD} = require('hardhat/builtin-tasks/task-names');"
-    echo "const assert = require('assert');"
-    echo
-    echo "subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {"
+    if [[ $language == js ]]; then
+        echo "const {TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD} = require('hardhat/builtin-tasks/task-names');"
+        echo "const assert = require('assert');"
+        echo
+        echo "subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args, hre, runSuper) => {"
+    else
+        [[ $language == ts ]] || assertFail
+        echo "import {TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD} from 'hardhat/builtin-tasks/task-names';"
+        echo "import assert = require('assert');"
+        echo "import {subtask} from 'hardhat/config';"
+        echo
+        echo "subtask(TASK_COMPILE_SOLIDITY_GET_SOLC_BUILD, async (args: any, _hre: any, _runSuper: any) => {"
+    fi
+
     echo "    assert(args.solcVersion == '${solc_version}', 'Unexpected solc version: ' + args.solcVersion)"
     echo "    return {"
     echo "        compilerPath: '$(realpath "$solc_path")',"
@@ -310,15 +466,12 @@ function hardhat_solc_build_subtask {
 
 function hardhat_compiler_settings {
     local solc_version="$1"
-    local level="$2"
+    local preset="$2"
     local evm_version="$3"
 
     echo "{"
     echo "    version: '${solc_version}',"
-    echo "    settings: {"
-    echo "        optimizer: $(optimizer_settings_for_level "$level"),"
-    echo "        evmVersion: '${evm_version}'"
-    echo "    }"
+    echo "    settings: $(settings_from_preset "$preset" "$evm_version")"
     echo "}"
 }
 
@@ -327,12 +480,16 @@ function compile_and_run_test
     local compile_fn="$1"
     local test_fn="$2"
     local verify_fn="$3"
+    local preset="$4"
+    local compile_only_presets="$5"
+
+    [[ $preset != *" "* ]] || assertFail "Preset names must not contain spaces."
 
     printLog "Running compile function..."
-    $compile_fn
+    time $compile_fn
     $verify_fn "$SOLCVERSION_SHORT" "$SOLCVERSION"
 
-    if [[ "$COMPILE_ONLY" == 1 ]]; then
+    if [[ "$COMPILE_ONLY" == 1 || " $compile_only_presets " == *" $preset "* ]]; then
         printLog "Skipping test function..."
     else
         printLog "Running test function..."
@@ -345,25 +502,28 @@ function truffle_run_test
     local config_file="$1"
     local binary_type="$2"
     local solc_path="$3"
-    local optimizer_level="$4"
-    local compile_fn="$5"
-    local test_fn="$6"
+    local preset="$4"
+    local compile_only_presets="$5"
+    local compile_fn="$6"
+    local test_fn="$7"
 
     truffle_clean
-    force_truffle_compiler_settings "$config_file" "$binary_type" "$solc_path" "$optimizer_level"
-    compile_and_run_test compile_fn test_fn truffle_verify_compiler_version
+    force_truffle_compiler_settings "$config_file" "$binary_type" "$solc_path" "$preset"
+    compile_and_run_test compile_fn test_fn truffle_verify_compiler_version "$preset" "$compile_only_presets"
 }
 
 function hardhat_run_test
 {
     local config_file="$1"
-    local optimizer_level="$2"
-    local compile_fn="$3"
-    local test_fn="$4"
+    local preset="$2"
+    local compile_only_presets="$3"
+    local compile_fn="$4"
+    local test_fn="$5"
+    local config_var_name="$6"
 
     hardhat_clean
-    force_hardhat_compiler_settings "$config_file" "$optimizer_level"
-    compile_and_run_test compile_fn test_fn hardhat_verify_compiler_version
+    force_hardhat_compiler_settings "$config_file" "$preset" "$config_var_name"
+    compile_and_run_test compile_fn test_fn hardhat_verify_compiler_version "$preset" "$compile_only_presets"
 }
 
 function external_test
@@ -380,4 +540,122 @@ function external_test
     )
     rm -rf "$DIR"
     echo "Done."
+}
+
+function gas_report_path
+{
+    local preset="$1"
+
+    echo "${DIR}/gas-report-${preset}.rst"
+}
+
+function gas_report_to_json
+{
+    cat - | "${REPO_ROOT}/scripts/externalTests/parse_eth_gas_report.py" | jq '{gas: .}'
+}
+
+function detect_hardhat_artifact_dir
+{
+    if [[ -e build/ && -e artifacts/ ]]; then
+        fail "Cannot determine Hardhat artifact location. Both build/ and artifacts/ exist"
+    elif [[ -e build/ ]]; then
+        echo -n build/artifacts
+    elif [[ -e artifacts/ ]]; then
+        echo -n artifacts
+    else
+        fail "Hardhat build artifacts not found."
+    fi
+}
+
+function bytecode_size_json_from_truffle_artifacts
+{
+    # NOTE: The output of this function is a series of concatenated JSON dicts rather than a list.
+
+    for artifact in build/contracts/*.json; do
+        if [[ $(jq '. | has("unlinked_binary")' "$artifact") == false ]]; then
+            # Each artifact represents compilation output for a single contract. Some top-level keys contain
+            # bits of Standard JSON output while others are generated by Truffle. Process it into a dict
+            # of the form `{"<file>": {"<contract>": <size>}}`.
+            # NOTE: The `bytecode` field starts with 0x, which is why we subtract 1 from size.
+            jq '{
+                (.ast.absolutePath): {
+                    (.contractName): (.bytecode | length / 2 - 1)
+                }
+            }' "$artifact"
+        fi
+    done
+}
+
+function bytecode_size_json_from_hardhat_artifacts
+{
+    # NOTE: The output of this function is a series of concatenated JSON dicts rather than a list.
+
+    for artifact in "$(detect_hardhat_artifact_dir)"/build-info/*.json; do
+        # Each artifact contains Standard JSON output under the `output` key.
+        # Process it into a dict of the form `{"<file>": {"<contract>": <size>}}`,
+        # Note that one Hardhat artifact often represents multiple input files.
+        jq '.output.contracts | to_entries[] | {
+            "\(.key)": .value | to_entries[] | {
+                "\(.key)": (.value.evm.bytecode.object | length / 2)
+            }
+        }' "$artifact"
+    done
+}
+
+function combine_artifact_json
+{
+    # Combine all dicts into a list with `jq --slurp` and then use `reduce` to merge them into one
+    # big dict with keys of the form `"<file>:<contract>"`. Then run jq again to filter out items
+    # with zero size and put the rest under under a top-level `bytecode_size` key. Also add another
+    # key with total bytecode size.
+    # NOTE: The extra inner `bytecode_size` key is there only to make diffs more readable.
+    cat - |
+        jq --slurp 'reduce (.[] | to_entries[]) as {$key, $value} ({}; . + {
+            ($key + ":" + ($value | to_entries[].key)): {
+                bytecode_size: $value | to_entries[].value
+            }
+        })' |
+        jq --indent 4 --sort-keys '{
+            bytecode_size: [. | to_entries[] | select(.value.bytecode_size > 0)] | from_entries,
+            total_bytecode_size: (reduce (. | to_entries[]) as {$key, $value} (0; . + $value.bytecode_size))
+        }'
+}
+
+function project_info_json
+{
+    local project_url="$1"
+
+    echo "{"
+    echo "    \"project\": {"
+    # NOTE: Given that we clone with `--depth 1`, we'll only get useful output out of `git describe`
+    # if we directly check out a tag. Still better than nothing.
+    echo "        \"version\": \"$(git describe --always)\","
+    echo "        \"commit\": \"$(git rev-parse HEAD)\","
+    echo "        \"url\": \"${project_url}\""
+    echo "    }"
+    echo "}"
+}
+
+function store_benchmark_report
+{
+    local framework="$1"
+    local project_name="$2"
+    local project_url="$3"
+    local preset="$4"
+
+    [[ $framework == truffle || $framework == hardhat ]] || assertFail
+    [[ " ${AVAILABLE_PRESETS[*]} " == *" $preset "* ]] || assertFail
+
+    local report_dir="${REPO_ROOT}/reports/externalTests"
+    local output_file="${report_dir}/benchmark-${project_name}-${preset}.json"
+    mkdir -p "$report_dir"
+
+    {
+        if [[ -e $(gas_report_path "$preset") ]]; then
+            gas_report_to_json < "$(gas_report_path "$preset")"
+        fi
+
+        "bytecode_size_json_from_${framework}_artifacts" | combine_artifact_json
+        project_info_json "$project_url"
+    } | jq --slurp "{\"${project_name}\": {\"${preset}\": add}}" --indent 4 --sort-keys > "$output_file"
 }

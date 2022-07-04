@@ -33,6 +33,7 @@
 #include <libsmtutil/CHCSmtLib2Interface.h>
 #include <liblangutil/CharStreamProvider.h>
 #include <libsolutil/Algorithms.h>
+#include <libsolutil/StringUtils.h>
 
 #ifdef HAVE_Z3_DLOPEN
 #include <z3_version.h>
@@ -78,6 +79,9 @@ CHC::CHC(
 
 void CHC::analyze(SourceUnit const& _source)
 {
+	if (!shouldAnalyze(_source))
+		return;
+
 	if (!m_settings.solvers.z3 && !m_settings.solvers.smtlib2)
 	{
 		if (!m_noSolverWarning)
@@ -137,6 +141,9 @@ vector<string> CHC::unhandledQueries() const
 
 bool CHC::visit(ContractDefinition const& _contract)
 {
+	if (!shouldAnalyze(_contract))
+		return false;
+
 	resetContractAnalysis();
 	initContract(_contract);
 	clearIndices(&_contract);
@@ -152,6 +159,9 @@ bool CHC::visit(ContractDefinition const& _contract)
 
 void CHC::endVisit(ContractDefinition const& _contract)
 {
+	if (!shouldAnalyze(_contract))
+		return;
+
 	for (auto base: _contract.annotation().linearizedBaseContracts)
 	{
 		if (auto constructor = base->constructor())
@@ -1488,7 +1498,7 @@ smtutil::Expression CHC::predicate(FunctionCall const& _funCall)
 
 	auto const* contract = function->annotation().contract;
 	auto const& hierarchy = m_currentContract->annotation().linearizedBaseContracts;
-	solAssert(kind != FunctionType::Kind::Internal || function->isFree() || (contract && contract->isLibrary()) || contains(hierarchy, contract), "");
+	solAssert(kind != FunctionType::Kind::Internal || function->isFree() || (contract && contract->isLibrary()) || util::contains(hierarchy, contract), "");
 
 	bool usesStaticCall = function->stateMutability() == StateMutability::Pure || function->stateMutability() == StateMutability::View;
 
@@ -1989,9 +1999,9 @@ map<unsigned, vector<unsigned>> CHC::summaryCalls(CHCSolverInterface::CexGraph c
 			// Predicates that do not have a CALLID have a predicate id at the end of <suffix>,
 			// so the assertion below should still hold.
 			auto beg = _s.data();
-			while (beg != _s.data() + _s.size() && !isdigit(*beg)) ++beg;
+			while (beg != _s.data() + _s.size() && !isDigit(*beg)) ++beg;
 			auto end = beg;
-			while (end != _s.data() + _s.size() && isdigit(*end)) ++end;
+			while (end != _s.data() + _s.size() && isDigit(*end)) ++end;
 
 			solAssert(beg != end, "Expected to find numerical call or predicate id.");
 

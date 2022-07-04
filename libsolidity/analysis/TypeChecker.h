@@ -113,11 +113,19 @@ private:
 	/// Performs checks specific to the ABI encode functions of type ABIEncodeCall
 	void typeCheckABIEncodeCallFunction(FunctionCall const& _functionCall);
 
+	/// Performs general checks and checks specific to string concat function call
+	void typeCheckStringConcatFunction(
+		FunctionCall const& _functionCall,
+		FunctionType const* _functionType
+	);
+
 	/// Performs general checks and checks specific to bytes concat function call
 	void typeCheckBytesConcatFunction(
 		FunctionCall const& _functionCall,
 		FunctionType const* _functionType
 	);
+
+	bool visit(ImportDirective const&) override;
 
 	void endVisit(InheritanceSpecifier const& _inheritance) override;
 	void endVisit(ModifierDefinition const& _modifier) override;

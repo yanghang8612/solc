@@ -35,6 +35,7 @@
 #include <libsolutil/Algorithms.h>
 #include <libsolutil/StringUtils.h>
 #include <libsolutil/Views.h>
+#include <libsolutil/Visitor.h>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -265,6 +266,11 @@ TypePointers TypeChecker::typeCheckMetaTypeFunctionAndRetrieveReturnType(Functio
 		);
 
 	return {TypeProvider::meta(dynamic_cast<TypeType const&>(*firstArgType).actualType())};
+}
+
+bool TypeChecker::visit(ImportDirective const&)
+{
+	return false;
 }
 
 void TypeChecker::endVisit(InheritanceSpecifier const& _inheritance)
@@ -530,15 +536,6 @@ bool TypeChecker::visit(VariableDeclaration const& _variable)
 	}
 	if (_variable.isConstant())
 	{
-		if (!varType->isValueType())
-		{
-			bool allowed = false;
-			if (auto arrayType = dynamic_cast<ArrayType const*>(varType))
-				allowed = arrayType->isByteArray();
-			if (!allowed)
-				m_errorReporter.fatalTypeError(9259_error, _variable.location(), "Constants of non-value type not yet implemented.");
-		}
-
 		if (!_variable.value())
 			m_errorReporter.typeError(4266_error, _variable.location(), "Uninitialized \"constant\" variable.");
 		else if (!*_variable.value()->annotation().isPure)
@@ -592,7 +589,14 @@ bool TypeChecker::visit(VariableDeclaration const& _variable)
 				);
 		}
 		if (!getter.interfaceFunctionType())
-			m_errorReporter.typeError(6744_error, _variable.location(), "Internal or recursive type is not allowed for public state variables.");
+		{
+			solAssert(getter.returnParameterNames().size() == getter.returnParameterTypes().size());
+			solAssert(getter.parameterNames().size() == getter.parameterTypes().size());
+			if (getter.returnParameterTypes().empty() && getter.parameterTypes().empty())
+				m_errorReporter.typeError(5359_error, _variable.location(), "The struct has all its members omitted, therefore the getter cannot return any values.");
+			else
+				m_errorReporter.typeError(6744_error, _variable.location(), "Internal or recursive type is not allowed for public state variables.");
+		}
 	}
 
 	bool isStructMemberDeclaration = dynamic_cast<StructDefinition const*>(_variable.scope()) != nullptr;
@@ -661,7 +665,7 @@ void TypeChecker::visitManually(
 		if (auto const* modifierContract = dynamic_cast<ContractDefinition const*>(modifierDecl->scope()))
 			if (m_currentContract)
 			{
-				if (!contains(m_currentContract->annotation().linearizedBaseContracts, modifierContract))
+				if (!util::contains(m_currentContract->annotation().linearizedBaseContracts, modifierContract))
 					m_errorReporter.typeError(
 						9428_error,
 						_modifier.location(),
@@ -765,6 +769,7 @@ void TypeChecker::endVisit(FunctionTypeName const& _funType)
 
 bool TypeChecker::visit(InlineAssembly const& _inlineAssembly)
 {
+	bool lvalueAccessToMemoryVariable = false;
 	// External references have already been resolved in a prior stage and stored in the annotation.
 	// We run the resolve step again regardless.
 	yul::ExternalIdentifierAccess::Resolver identifierAccess = [&](
@@ -789,6 +794,8 @@ bool TypeChecker::visit(InlineAssembly const& _inlineAssembly)
 		if (auto var = dynamic_cast<VariableDeclaration const*>(declaration))
 		{
 			solAssert(var->type(), "Expected variable type!");
+			if (_context == yul::IdentifierContext::LValue && var->type()->dataStoredIn(DataLocation::Memory))
+				lvalueAccessToMemoryVariable = true;
 			if (var->immutable())
 			{
 				m_errorReporter.typeError(3773_error, nativeLocationOf(_identifier), "Assembly access to immutable variables is not supported.");
@@ -976,8 +983,11 @@ bool TypeChecker::visit(InlineAssembly const& _inlineAssembly)
 		identifierAccess
 	);
 	if (!analyzer.analyze(_inlineAssembly.operations()))
-		return false;
-	return true;
+		solAssert(m_errorReporter.hasErrors());
+	_inlineAssembly.annotation().hasMemoryEffects =
+		lvalueAccessToMemoryVariable ||
+		(analyzer.sideEffects().memory != yul::SideEffects::None);
+	return false;
 }
 
 bool TypeChecker::visit(IfStatement const& _ifStatement)
@@ -1785,7 +1795,7 @@ Type const* TypeChecker::typeCheckTypeConversionAndRetrieveReturnType(
 						(
 							(
 								resultArrayType->isPointer() ||
-								(argArrayType->isByteArray() && resultArrayType->isByteArray())
+								(argArrayType->isByteArrayOrString() && resultArrayType->isByteArrayOrString())
 							) &&
 							resultArrayType->location() == DataLocation::Storage
 						),
@@ -1793,7 +1803,7 @@ Type const* TypeChecker::typeCheckTypeConversionAndRetrieveReturnType(
 					);
 				else
 					solAssert(
-						argArrayType->isByteArray() && !argArrayType->isString() && resultType->category() == Type::Category::FixedBytes,
+						argArrayType->isByteArray() && resultType->category() == Type::Category::FixedBytes,
 						""
 					);
 			}
@@ -2115,16 +2125,35 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 		return;
 	}
 
-	if (functionPointerType->kind() != FunctionType::Kind::External)
+	if (
+		functionPointerType->kind() != FunctionType::Kind::External &&
+		functionPointerType->kind() != FunctionType::Kind::Declaration
+	)
 	{
-		string msg = "Function must be \"public\" or \"external\".";
+		string msg = "Expected regular external function type, or external view on public function.";
+		if (functionPointerType->kind() == FunctionType::Kind::Internal)
+			msg += " Provided internal function.";
+		else if (functionPointerType->kind() == FunctionType::Kind::DelegateCall)
+			msg += " Cannot use library functions for abi.encodeCall.";
+		else if (functionPointerType->kind() == FunctionType::Kind::Creation)
+			msg += " Provided creation function.";
+		else
+			msg += " Cannot use special function.";
 		SecondarySourceLocation ssl{};
 
 		if (functionPointerType->hasDeclaration())
 		{
 			ssl.append("Function is declared here:", functionPointerType->declaration().location());
-			if (functionPointerType->declaration().scope() == m_currentContract)
+			if (
+				functionPointerType->declaration().visibility() == Visibility::Public &&
+				functionPointerType->declaration().scope() == m_currentContract
+			)
 				msg += " Did you forget to prefix \"this.\"?";
+			else if (util::contains(
+				m_currentContract->annotation().linearizedBaseContracts,
+				functionPointerType->declaration().scope()
+			) && functionPointerType->declaration().scope() != m_currentContract)
+				msg += " Functions from base contracts have to be external.";
 		}
 
 		m_errorReporter.typeError(3509_error, arguments[0]->location(), ssl, msg);
@@ -2181,11 +2210,39 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 				"Cannot implicitly convert component at position " +
 				to_string(i) +
 				" from \"" +
-				argType.canonicalName() +
+				argType.toString() +
 				"\" to \"" +
-				functionPointerType->parameterTypes()[i]->canonicalName() +
+				functionPointerType->parameterTypes()[i]->toString() +
 				"\"" +
 				(result.message().empty() ?  "." : ": " + result.message())
+			);
+	}
+}
+
+
+void TypeChecker::typeCheckStringConcatFunction(
+	FunctionCall const& _functionCall,
+	FunctionType const* _functionType
+)
+{
+	solAssert(_functionType);
+	solAssert(_functionType->kind() == FunctionType::Kind::StringConcat);
+	solAssert(_functionCall.names().empty());
+
+	typeCheckFunctionGeneralChecks(_functionCall, _functionType);
+
+	for (shared_ptr<Expression const> const& argument: _functionCall.arguments())
+	{
+		Type const* argumentType = type(*argument);
+		bool notConvertibleToString = !argumentType->isImplicitlyConvertibleTo(*TypeProvider::stringMemory());
+
+		if (notConvertibleToString)
+			m_errorReporter.typeError(
+				9977_error,
+				argument->location(),
+				"Invalid type for argument in the string.concat function call. "
+				"string type is required, but " +
+				argumentType->identifier() + " provided."
 			);
 	}
 }
@@ -2195,9 +2252,9 @@ void TypeChecker::typeCheckBytesConcatFunction(
 	FunctionType const* _functionType
 )
 {
-	solAssert(_functionType, "");
-	solAssert(_functionType->kind() == FunctionType::Kind::BytesConcat, "");
-	solAssert(_functionCall.names().empty(), "");
+	solAssert(_functionType);
+	solAssert(_functionType->kind() == FunctionType::Kind::BytesConcat);
+	solAssert(_functionCall.names().empty());
 
 	typeCheckFunctionGeneralChecks(_functionCall, _functionType);
 
@@ -2634,6 +2691,12 @@ bool TypeChecker::visit(FunctionCall const& _functionCall)
 			returnTypes = functionType->returnParameterTypes();
 			break;
 		}
+		case FunctionType::Kind::StringConcat:
+		{
+			typeCheckStringConcatFunction(_functionCall, functionType);
+			returnTypes = functionType->returnParameterTypes();
+			break;
+		}
 		case FunctionType::Kind::Wrap:
 		case FunctionType::Kind::Unwrap:
 		{
@@ -2860,7 +2923,6 @@ void TypeChecker::endVisit(NewExpression const& _newExpression)
 			strings(1, ""),
 			strings(1, ""),
 			FunctionType::Kind::ObjectCreation,
-			false,
 			StateMutability::Pure
 		);
 		_newExpression.annotation().isPure = true;
@@ -3571,12 +3633,89 @@ void TypeChecker::endVisit(Literal const& _literal)
 
 void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 {
-	if (m_currentContract->isInterface())
-		m_errorReporter.typeError(
-			9088_error,
-			_usingFor.location(),
-			"The \"using for\" directive is not allowed inside interfaces."
+	if (!_usingFor.usesBraces())
+	{
+		solAssert(_usingFor.functionsOrLibrary().size() == 1);
+		ContractDefinition const* library = dynamic_cast<ContractDefinition const*>(
+				_usingFor.functionsOrLibrary().front()->annotation().referencedDeclaration
 		);
+		solAssert(library && library->isLibrary());
+		// No type checking for libraries
+		return;
+	}
+
+	if (!_usingFor.typeName())
+	{
+		solAssert(m_errorReporter.hasErrors());
+		return;
+	}
+
+	solAssert(_usingFor.typeName()->annotation().type);
+	Type const* normalizedType = TypeProvider::withLocationIfReference(
+		DataLocation::Storage,
+		_usingFor.typeName()->annotation().type
+	);
+	solAssert(normalizedType);
+
+	if (_usingFor.global())
+	{
+		if (m_currentContract)
+			solAssert(m_errorReporter.hasErrors());
+		if (Declaration const* typeDefinition = _usingFor.typeName()->annotation().type->typeDefinition())
+		{
+			if (typeDefinition->scope() != m_currentSourceUnit)
+				m_errorReporter.typeError(
+					4117_error,
+					_usingFor.location(),
+					"Can only use \"global\" with types defined in the same source unit at file level."
+				);
+		}
+		else
+			m_errorReporter.typeError(
+				8841_error,
+				_usingFor.location(),
+				"Can only use \"global\" with user-defined types."
+			);
+	}
+
+
+	for (ASTPointer<IdentifierPath> const& path: _usingFor.functionsOrLibrary())
+	{
+		solAssert(path->annotation().referencedDeclaration);
+		FunctionDefinition const& functionDefinition =
+			dynamic_cast<FunctionDefinition const&>(*path->annotation().referencedDeclaration);
+
+		solAssert(functionDefinition.type());
+
+		if (functionDefinition.parameters().empty())
+			m_errorReporter.fatalTypeError(
+				4731_error,
+				path->location(),
+				"The function \"" + joinHumanReadable(path->path(), ".") + "\" " +
+				"does not have any parameters, and therefore cannot be bound to the type \"" +
+				(normalizedType ? normalizedType->toString(true) : "*") + "\"."
+			);
+
+		FunctionType const* functionType = dynamic_cast<FunctionType const&>(*functionDefinition.type()).asBoundFunction();
+		solAssert(functionType && functionType->selfType(), "");
+		BoolResult result = normalizedType->isImplicitlyConvertibleTo(
+			*TypeProvider::withLocationIfReference(DataLocation::Storage, functionType->selfType())
+		);
+		if (!result)
+			m_errorReporter.typeError(
+				3100_error,
+				path->location(),
+				"The function \"" + joinHumanReadable(path->path(), ".") + "\" "+
+				"cannot be bound to the type \"" + _usingFor.typeName()->annotation().type->toString() +
+				"\" because the type cannot be implicitly converted to the first argument" +
+				" of the function (\"" + functionType->selfType()->toString() + "\")" +
+				(
+					result.message().empty() ?
+					"." :
+					": " +  result.message()
+				)
+			);
+	}
 }
 
 void TypeChecker::checkErrorAndEventParameters(CallableDeclaration const& _callable)

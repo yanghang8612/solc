@@ -24,43 +24,56 @@ set -e
 source scripts/common.sh
 source test/externalTests/common.sh
 
+REPO_ROOT=$(realpath "$(dirname "$0")/../..")
+
 verify_input "$@"
 BINARY_TYPE="$1"
 BINARY_PATH="$2"
+SELECTED_PRESETS="$3"
 
-function compile_fn { npx truffle compile; }
-function test_fn { npm run test; }
+function compile_fn { yarn build; }
+function test_fn { yarn test; }
 
 function ens_test
 {
-    local repo="https://github.com/ensdomains/ens.git"
-    local branch=master
-    local config_file="truffle.js"
-    local min_optimizer_level=1
-    local max_optimizer_level=3
+    local repo="https://github.com/ensdomains/ens-contracts.git"
+    local ref_type=tag
+    local ref="v0.0.8"     # The project is in flux right now and master might be too unstable for us
+    local config_file="hardhat.config.js"
 
-    local selected_optimizer_levels
-    selected_optimizer_levels=$(circleci_select_steps "$(seq "$min_optimizer_level" "$max_optimizer_level")")
-    print_optimizer_levels_or_exit "$selected_optimizer_levels"
+    local compile_only_presets=(
+        legacy-no-optimize        # Compiles but tests fail to deploy GovernorCompatibilityBravo (code too large).
+    )
+    local settings_presets=(
+        "${compile_only_presets[@]}"
+        #ir-no-optimize           # Compilation fails with "YulException: Variable var__945 is 1 slot(s) too deep inside the stack."
+        #ir-optimize-evm-only     # Compilation fails with "YulException: Variable var__945 is 1 slot(s) too deep inside the stack."
+        ir-optimize-evm+yul      # Needs memory-safe inline assembly patch
+        legacy-optimize-evm-only
+        legacy-optimize-evm+yul
+    )
+
+    [[ $SELECTED_PRESETS != "" ]] || SELECTED_PRESETS=$(circleci_select_steps_multiarg "${settings_presets[@]}")
+    print_presets_or_exit "$SELECTED_PRESETS"
 
     setup_solc "$DIR" "$BINARY_TYPE" "$BINARY_PATH"
-    download_project "$repo" "$branch" "$DIR"
-    [[ $BINARY_TYPE == native ]] && replace_global_solc "$BINARY_PATH"
-
-    # Use latest Truffle. Older versions crash on the output from 0.8.0.
-    force_truffle_version ^5.1.55
+    download_project "$repo" "$ref_type" "$ref" "$DIR"
 
     neutralize_package_lock
     neutralize_package_json_hooks
-    force_truffle_compiler_settings "$config_file" "$BINARY_TYPE" "${DIR}/solc" "$min_optimizer_level"
-    npm install
+    force_hardhat_compiler_binary "$config_file" "$BINARY_TYPE" "$BINARY_PATH"
+    force_hardhat_compiler_settings "$config_file" "$(first_word "$SELECTED_PRESETS")"
+    yarn install
 
     replace_version_pragmas
-    [[ $BINARY_TYPE == solcjs ]] && force_solc_modules "${DIR}/solc"
+    neutralize_packaged_contracts
 
-    for level in $selected_optimizer_levels; do
-        truffle_run_test "$config_file" "$BINARY_TYPE" "${DIR}/solc" "$level" compile_fn test_fn
+    find . -name "*.sol" -exec sed -i -e 's/^\(\s*\)\(assembly\)/\1\/\/\/ @solidity memory-safe-assembly\n\1\2/' '{}' \;
+
+    for preset in $SELECTED_PRESETS; do
+        hardhat_run_test "$config_file" "$preset" "${compile_only_presets[*]}" compile_fn test_fn
+        store_benchmark_report hardhat ens "$repo" "$preset"
     done
 }
 
-external_test Ens ens_test
+external_test ENS ens_test

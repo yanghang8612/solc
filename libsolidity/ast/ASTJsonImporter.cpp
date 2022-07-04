@@ -348,10 +348,19 @@ ASTPointer<InheritanceSpecifier> ASTJsonImporter::createInheritanceSpecifier(Jso
 
 ASTPointer<UsingForDirective> ASTJsonImporter::createUsingForDirective(Json::Value const& _node)
 {
+	vector<ASTPointer<IdentifierPath>> functions;
+	if (_node.isMember("libraryName"))
+		functions.emplace_back(createIdentifierPath(_node["libraryName"]));
+	else if (_node.isMember("functionList"))
+		for (Json::Value const& function: _node["functionList"])
+			functions.emplace_back(createIdentifierPath(function["function"]));
+
 	return createASTNode<UsingForDirective>(
 		_node,
-		createIdentifierPath(member(_node, "libraryName")),
-		_node["typeName"].isNull() ? nullptr  : convertJsonToASTNode<TypeName>(_node["typeName"])
+		move(functions),
+		!_node.isMember("libraryName"),
+		_node["typeName"].isNull() ? nullptr  : convertJsonToASTNode<TypeName>(_node["typeName"]),
+		memberAsBool(_node, "global")
 	);
 }
 
@@ -626,11 +635,24 @@ ASTPointer<InlineAssembly> ASTJsonImporter::createInlineAssembly(Json::Value con
 	astAssert(m_evmVersion == evmVersion, "Imported tree evm version differs from configured evm version!");
 
 	yul::Dialect const& dialect = yul::EVMDialect::strictAssemblyForEVM(evmVersion.value());
+	ASTPointer<vector<ASTPointer<ASTString>>> flags;
+	if (_node.isMember("flags"))
+	{
+		flags = make_shared<vector<ASTPointer<ASTString>>>();
+		Json::Value const& flagsNode = _node["flags"];
+		astAssert(flagsNode.isArray(), "Assembly flags must be an array.");
+		for (Json::ArrayIndex i = 0; i < flagsNode.size(); ++i)
+		{
+			astAssert(flagsNode[i].isString(), "Assembly flag must be a string.");
+			flags->emplace_back(make_shared<ASTString>(flagsNode[i].asString()));
+		}
+	}
 	shared_ptr<yul::Block> operations = make_shared<yul::Block>(yul::AsmJsonImporter(m_sourceNames).createBlock(member(_node, "AST")));
 	return createASTNode<InlineAssembly>(
 		_node,
 		nullOrASTString(_node, "documentation"),
 		dialect,
+		move(flags),
 		operations
 	);
 }

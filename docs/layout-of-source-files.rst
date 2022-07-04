@@ -3,8 +3,8 @@ Layout of a Solidity Source File
 ********************************
 
 Source files can contain an arbitrary number of
-:ref:`contract definitions<contract_structure>`, import_ directives,
-:ref:`pragma directives<pragma>` and
+:ref:`contract definitions<contract_structure>`, import_ ,
+:ref:`pragma<pragma>` and :ref:`using for<using-for>` directives and
 :ref:`struct<structs>`, :ref:`enum<enums>`, :ref:`function<functions>`, :ref:`error<errors>`
 and :ref:`constant variable<constants>` definitions.
 
@@ -13,7 +13,7 @@ and :ref:`constant variable<constants>` definitions.
 SPDX License Identifier
 =======================
 
-Trust in smart contract can be better established if their source code
+Trust in smart contracts can be better established if their source code
 is available. Since making source code available always touches on legal problems
 with regards to copyright, the Solidity compiler encourages the use
 of machine-readable `SPDX license identifiers <https://spdx.org>`_.
@@ -27,6 +27,9 @@ it does include the supplied string in the :ref:`bytecode metadata <metadata>`.
 
 If you do not want to specify a license or if the source code is
 not open-source, please use the special value ``UNLICENSED``.
+Note that ``UNLICENSED`` (no usage allowed, not present in SPDX license list)
+is different from ``UNLICENSE`` (grants all rights to everyone).
+Solidity follows `the npm recommendation <https://docs.npmjs.com/cli/v7/configuring-npm/package-json#license>`_.
 
 Supplying this comment of course does not free you from other
 obligations related to licensing like having to mention

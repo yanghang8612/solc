@@ -312,9 +312,13 @@ public:
 	/// of the storage array into it.
 	std::string copyArrayFromStorageToMemoryFunction(ArrayType const& _from, ArrayType const& _to);
 
-	/// @returns the name of a function that does concatenation of variadic number of bytes
-	/// or fixed bytes
-	std::string bytesConcatFunction(std::vector<Type const*> const& _argumentTypes);
+	/// @returns the name of a function that does concatenation of variadic number of
+	/// bytes if @a functionTypeKind is FunctionType::Kind::BytesConcat,
+	/// or of strings, if @a functionTypeKind is FunctionType::Kind::StringConcat.
+	std::string bytesOrStringConcatFunction(
+		std::vector<Type const*> const& _argumentTypes,
+		FunctionType::Kind _functionTypeKind
+	);
 
 	/// @returns the name of a function that performs index access for mappings.
 	/// @param _mappingType the type of the mapping
@@ -521,6 +525,9 @@ public:
 	/// allocated byte array in memory.
 	/// Signature: (address) -> mpos
 	std::string externalCodeFunction();
+
+	/// @return the name of a function that that checks if two external functions pointers are equal or not
+	std::string externalFunctionPointersEqualFunction();
 
 private:
 /// @returns the name of a function that copies a struct from calldata or memory to storage

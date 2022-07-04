@@ -449,13 +449,18 @@ FunctionType const* TypeProvider::function(
 	strings const& _parameterTypes,
 	strings const& _returnParameterTypes,
 	FunctionType::Kind _kind,
-	bool _arbitraryParameters,
-	StateMutability _stateMutability
+	StateMutability _stateMutability,
+	FunctionType::Options _options
 )
 {
+	// Can only use this constructor for "arbitraryParameters".
+	solAssert(!_options.valueSet && !_options.gasSet && !_options.saltSet && !_options.bound);
 	return createAndGet<FunctionType>(
-		_parameterTypes, _returnParameterTypes,
-		_kind, _arbitraryParameters, _stateMutability
+		_parameterTypes,
+		_returnParameterTypes,
+		_kind,
+		_stateMutability,
+		std::move(_options)
 	);
 }
 
@@ -465,14 +470,9 @@ FunctionType const* TypeProvider::function(
 	strings _parameterNames,
 	strings _returnParameterNames,
 	FunctionType::Kind _kind,
-	bool _arbitraryParameters,
 	StateMutability _stateMutability,
 	Declaration const* _declaration,
-	bool _gasSet,
-	bool _valueSet,
-    bool _tokenSet,
-	bool _bound,
-	bool _saltSet
+	FunctionType::Options _options
 )
 {
 	return createAndGet<FunctionType>(
@@ -481,14 +481,9 @@ FunctionType const* TypeProvider::function(
 		_parameterNames,
 		_returnParameterNames,
 		_kind,
-		_arbitraryParameters,
 		_stateMutability,
 		_declaration,
-		_gasSet,
-		_valueSet,
-        _tokenSet,
-		_bound,
-		_saltSet
+		std::move(_options)
 	);
 }
 
