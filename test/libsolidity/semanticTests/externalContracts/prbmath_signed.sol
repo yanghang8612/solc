@@ -46,11 +46,9 @@ contract test {
         assert(z1 == z2);
     }
 }
-// ====
-// compileViaYul: also
 // ----
 // constructor()
-// gas irOptimized: 1926032
+// gas irOptimized: 1878547
 // gas legacy: 2478955
 // gas legacyOptimized: 1877737
 // div(int256,int256): 3141592653589793238, 88714123 -> 35412542528203691288251815328

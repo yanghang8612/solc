@@ -7,11 +7,9 @@ contract C {
     }
 }
 
-// ====
-// compileViaYul: also
 // ----
 // constructor(): 1, 2, 3 ->
-// gas irOptimized: 142856
+// gas irOptimized: 141700
 // gas legacy: 183490
 // gas legacyOptimized: 151938
 // a(uint256): 0 -> 1

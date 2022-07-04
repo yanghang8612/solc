@@ -68,10 +68,12 @@ private:
 	void requireServerInitialized();
 	void handleInitialize(MessageID _id, Json::Value const& _args);
 	void handleWorkspaceDidChangeConfiguration(Json::Value const& _args);
+	void setTrace(Json::Value const& _args);
 	void handleTextDocumentDidOpen(Json::Value const& _args);
 	void handleTextDocumentDidChange(Json::Value const& _args);
 	void handleTextDocumentDidClose(Json::Value const& _args);
 	void handleGotoDefinition(MessageID _id, Json::Value const& _args);
+	void semanticTokensFull(MessageID _id, Json::Value const& _args);
 
 	/// Invoked when the server user-supplied configuration changes (initiated by the client).
 	void changeConfiguration(Json::Value const&);
@@ -91,7 +93,7 @@ private:
 	Transport& m_client;
 	std::map<std::string, MessageHandler> m_handlers;
 
-	/// Set of files known to be open by the client.
+	/// Set of files (names in URI form) known to be open by the client.
 	std::set<std::string> m_openFiles;
 	/// Set of source unit names for which we sent diagnostics to the client in the last iteration.
 	std::set<std::string> m_nonemptyDiagnostics;

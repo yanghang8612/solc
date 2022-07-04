@@ -26,6 +26,7 @@
 
 // LSP feature implementations
 #include <libsolidity/lsp/GotoDefinition.h>
+#include <libsolidity/lsp/SemanticTokensBuilder.h>
 
 #include <liblangutil/SourceReferenceExtractor.h>
 #include <liblangutil/CharStream.h>
@@ -36,8 +37,6 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
-
-#include <fmt/format.h>
 
 #include <ostream>
 #include <string>
@@ -66,6 +65,49 @@ int toDiagnosticSeverity(Error::Type _errorType)
 	return -1;
 }
 
+Json::Value semanticTokensLegend()
+{
+	Json::Value legend = Json::objectValue;
+
+	// NOTE! The (alphabetical) order and items must match exactly the items of
+	//       their respective enum class members.
+
+	Json::Value tokenTypes = Json::arrayValue;
+	tokenTypes.append("class");
+	tokenTypes.append("comment");
+	tokenTypes.append("enum");
+	tokenTypes.append("enumMember");
+	tokenTypes.append("event");
+	tokenTypes.append("function");
+	tokenTypes.append("interface");
+	tokenTypes.append("keyword");
+	tokenTypes.append("macro");
+	tokenTypes.append("method");
+	tokenTypes.append("modifier");
+	tokenTypes.append("number");
+	tokenTypes.append("operator");
+	tokenTypes.append("parameter");
+	tokenTypes.append("property");
+	tokenTypes.append("string");
+	tokenTypes.append("struct");
+	tokenTypes.append("type");
+	tokenTypes.append("typeParameter");
+	tokenTypes.append("variable");
+	legend["tokenTypes"] = tokenTypes;
+
+	Json::Value tokenModifiers = Json::arrayValue;
+	tokenModifiers.append("abstract");
+	tokenModifiers.append("declaration");
+	tokenModifiers.append("definition");
+	tokenModifiers.append("deprecated");
+	tokenModifiers.append("documentation");
+	tokenModifiers.append("modification");
+	tokenModifiers.append("readonly");
+	legend["tokenModifiers"] = tokenModifiers;
+
+	return legend;
+}
+
 }
 
 LanguageServer::LanguageServer(Transport& _transport):
@@ -76,12 +118,14 @@ LanguageServer::LanguageServer(Transport& _transport):
 		{"exit", [this](auto, auto) { m_state = (m_state == State::ShutdownRequested ? State::ExitRequested : State::ExitWithoutShutdown); }},
 		{"initialize", bind(&LanguageServer::handleInitialize, this, _1, _2)},
 		{"initialized", [](auto, auto) {}},
+		{"$/setTrace", bind(&LanguageServer::setTrace, this, _2)},
 		{"shutdown", [this](auto, auto) { m_state = State::ShutdownRequested; }},
 		{"textDocument/definition", GotoDefinition(*this) },
 		{"textDocument/didOpen", bind(&LanguageServer::handleTextDocumentDidOpen, this, _2)},
 		{"textDocument/didChange", bind(&LanguageServer::handleTextDocumentDidChange, this, _2)},
 		{"textDocument/didClose", bind(&LanguageServer::handleTextDocumentDidClose, this, _2)},
 		{"textDocument/implementation", GotoDefinition(*this) },
+		{"textDocument/semanticTokens/full", bind(&LanguageServer::semanticTokensFull, this, _1, _2)},
 		{"workspace/didChangeConfiguration", bind(&LanguageServer::handleWorkspaceDidChangeConfiguration, this, _2)},
 	},
 	m_fileRepository("/" /* basePath */),
@@ -113,9 +157,9 @@ void LanguageServer::compile()
 	swap(oldRepository, m_fileRepository);
 
 	for (string const& fileName: m_openFiles)
-		m_fileRepository.setSourceByClientPath(
+		m_fileRepository.setSourceByUri(
 			fileName,
-			oldRepository.sourceUnits().at(oldRepository.clientPathToSourceUnitName(fileName))
+			oldRepository.sourceUnits().at(oldRepository.uriToSourceUnitName(fileName))
 		);
 
 	// TODO: optimize! do not recompile if nothing has changed (file(s) not flagged dirty).
@@ -166,11 +210,18 @@ void LanguageServer::compileAndUpdateDiagnostics()
 		diagnosticsBySourceUnit[*location->sourceName].append(jsonDiag);
 	}
 
+	if (m_client.traceValue() != TraceValue::Off)
+	{
+		Json::Value extra;
+		extra["openFileCount"] = Json::UInt64(diagnosticsBySourceUnit.size());
+		m_client.trace("Number of currently open files: " + to_string(diagnosticsBySourceUnit.size()), extra);
+	}
+
 	m_nonemptyDiagnostics.clear();
 	for (auto&& [sourceUnitName, diagnostics]: diagnosticsBySourceUnit)
 	{
 		Json::Value params;
-		params["uri"] = m_fileRepository.sourceUnitNameToClientPath(sourceUnitName);
+		params["uri"] = m_fileRepository.sourceUnitNameToUri(sourceUnitName);
 		if (!diagnostics.empty())
 			m_nonemptyDiagnostics.insert(sourceUnitName);
 		params["diagnostics"] = move(diagnostics);
@@ -244,13 +295,12 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 			ErrorCode::InvalidParams,
 			"rootUri only supports file URI scheme."
 		);
-
-		rootPath = rootPath.substr(7);
+		rootPath = stripFileUriSchemePrefix(rootPath);
 	}
 	else if (Json::Value rootPath = _args["rootPath"])
 		rootPath = rootPath.asString();
 
-	m_fileRepository = FileRepository(boost::filesystem::path(rootPath));
+	m_fileRepository = FileRepository(rootPath);
 	if (_args["initializationOptions"].isObject())
 		changeConfiguration(_args["initializationOptions"]);
 
@@ -261,8 +311,28 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 	replyArgs["capabilities"]["implementationProvider"] = true;
 	replyArgs["capabilities"]["textDocumentSync"]["change"] = 2; // 0=none, 1=full, 2=incremental
 	replyArgs["capabilities"]["textDocumentSync"]["openClose"] = true;
+	replyArgs["capabilities"]["semanticTokensProvider"]["legend"] = semanticTokensLegend();
+	replyArgs["capabilities"]["semanticTokensProvider"]["range"] = false;
+	replyArgs["capabilities"]["semanticTokensProvider"]["full"] = true; // XOR requests.full.delta = true
 
 	m_client.reply(_id, move(replyArgs));
+}
+
+void LanguageServer::semanticTokensFull(MessageID _id, Json::Value const& _args)
+{
+	auto uri = _args["textDocument"]["uri"];
+
+	compile();
+
+	auto const sourceName = m_fileRepository.uriToSourceUnitName(uri.as<string>());
+	SourceUnit const& ast = m_compilerStack.ast(sourceName);
+	m_compilerStack.charStream(sourceName);
+	Json::Value data = SemanticTokensBuilder().build(ast, m_compilerStack.charStream(sourceName));
+
+	Json::Value reply = Json::objectValue;
+	reply["data"] = data;
+
+	m_client.reply(_id, std::move(reply));
 }
 
 void LanguageServer::handleWorkspaceDidChangeConfiguration(Json::Value const& _args)
@@ -271,6 +341,21 @@ void LanguageServer::handleWorkspaceDidChangeConfiguration(Json::Value const& _a
 
 	if (_args["settings"].isObject())
 		changeConfiguration(_args["settings"]);
+}
+
+void LanguageServer::setTrace(Json::Value const& _args)
+{
+	if (!_args["value"].isString())
+		// Simply ignore invalid parameter.
+		return;
+
+	string const stringValue = _args["value"].asString();
+	if (stringValue == "off")
+		m_client.setTrace(TraceValue::Off);
+	else if (stringValue == "messages")
+		m_client.setTrace(TraceValue::Messages);
+	else if (stringValue == "verbose")
+		m_client.setTrace(TraceValue::Verbose);
 }
 
 void LanguageServer::handleTextDocumentDidOpen(Json::Value const& _args)
@@ -286,7 +371,7 @@ void LanguageServer::handleTextDocumentDidOpen(Json::Value const& _args)
 	string text = _args["textDocument"]["text"].asString();
 	string uri = _args["textDocument"]["uri"].asString();
 	m_openFiles.insert(uri);
-	m_fileRepository.setSourceByClientPath(uri, move(text));
+	m_fileRepository.setSourceByUri(uri, move(text));
 	compileAndUpdateDiagnostics();
 }
 
@@ -304,7 +389,7 @@ void LanguageServer::handleTextDocumentDidChange(Json::Value const& _args)
 			"Invalid content reference."
 		);
 
-		string const sourceUnitName = m_fileRepository.clientPathToSourceUnitName(uri);
+		string const sourceUnitName = m_fileRepository.uriToSourceUnitName(uri);
 		lspAssert(
 			m_fileRepository.sourceUnits().count(sourceUnitName),
 			ErrorCode::RequestFailed,
@@ -325,7 +410,7 @@ void LanguageServer::handleTextDocumentDidChange(Json::Value const& _args)
 			buffer.replace(static_cast<size_t>(change->start), static_cast<size_t>(change->end - change->start), move(text));
 			text = move(buffer);
 		}
-		m_fileRepository.setSourceByClientPath(uri, move(text));
+		m_fileRepository.setSourceByUri(uri, move(text));
 	}
 
 	compileAndUpdateDiagnostics();

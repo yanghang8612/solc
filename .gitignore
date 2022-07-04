@@ -68,3 +68,7 @@ contracts/
 
 upload/
 soljson.js
+
+# OS specific local files
+.DS_Store
+Thumbs.db

@@ -40,9 +40,10 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
-#include <range/v3/view/zip.hpp>
-#include <range/v3/view/drop_exactly.hpp>
 #include <range/v3/algorithm/count_if.hpp>
+#include <range/v3/view/drop_exactly.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <memory>
 #include <vector>
@@ -105,26 +106,71 @@ bool TypeChecker::visit(ContractDefinition const& _contract)
 
 void TypeChecker::checkDoubleStorageAssignment(Assignment const& _assignment)
 {
-	TupleType const& lhs = dynamic_cast<TupleType const&>(*type(_assignment.leftHandSide()));
-	TupleType const& rhs = dynamic_cast<TupleType const&>(*type(_assignment.rightHandSide()));
-
-	if (lhs.components().size() != rhs.components().size())
-	{
-		solAssert(m_errorReporter.hasErrors(), "");
-		return;
-	}
-
 	size_t storageToStorageCopies = 0;
 	size_t toStorageCopies = 0;
-	for (size_t i = 0; i < lhs.components().size(); ++i)
-	{
-		ReferenceType const* ref = dynamic_cast<ReferenceType const*>(lhs.components()[i]);
-		if (!ref || !ref->dataStoredIn(DataLocation::Storage) || ref->isPointer())
-			continue;
-		toStorageCopies++;
-		if (rhs.components()[i]->dataStoredIn(DataLocation::Storage))
-			storageToStorageCopies++;
-	}
+	size_t storageByteArrayPushes = 0;
+	size_t storageByteAccesses = 0;
+	auto count = [&](TupleExpression const& _lhs, TupleType const& _rhs, auto _recurse) -> void {
+		TupleType const& lhsType = dynamic_cast<TupleType const&>(*type(_lhs));
+
+		if (lhsType.components().size() != _rhs.components().size())
+		{
+			solAssert(m_errorReporter.hasErrors(), "");
+			return;
+		}
+
+		for (auto&& [index, componentType]: lhsType.components() | ranges::views::enumerate)
+		{
+			if (ReferenceType const* ref = dynamic_cast<ReferenceType const*>(componentType))
+			{
+				if (ref && ref->dataStoredIn(DataLocation::Storage) && !ref->isPointer())
+				{
+					toStorageCopies++;
+					if (_rhs.components()[index]->dataStoredIn(DataLocation::Storage))
+						storageToStorageCopies++;
+				}
+			}
+			else if (FixedBytesType const* bytesType = dynamic_cast<FixedBytesType const*>(componentType))
+			{
+				if (bytesType && bytesType->numBytes() == 1)
+				{
+					if (FunctionCall const* lhsCall = dynamic_cast<FunctionCall const*>(resolveOuterUnaryTuples(_lhs.components().at(index).get())))
+					{
+						FunctionType const& callType = dynamic_cast<FunctionType const&>(*type(lhsCall->expression()));
+						if (callType.kind() == FunctionType::Kind::ArrayPush)
+						{
+							ArrayType const& arrayType = dynamic_cast<ArrayType const&>(*callType.selfType());
+							if (arrayType.isByteArray() && arrayType.dataStoredIn(DataLocation::Storage))
+							{
+								++storageByteAccesses;
+								++storageByteArrayPushes;
+							}
+						}
+					}
+					else if (IndexAccess const* indexAccess = dynamic_cast<IndexAccess const*>(resolveOuterUnaryTuples(_lhs.components().at(index).get())))
+					{
+						if (ArrayType const* arrayType = dynamic_cast<ArrayType const*>(type(indexAccess->baseExpression())))
+							if (arrayType->isByteArray() && arrayType->dataStoredIn(DataLocation::Storage))
+								++storageByteAccesses;
+					}
+				}
+			}
+			else if (TupleType const* tupleType = dynamic_cast<TupleType const*>(componentType))
+				if (auto const* lhsNested = dynamic_cast<TupleExpression const*>(_lhs.components().at(index).get()))
+					if (auto const* rhsNestedType = dynamic_cast<TupleType const*>(_rhs.components().at(index)))
+						_recurse(
+							*lhsNested,
+							*rhsNestedType,
+							_recurse
+						);
+		}
+	};
+	count(
+		dynamic_cast<TupleExpression const&>(_assignment.leftHandSide()),
+		dynamic_cast<TupleType const&>(*type(_assignment.rightHandSide())),
+		count
+	);
+
 	if (storageToStorageCopies >= 1 && toStorageCopies >= 2)
 		m_errorReporter.warning(
 			7238_error,
@@ -133,6 +179,16 @@ void TypeChecker::checkDoubleStorageAssignment(Assignment const& _assignment)
 			"copy to a temporary location, one of them might be overwritten before the second "
 			"is executed and thus may have unexpected effects. It is safer to perform the copies "
 			"separately or assign to storage pointers first."
+		);
+
+	if (storageByteArrayPushes >= 1 && storageByteAccesses >= 2)
+		m_errorReporter.warning(
+			7239_error,
+			_assignment.location(),
+			"This assignment involves multiple accesses to a bytes array in storage while simultaneously enlarging it. "
+			"When a bytes array is enlarged, it may transition from short storage layout to long storage layout, "
+			"which invalidates all references to its elements. It is safer to only enlarge byte arrays in a single "
+			"operation, one element at a time."
 		);
 }
 
@@ -1663,19 +1719,22 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	else
 		_operation.subExpression().accept(*this);
 	Type const* subExprType = type(_operation.subExpression());
-	Type const* t = type(_operation.subExpression())->unaryOperatorResult(op);
-	if (!t)
+	TypeResult result = type(_operation.subExpression())->unaryOperatorResult(op);
+	if (!result)
 	{
 		string description = "Unary operator " + string(TokenTraits::toString(op)) + " cannot be applied to type " + subExprType->toString();
+		if (!result.message().empty())
+			description += ". " + result.message();
 		if (modifying)
 			// Cannot just report the error, ignore the unary operator, and continue,
 			// because the sub-expression was already processed with requireLValue()
 			m_errorReporter.fatalTypeError(9767_error, _operation.location(), description);
 		else
 			m_errorReporter.typeError(4907_error, _operation.location(), description);
-		t = subExprType;
+		_operation.annotation().type = subExprType;
 	}
-	_operation.annotation().type = t;
+	else
+		_operation.annotation().type = result.get();
 	_operation.annotation().isConstant = false;
 	_operation.annotation().isPure = !modifying && *_operation.subExpression().annotation().isPure;
 	_operation.annotation().isLValue = false;
@@ -1839,7 +1898,7 @@ Type const* TypeChecker::typeCheckTypeConversionAndRetrieveReturnType(
 					_functionCall.location(),
 					ssl,
 					"Explicit type conversion not allowed from non-payable \"address\" to \"" +
-					resultType->toString() +
+					resultType->humanReadableName() +
 					"\", which has a payable fallback function."
 				);
 			}
@@ -1853,9 +1912,9 @@ Type const* TypeChecker::typeCheckTypeConversionAndRetrieveReturnType(
 					5030_error,
 					_functionCall.location(),
 					"Explicit type conversion not allowed from \"" +
-					argType->toString() +
+					argType->humanReadableName() +
 					"\" to \"" +
-					resultType->toString() +
+					resultType->humanReadableName() +
 					"\". To obtain the address of the contract of the function, " +
 					"you can use the .address member of the function."
 				);
@@ -1864,9 +1923,9 @@ Type const* TypeChecker::typeCheckTypeConversionAndRetrieveReturnType(
 					9640_error,
 					_functionCall.location(),
 					"Explicit type conversion not allowed from \"" +
-					argType->toString() +
+					argType->humanReadableName() +
 					"\" to \"" +
-					resultType->toString() +
+					resultType->humanReadableName() +
 					"\".",
 					result.message()
 				);
@@ -2111,57 +2170,60 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 		return;
 	}
 
-	auto const functionPointerType = dynamic_cast<FunctionTypePointer>(type(*arguments.front()));
-
-	if (!functionPointerType)
+	FunctionType const* externalFunctionType = nullptr;
+	if (auto const functionPointerType = dynamic_cast<FunctionTypePointer>(type(*arguments.front())))
+	{
+		// this cannot be a library function, that is checked below
+		externalFunctionType = functionPointerType->asExternallyCallableFunction(false);
+		solAssert(externalFunctionType->kind() == functionPointerType->kind());
+	}
+	else
 	{
 		m_errorReporter.typeError(
 			5511_error,
 			arguments.front()->location(),
 			"Expected first argument to be a function pointer, not \"" +
-			type(*arguments.front())->canonicalName() +
+			type(*arguments.front())->toString() +
 			"\"."
 		);
 		return;
 	}
 
 	if (
-		functionPointerType->kind() != FunctionType::Kind::External &&
-		functionPointerType->kind() != FunctionType::Kind::Declaration
+		externalFunctionType->kind() != FunctionType::Kind::External &&
+		externalFunctionType->kind() != FunctionType::Kind::Declaration
 	)
 	{
 		string msg = "Expected regular external function type, or external view on public function.";
-		if (functionPointerType->kind() == FunctionType::Kind::Internal)
+		if (externalFunctionType->kind() == FunctionType::Kind::Internal)
 			msg += " Provided internal function.";
-		else if (functionPointerType->kind() == FunctionType::Kind::DelegateCall)
+		else if (externalFunctionType->kind() == FunctionType::Kind::DelegateCall)
 			msg += " Cannot use library functions for abi.encodeCall.";
-		else if (functionPointerType->kind() == FunctionType::Kind::Creation)
+		else if (externalFunctionType->kind() == FunctionType::Kind::Creation)
 			msg += " Provided creation function.";
 		else
 			msg += " Cannot use special function.";
 		SecondarySourceLocation ssl{};
 
-		if (functionPointerType->hasDeclaration())
+		if (externalFunctionType->hasDeclaration())
 		{
-			ssl.append("Function is declared here:", functionPointerType->declaration().location());
+			ssl.append("Function is declared here:", externalFunctionType->declaration().location());
 			if (
-				functionPointerType->declaration().visibility() == Visibility::Public &&
-				functionPointerType->declaration().scope() == m_currentContract
+				externalFunctionType->declaration().visibility() == Visibility::Public &&
+				externalFunctionType->declaration().scope() == m_currentContract
 			)
 				msg += " Did you forget to prefix \"this.\"?";
 			else if (util::contains(
 				m_currentContract->annotation().linearizedBaseContracts,
-				functionPointerType->declaration().scope()
-			) && functionPointerType->declaration().scope() != m_currentContract)
+				externalFunctionType->declaration().scope()
+			) && externalFunctionType->declaration().scope() != m_currentContract)
 				msg += " Functions from base contracts have to be external.";
 		}
 
 		m_errorReporter.typeError(3509_error, arguments[0]->location(), ssl, msg);
 		return;
 	}
-
-	solAssert(!functionPointerType->takesArbitraryParameters(), "Function must have fixed parameters.");
-
+	solAssert(!externalFunctionType->takesArbitraryParameters(), "Function must have fixed parameters.");
 	// Tuples with only one component become that component
 	vector<ASTPointer<Expression const>> callArguments;
 
@@ -2174,14 +2236,14 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 	else
 		callArguments.push_back(arguments[1]);
 
-	if (functionPointerType->parameterTypes().size() != callArguments.size())
+	if (externalFunctionType->parameterTypes().size() != callArguments.size())
 	{
 		if (tupleType)
 			m_errorReporter.typeError(
 				7788_error,
 				_functionCall.location(),
 				"Expected " +
-				to_string(functionPointerType->parameterTypes().size()) +
+				to_string(externalFunctionType->parameterTypes().size()) +
 				" instead of " +
 				to_string(callArguments.size()) +
 				" components for the tuple parameter."
@@ -2191,18 +2253,18 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 				7515_error,
 				_functionCall.location(),
 				"Expected a tuple with " +
-				to_string(functionPointerType->parameterTypes().size()) +
+				to_string(externalFunctionType->parameterTypes().size()) +
 				" components instead of a single non-tuple parameter."
 			);
 	}
 
 	// Use min() to check as much as we can before failing fatally
-	size_t const numParameters = min(callArguments.size(), functionPointerType->parameterTypes().size());
+	size_t const numParameters = min(callArguments.size(), externalFunctionType->parameterTypes().size());
 
 	for (size_t i = 0; i < numParameters; i++)
 	{
 		Type const& argType = *type(*callArguments[i]);
-		BoolResult result = argType.isImplicitlyConvertibleTo(*functionPointerType->parameterTypes()[i]);
+		BoolResult result = argType.isImplicitlyConvertibleTo(*externalFunctionType->parameterTypes()[i]);
 		if (!result)
 			m_errorReporter.typeError(
 				5407_error,
@@ -2212,7 +2274,7 @@ void TypeChecker::typeCheckABIEncodeCallFunction(FunctionCall const& _functionCa
 				" from \"" +
 				argType.toString() +
 				"\" to \"" +
-				functionPointerType->parameterTypes()[i]->toString() +
+				externalFunctionType->parameterTypes()[i]->toString() +
 				"\"" +
 				(result.message().empty() ?  "." : ": " + result.message())
 			);
@@ -3633,11 +3695,36 @@ void TypeChecker::endVisit(Literal const& _literal)
 
 void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 {
+	if (_usingFor.global())
+	{
+		if (m_currentContract || !_usingFor.typeName())
+		{
+			solAssert(m_errorReporter.hasErrors());
+			return;
+		}
+		solAssert(_usingFor.typeName()->annotation().type);
+		if (Declaration const* typeDefinition = _usingFor.typeName()->annotation().type->typeDefinition())
+		{
+			if (typeDefinition->scope() != m_currentSourceUnit)
+				m_errorReporter.typeError(
+					4117_error,
+					_usingFor.location(),
+					"Can only use \"global\" with types defined in the same source unit at file level."
+				);
+		}
+		else
+			m_errorReporter.typeError(
+				8841_error,
+				_usingFor.location(),
+				"Can only use \"global\" with user-defined types."
+			);
+	}
+
 	if (!_usingFor.usesBraces())
 	{
 		solAssert(_usingFor.functionsOrLibrary().size() == 1);
 		ContractDefinition const* library = dynamic_cast<ContractDefinition const*>(
-				_usingFor.functionsOrLibrary().front()->annotation().referencedDeclaration
+			_usingFor.functionsOrLibrary().front()->annotation().referencedDeclaration
 		);
 		solAssert(library && library->isLibrary());
 		// No type checking for libraries
@@ -3656,28 +3743,6 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 		_usingFor.typeName()->annotation().type
 	);
 	solAssert(normalizedType);
-
-	if (_usingFor.global())
-	{
-		if (m_currentContract)
-			solAssert(m_errorReporter.hasErrors());
-		if (Declaration const* typeDefinition = _usingFor.typeName()->annotation().type->typeDefinition())
-		{
-			if (typeDefinition->scope() != m_currentSourceUnit)
-				m_errorReporter.typeError(
-					4117_error,
-					_usingFor.location(),
-					"Can only use \"global\" with types defined in the same source unit at file level."
-				);
-		}
-		else
-			m_errorReporter.typeError(
-				8841_error,
-				_usingFor.location(),
-				"Can only use \"global\" with user-defined types."
-			);
-	}
-
 
 	for (ASTPointer<IdentifierPath> const& path: _usingFor.functionsOrLibrary())
 	{

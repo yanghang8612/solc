@@ -48,6 +48,7 @@
 
 #include <libsolutil/Whiskers.h>
 #include <libsolutil/FunctionSelector.h>
+#include <libsolutil/StackTooDeepString.h>
 
 #include <range/v3/view/reverse.hpp>
 
@@ -678,7 +679,7 @@ bool ContractCompiler::visit(FunctionDefinition const& _function)
 		BOOST_THROW_EXCEPTION(
 			StackTooDeepError() <<
 			errinfo_sourceLocation(_function.location()) <<
-			util::errinfo_comment("Stack too deep, try removing local variables.")
+			util::errinfo_comment(util::stackTooDeepString)
 		);
 	while (!stackLayout.empty() && stackLayout.back() != static_cast<int>(stackLayout.size() - 1))
 		if (stackLayout.back() < 0)
@@ -848,7 +849,7 @@ bool ContractCompiler::visit(InlineAssembly const& _inlineAssembly)
 						BOOST_THROW_EXCEPTION(
 							StackTooDeepError() <<
 							errinfo_sourceLocation(_inlineAssembly.location()) <<
-							util::errinfo_comment("Stack too deep, try removing local variables.")
+							util::errinfo_comment(util::stackTooDeepString)
 						);
 					_assembly.appendInstruction(dupInstruction(stackDiff));
 				}
@@ -922,7 +923,7 @@ bool ContractCompiler::visit(InlineAssembly const& _inlineAssembly)
 				BOOST_THROW_EXCEPTION(
 					StackTooDeepError() <<
 					errinfo_sourceLocation(_inlineAssembly.location()) <<
-					util::errinfo_comment("Stack too deep(" + to_string(stackDiff) + "), try removing local variables.")
+					util::errinfo_comment(util::stackTooDeepString)
 				);
 			_assembly.appendInstruction(swapInstruction(stackDiff));
 			_assembly.appendInstruction(Instruction::POP);
