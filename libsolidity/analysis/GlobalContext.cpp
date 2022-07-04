@@ -112,7 +112,7 @@ inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariable
 		magicVarDecl("tx", TypeProvider::magic(MagicType::Kind::Transaction)),
 		magicVarDecl("freeze", TypeProvider::function(strings{"uint", "uint"}, strings{"bool"}, FunctionType::Kind::Freeze, StateMutability::NonPayable)),
 		magicVarDecl("unfreeze", TypeProvider::function(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Unfreeze, StateMutability::NonPayable)),
-		magicVarDecl("freezeExpireTime",TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::View)),
+		magicVarDecl("freezeExpireTime",TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::NonPayable)),
 		magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
 		// Accepts a MagicType that can be any contract type or an Integer type and returns a
 		// MagicType. The TypeChecker handles the correctness of the input and output types.
