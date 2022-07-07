@@ -17,6 +17,8 @@
 // SPDX-License-Identifier: GPL-3.0
 #pragma once
 
+#include <libsolutil/Exceptions.h>
+
 #include <json/value.h>
 
 #include <functional>
@@ -32,6 +34,13 @@ namespace solidity::lsp
 
 using MessageID = Json::Value;
 
+enum class TraceValue
+{
+	Off,
+	Messages,
+	Verbose
+};
+
 enum class ErrorCode
 {
 	// Defined by JSON RPC
@@ -46,6 +55,32 @@ enum class ErrorCode
 };
 
 /**
+ * Error exception used to bail out on errors in the LSP function-call handlers.
+ */
+class RequestError: public util::Exception
+{
+public:
+	explicit RequestError(ErrorCode _code):
+		m_code{_code}
+	{
+	}
+
+	ErrorCode code() const noexcept { return m_code; }
+
+private:
+	ErrorCode m_code;
+};
+
+#define lspAssert(condition, errorCode, errorMessage) \
+	if (!(condition)) \
+	{ \
+		BOOST_THROW_EXCEPTION( \
+			RequestError(errorCode) << \
+			util::errinfo_comment(errorMessage) \
+		); \
+	}
+
+/**
  * Transport layer API
  *
  * The transport layer API is abstracted to make LSP more testable as well as
@@ -56,11 +91,44 @@ class Transport
 public:
 	virtual ~Transport() = default;
 
+	std::optional<Json::Value> receive();
+	void notify(std::string _method, Json::Value _params);
+	void reply(MessageID _id, Json::Value _result);
+	void error(MessageID _id, ErrorCode _code, std::string _message);
+
 	virtual bool closed() const noexcept = 0;
-	virtual std::optional<Json::Value> receive() = 0;
-	virtual void notify(std::string _method, Json::Value _params) = 0;
-	virtual void reply(MessageID _id, Json::Value _result) = 0;
-	virtual void error(MessageID _id, ErrorCode _code, std::string _message) = 0;
+
+	void trace(std::string _message, Json::Value _extra = Json::nullValue);
+
+	TraceValue traceValue() const noexcept { return m_logTrace; }
+	void setTrace(TraceValue _value) noexcept { m_logTrace = _value; }
+
+private:
+	TraceValue m_logTrace = TraceValue::Off;
+
+protected:
+	/// Reads from the transport and parses the headers until the beginning
+	/// of the contents.
+	std::optional<std::map<std::string, std::string>> parseHeaders();
+
+	/// Consumes exactly @p _byteCount bytes, as needed for consuming
+	/// the message body from the transport line.
+	virtual std::string readBytes(size_t _byteCount) = 0;
+
+	// Mimmicks std::getline() on this Transport API.
+	virtual std::string getline() = 0;
+
+	/// Writes the given payload @p _data to transport.
+	/// This call may or may not buffer.
+	virtual void writeBytes(std::string_view _data) = 0;
+
+	/// Ensures transport output is flushed.
+	virtual void flushOutput() = 0;
+
+	/// Sends an arbitrary raw message to the client.
+	///
+	/// Used by the notify/reply/error function family.
+	virtual void send(Json::Value _message, MessageID _id = Json::nullValue);
 };
 
 /**
@@ -75,27 +143,34 @@ public:
 	/// @param _out for example std::cout (stdout)
 	IOStreamTransport(std::istream& _in, std::ostream& _out);
 
-	// Constructs a JSON transport using standard I/O streams.
-	IOStreamTransport();
-
 	bool closed() const noexcept override;
-	std::optional<Json::Value> receive() override;
-	void notify(std::string _method, Json::Value _params) override;
-	void reply(MessageID _id, Json::Value _result) override;
-	void error(MessageID _id, ErrorCode _code, std::string _message) override;
 
 protected:
-	/// Sends an arbitrary raw message to the client.
-	///
-	/// Used by the notify/reply/error function family.
-	virtual void send(Json::Value _message, MessageID _id = Json::nullValue);
-
-	/// Parses header section from the client including message-delimiting empty line.
-	std::optional<std::map<std::string, std::string>> parseHeaders();
+	std::string readBytes(size_t _byteCount) override;
+	std::string getline() override;
+	void writeBytes(std::string_view _data) override;
+	void flushOutput() override;
 
 private:
 	std::istream& m_input;
 	std::ostream& m_output;
+};
+
+/**
+ * Standard I/O transport Layer utilizing stdin/stdout for communication.
+ */
+class StdioTransport: public Transport
+{
+public:
+	StdioTransport();
+
+	bool closed() const noexcept override;
+
+protected:
+	std::string readBytes(size_t _byteCount) override;
+	std::string getline() override;
+	void writeBytes(std::string_view _data) override;
+	void flushOutput() override;
 };
 
 }

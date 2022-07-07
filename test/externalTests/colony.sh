@@ -24,9 +24,12 @@ set -e
 source scripts/common.sh
 source test/externalTests/common.sh
 
+REPO_ROOT=$(realpath "$(dirname "$0")/../..")
+
 verify_input "$@"
 BINARY_TYPE="$1"
 BINARY_PATH="$2"
+SELECTED_PRESETS="$3"
 
 function compile_fn { yarn run provision:token:contracts; }
 function test_fn { yarn run test:contracts; }
@@ -34,22 +37,31 @@ function test_fn { yarn run test:contracts; }
 function colony_test
 {
     local repo="https://github.com/solidity-external-tests/colonyNetwork.git"
-    local branch=develop_080
+    local ref_type=branch
+    local ref="develop_080"
     local config_file="truffle.js"
-    # On levels 1 and 2 it compiles but tests run out of gas
-    local min_optimizer_level=3
-    local max_optimizer_level=3
 
-    local selected_optimizer_levels
-    selected_optimizer_levels=$(circleci_select_steps "$(seq "$min_optimizer_level" "$max_optimizer_level")")
-    print_optimizer_levels_or_exit "$selected_optimizer_levels"
+    local compile_only_presets=(
+        ir-no-optimize            # Compiles but tests run out of gas
+        ir-optimize-evm-only      # Compiles but tests run out of gas
+        legacy-no-optimize        # Compiles but tests run out of gas
+        legacy-optimize-evm-only  # Compiles but tests run out of gas
+    )
+    local settings_presets=(
+        "${compile_only_presets[@]}"
+        ir-optimize-evm+yul
+        legacy-optimize-evm+yul
+    )
+
+    [[ $SELECTED_PRESETS != "" ]] || SELECTED_PRESETS=$(circleci_select_steps_multiarg "${settings_presets[@]}")
+    print_presets_or_exit "$SELECTED_PRESETS"
 
     setup_solc "$DIR" "$BINARY_TYPE" "$BINARY_PATH"
-    download_project "$repo" "$branch" "$DIR"
+    download_project "$repo" "$ref_type" "$ref" "$DIR"
     [[ $BINARY_TYPE == native ]] && replace_global_solc "$BINARY_PATH"
 
     neutralize_package_json_hooks
-    force_truffle_compiler_settings "$config_file" "$BINARY_TYPE" "${DIR}/solc" "$min_optimizer_level"
+    force_truffle_compiler_settings "$config_file" "$BINARY_TYPE" "${DIR}/solc/dist" "$(first_word "$SELECTED_PRESETS")"
     yarn install
     git submodule update --init
 
@@ -59,10 +71,11 @@ function colony_test
     cd ..
 
     replace_version_pragmas
-    [[ $BINARY_TYPE == solcjs ]] && force_solc_modules "${DIR}/solc"
+    [[ $BINARY_TYPE == solcjs ]] && force_solc_modules "${DIR}/solc/dist"
 
-    for level in $selected_optimizer_levels; do
-        truffle_run_test "$config_file" "$BINARY_TYPE" "${DIR}/solc" "$level" compile_fn test_fn
+    for preset in $SELECTED_PRESETS; do
+        truffle_run_test "$config_file" "$BINARY_TYPE" "${DIR}/solc/dist" "$preset" "${compile_only_presets[*]}" compile_fn test_fn
+        store_benchmark_report truffle colony "$repo" "$preset"
     done
 }
 

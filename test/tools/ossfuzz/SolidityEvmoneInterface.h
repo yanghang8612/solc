@@ -22,7 +22,7 @@
 
 #include <libsolidity/interface/CompilerStack.h>
 
-#include <libyul/AssemblyStack.h>
+#include <libyul/YulStack.h>
 
 #include <libsolutil/Keccak256.h>
 
@@ -91,7 +91,7 @@ public:
 	/// @returns method identifiers in contract called @param _contractName.
 	Json::Value methodIdentifiers(std::string const& _contractName)
 	{
-		return m_compiler.methodIdentifiers(_contractName);
+		return m_compiler.interfaceSymbols(_contractName)["methods"];
 	}
 	/// @returns Compilation output comprising EVM bytecode and list of
 	/// method identifiers in contract if compilation is successful,

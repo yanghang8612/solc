@@ -36,16 +36,14 @@ contract Test {
         return a[0][0] + a[1][0] + a[2][1];
     }
 }
-// ====
-// compileViaYul: also
 // ----
 // test() -> 24
-// gas irOptimized: 227167
+// gas irOptimized: 226714
 // gas legacy: 227133
 // gas legacyOptimized: 226547
 // test1() -> 3
 // test2() -> 6
 // test3() -> 24
-// gas irOptimized: 133621
+// gas irOptimized: 133317
 // gas legacy: 134295
 // gas legacyOptimized: 133383

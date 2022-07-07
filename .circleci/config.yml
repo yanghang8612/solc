@@ -9,20 +9,20 @@ version: 2.1
 parameters:
   ubuntu-2004-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004-9
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:3d8a912e8e78e98cd217955d06d98608ad60adc67728d4c3a569991235fa1abb"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004-13
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:aa64242ecba4f040a839eadfaf20e8489cf93d1cb96ab90df2b240cdbbfe7f7c"
   ubuntu-2004-clang-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004.clang-9
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:a1ba002cae17279d1396a898b04e4e9c45602ad881295db3e2f484a7e24f6f43"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004.clang-13
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:caaf8d42aaf07397d1540e570f096a4fb1ef11fda7da3f1141d8852ec8322a9e"
   ubuntu-1604-clang-ossfuzz-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu1604.clang.ossfuzz-14
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:f353823cce2f6cd2f9f1459d86cd76fdfc551a0261d87626615ea6c1d8f90587"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu1604.clang.ossfuzz-18
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:048002d71a1f86f83dedb79dd057760b752256c75646ba5ad5c1bbe92e1695aa"
   emscripten-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:emscripten-8
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:842d6074e0e7e5355c89122c1cafc1fdb59696596750e7d56e5f35c0d883ad59"
+    # solbuildpackpusher/solidity-buildpack-deps:emscripten-11
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:0ad7c65e8c54d926ba9cb80d56246e4fc49f9284ad5188aaaa4834f46ab0c315"
   evm-version:
     type: string
     default: london
@@ -36,7 +36,7 @@ commands:
     parameters:
       event:
         type: enum
-        enum: ["failure", "success"]
+        enum: ["failure", "success", "release"]
       condition:
         type: string
     steps:
@@ -53,8 +53,15 @@ commands:
             workflow_info=$(curl --silent "https://circleci.com/api/v2/workflow/${CIRCLE_WORKFLOW_ID}") || true
             workflow_name=$(echo "$workflow_info" | grep -E '"\s*name"\s*:\s*".*"' | cut -d \" -f 4 || echo "$CIRCLE_WORKFLOW_ID")
 
-            [[ "<< parameters.event >>" == "failure" ]] && message=" ❌ [${workflow_name}] Job **${CIRCLE_JOB}** failed on **${CIRCLE_BRANCH}**. Please see [build ${CIRCLE_BUILD_NUM}](${CIRCLE_BUILD_URL}) for details."
-            [[ "<< parameters.event >>" == "success" ]] && message=" ✅ [${workflow_name}] Job **${CIRCLE_JOB}** succeeded on **${CIRCLE_BRANCH}**. Please see [build ${CIRCLE_BUILD_NUM}](${CIRCLE_BUILD_URL}) for details."
+            [[ $CIRCLE_NODE_TOTAL == 1 ]] && job="**${CIRCLE_JOB}**"
+            [[ $CIRCLE_NODE_TOTAL != 1 ]] && job="**${CIRCLE_JOB}** (run $((CIRCLE_NODE_INDEX + 1))/${CIRCLE_NODE_TOTAL})"
+
+            [[ "<< parameters.event >>" == "failure" ]] && message=" ❌ [${workflow_name}] Job ${job} failed on **${CIRCLE_BRANCH}**. Please see [build ${CIRCLE_BUILD_NUM}](${CIRCLE_BUILD_URL}) for details."
+            [[ "<< parameters.event >>" == "success" ]] && message=" ✅ [${workflow_name}] Job ${job} succeeded on **${CIRCLE_BRANCH}**. Please see [build ${CIRCLE_BUILD_NUM}](${CIRCLE_BUILD_URL}) for details."
+            [[ "<< parameters.event >>" == "release" ]] && message=" 📦 Release binaries for version **${CIRCLE_TAG}** are ready and attached as artifacts to [build ${CIRCLE_BUILD_NUM}](${CIRCLE_BUILD_URL}). **Please make sure the whole workflow succeeded before using them.**"
+
+            # The release notification only makes sense on tagged commits. If the commit is untagged, just bail out.
+            [[ "<< parameters.event >>" == "release" ]] && { [[ $CIRCLE_TAG != "" ]] || { echo "Not a tagged commit - notification skipped."; exit 0; } }
 
             curl "https://api.gitter.im/v1/rooms/${GITTER_NOTIFY_ROOM_ID}/chatMessages" \
               --request POST \
@@ -76,6 +83,13 @@ commands:
     steps:
       - gitter_notify_unless_pr:
           event: success
+          condition: on_success
+
+  gitter_notify_release_unless_pr:
+    description: "Posts a release notification to the main room on Gitter (if not running on a PR)."
+    steps:
+      - gitter_notify_unless_pr:
+          event: release
           condition: on_success
 
 defaults:
@@ -208,7 +222,17 @@ defaults:
             command: pip install --user deepdiff colorama
         - run:
             name: Executing solc LSP test suite
-            command: ./test/lsp.py ./build/solc/solc
+            command: ./test/lsp.py ./build/solc/solc --non-interactive
+        - gitter_notify_failure_unless_pr
+
+  - steps_build: &steps_build
+      steps:
+        - checkout
+        - run: *run_build
+        - store_artifacts: *artifacts_solc
+        - store_artifacts: *artifact_solidity_upgrade
+        - store_artifacts: *artifact_yul_phaser
+        - persist_to_workspace: *artifacts_executables
         - gitter_notify_failure_unless_pr
 
   - steps_soltest_all: &steps_soltest_all
@@ -230,6 +254,14 @@ defaults:
         - store_test_results: *store_test_results
         - store_artifacts: *artifacts_test_results
         - gitter_notify_failure_unless_pr
+
+  - steps_install_dependencies_osx: &steps_install_dependencies_osx
+      steps:
+        # FIXME: We used to cache dependencies on macOS but now it takes longer than just installing
+        # them each time. See https://github.com/ethereum/solidity/issues/12925.
+        - run:
+            name: Install build dependencies
+            command: ./.circleci/osx_install_dependencies.sh
 
   # --------------------------------------------------------------------------
   # Base Image Templates
@@ -352,10 +384,18 @@ defaults:
 
   - base_osx: &base_osx
       macos:
-        xcode: "11.0.0"
+        xcode: "13.2.0"
       environment:
         TERM: xterm
-        MAKEFLAGS: -j 5
+        MAKEFLAGS: -j5
+
+  - base_osx_large: &base_osx_large
+      macos:
+        xcode: "13.2.0"
+      resource_class: large
+      environment:
+        TERM: xterm
+        MAKEFLAGS: -j10
 
   - base_ems_large: &base_ems_large
       docker:
@@ -373,7 +413,7 @@ defaults:
         TERM: xterm
         MAKEFLAGS: -j 2
 
-  - base_node_latest_small: &base_node_latest_small
+  - base_node_small: &base_node_small
       docker:
         - image: circleci/node
       resource_class: small
@@ -388,6 +428,13 @@ defaults:
       filters:
         tags:
           only: /.*/
+
+  - workflow_trigger_on_releases: &workflow_trigger_on_releases
+      filters:
+        tags:
+          only: /^v.*/
+        branches:
+          ignore: /.*/
 
   - workflow_ubuntu2004: &workflow_ubuntu2004
       <<: *workflow_trigger_on_tags
@@ -464,6 +511,132 @@ defaults:
       requires:
         - b_win_release
 
+  # --------------------------------------------------------------------------
+  # Parameterized Job Templates
+
+  # Separate compile-only runs of those external tests where a full run takes much longer.
+  - job_ems_compile_ext_colony: &job_ems_compile_ext_colony
+      <<: *workflow_emscripten
+      name: t_ems_compile_ext_colony
+      project: colony
+      binary_type: solcjs
+      compile_only: 1
+      nodejs_version: '14'
+
+  - job_native_test_ext_gnosis: &job_native_test_ext_gnosis
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_gnosis
+      project: gnosis
+      binary_type: native
+      # NOTE: Tests crash on nodejs 17: "Error: error:0308010C:digital envelope routines::unsupported"
+      nodejs_version: '16'
+  - job_native_test_ext_zeppelin: &job_native_test_ext_zeppelin
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_zeppelin
+      project: zeppelin
+      binary_type: native
+      # NOTE: Tests crash on nodejs 17: "Error: error:0308010C:digital envelope routines::unsupported"
+      nodejs_version: '16'
+      resource_class: large
+  - job_native_test_ext_ens: &job_native_test_ext_ens
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_ens
+      project: ens
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_trident: &job_native_test_ext_trident
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_trident
+      project: trident
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_euler: &job_native_test_ext_euler
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_euler
+      project: euler
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_yield_liquidator: &job_native_test_ext_yield_liquidator
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_yield_liquidator
+      project: yield-liquidator
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_bleeps: &job_native_test_ext_bleeps
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_bleeps
+      project: bleeps
+      binary_type: native
+      nodejs_version: '16'
+      resource_class: medium
+  - job_native_test_ext_pool_together: &job_native_test_ext_pool_together
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_pool_together
+      project: pool-together
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_perpetual_pools: &job_native_test_ext_perpetual_pools
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_perpetual_pools
+      project: perpetual-pools
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_uniswap: &job_native_test_ext_uniswap
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_uniswap
+      project: uniswap
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_prb_math: &job_native_test_ext_prb_math
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_prb_math
+      project: prb-math
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_elementfi: &job_native_test_ext_elementfi
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_elementfi
+      project: elementfi
+      binary_type: native
+      nodejs_version: '16'
+      resource_class: medium
+  - job_native_test_ext_brink: &job_native_test_ext_brink
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_brink
+      project: brink
+      binary_type: native
+      nodejs_version: '16'
+  - job_native_test_ext_chainlink: &job_native_test_ext_chainlink
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_chainlink
+      project: chainlink
+      binary_type: native
+      nodejs_version: '16'
+      resource_class: large # Tests run out of memory on a smaller machine
+  - job_native_test_ext_gp2: &job_native_test_ext_gp2
+      <<: *workflow_ubuntu2004_static
+      name: t_native_test_ext_gp2
+      project: gp2
+      binary_type: native
+      # NOTE: Tests crash on nodejs 17: "Error: error:0308010C:digital envelope routines::unsupported"
+      nodejs_version: '16'
+  - job_ems_test_ext_colony: &job_ems_test_ext_colony
+      <<: *workflow_emscripten
+      name: t_ems_test_ext_colony
+      project: colony
+      binary_type: solcjs
+      nodejs_version: '14'
+      resource_class: medium
+
+  - job_b_ubu_asan_clang: &job_b_ubu_asan_clang
+      <<: *workflow_trigger_on_tags
+      name: b_ubu_asan_clang
+      cmake_options: -DSANITIZE=address
+  - job_b_ubu_ubsan_clang: &job_b_ubu_ubsan_clang
+      <<: *workflow_trigger_on_tags
+      name: b_ubu_ubsan_clang
+      cmake_options: -DSANITIZE=address
+
 # -----------------------------------------------------------------------------------------------
 jobs:
 
@@ -483,7 +656,7 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   chk_docs_examples:
-    <<: *base_node_latest_small
+    <<: *base_node_small
     steps:
       - checkout
       - attach_workspace:
@@ -531,9 +704,17 @@ jobs:
           name: Install pip
           command: apt -q update && apt install -y python3-pip
       - run:
-          name: Install pylint
-          command: python3 -m pip install pylint z3-solver pygments-lexer-solidity parsec tabulate deepdiff colorama
-          # also z3-solver, parsec and tabulate to make sure pylint knows about this module, pygments-lexer-solidity for docs
+          name: Install pylint and dependencies of the scripts that will be linted
+          command: python3 -m pip install
+            pylint
+            z3-solver
+            pygments-lexer-solidity
+            parsec
+            tabulate
+            deepdiff
+            colorama
+            requests
+      - run: pylint --version
       - run:
           name: Linting Python Scripts
           command: ./scripts/pylint_all.py
@@ -552,7 +733,7 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   chk_buglist:
-    <<: *base_node_latest_small
+    <<: *base_node_small
     steps:
       - checkout
       - run:
@@ -609,14 +790,7 @@ jobs:
     # this runs 2x faster on xlarge but takes 4x more resources (compared to medium).
     # Enough other jobs depend on it that it's worth it though.
     <<: *base_ubuntu2004_xlarge
-    steps:
-      - checkout
-      - run: *run_build
-      - store_artifacts: *artifacts_solc
-      - store_artifacts: *artifact_solidity_upgrade
-      - store_artifacts: *artifact_yul_phaser
-      - persist_to_workspace: *artifacts_executables
-      - gitter_notify_failure_unless_pr
+    <<: *steps_build
 
   # x64 ASAN build, for testing for memory related bugs
   b_ubu_asan: &b_ubu_asan
@@ -626,12 +800,7 @@ jobs:
       CMAKE_OPTIONS: -DSANITIZE=address
       MAKEFLAGS: -j 3
       CMAKE_BUILD_TYPE: Release
-    steps:
-      - checkout
-      - run: *run_build
-      - store_artifacts: *artifacts_solc
-      - persist_to_workspace: *artifacts_executables
-      - gitter_notify_failure_unless_pr
+    <<: *steps_build
 
   b_ubu_clang: &b_ubu_clang
     <<: *base_ubuntu2004_clang_large
@@ -640,42 +809,21 @@ jobs:
       CC: clang
       CXX: clang++
       MAKEFLAGS: -j 10
-    steps:
-      - checkout
-      - run: *run_build
-      - store_artifacts: *artifacts_solc
-      - persist_to_workspace: *artifacts_executables
-      - gitter_notify_failure_unless_pr
+    <<: *steps_build
 
-  b_ubu_asan_clang: &b_ubu_asan_clang
+  b_ubu_san_clang:
     # This runs a bit faster on large and xlarge but on nightly efficiency matters more.
+    parameters:
+      cmake_options:
+        type: string
     <<: *base_ubuntu2004_clang
     environment:
+      TERM: xterm
       CC: clang
       CXX: clang++
-      CMAKE_OPTIONS: -DSANITIZE=address
       MAKEFLAGS: -j 3
-    steps:
-      - checkout
-      - run: *run_build
-      - store_artifacts: *artifacts_solc
-      - persist_to_workspace: *artifacts_executables
-      - gitter_notify_failure_unless_pr
-
-  b_ubu_ubsan_clang: &b_ubu_ubsan_clang
-    # This runs a bit faster on large and xlarge but on nightly efficiency matters more.
-    <<: *base_ubuntu2004_clang
-    environment:
-      CC: clang
-      CXX: clang++
-      CMAKE_OPTIONS: -DSANITIZE=undefined
-      MAKEFLAGS: -j 3
-    steps:
-      - checkout
-      - run: *run_build
-      - store_artifacts: *artifacts_solc
-      - persist_to_workspace: *artifacts_executables
-      - gitter_notify_failure_unless_pr
+      CMAKE_OPTIONS: << parameters.cmake_options >>
+    <<: *steps_build
 
   b_ubu_release: &b_ubu_release
     <<: *b_ubu
@@ -791,30 +939,16 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   b_osx:
-    <<: *base_osx
+    <<: *base_osx_large
     environment:
       TERM: xterm
       CMAKE_BUILD_TYPE: Release
-      MAKEFLAGS: -j 5
+      MAKEFLAGS: -j10
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - dependencies-osx-{{ arch }}-{{ checksum ".circleci/osx_install_dependencies.sh" }}
-      # DO NOT EDIT between here and save_cache, but rather edit ./circleci/osx_install_dependencies.sh
-      # WARNING! If you do edit anything here instead, remember to invalidate the cache manually.
-      - run:
-          name: Install build dependencies
-          command: ./.circleci/osx_install_dependencies.sh
-      - save_cache:
-          key: dependencies-osx-{{ arch }}-{{ checksum ".circleci/osx_install_dependencies.sh" }}
-          paths:
-            - /usr/local/bin
-            - /usr/local/sbin
-            - /usr/local/lib
-            - /usr/local/include
-            - /usr/local/Cellar
-            - /usr/local/Homebrew
+      - when:
+          condition: true
+          <<: *steps_install_dependencies_osx
       - run: *run_build
       - store_artifacts: *artifacts_solc
       - store_artifacts: *artifact_solidity_upgrade
@@ -827,7 +961,7 @@ jobs:
             - build/test/tools/solfuzzer
       - gitter_notify_failure_unless_pr
 
-  t_osx_soltest:
+  t_osx_soltest: &t_osx_soltest
     <<: *base_osx
     environment:
       EVM: << pipeline.parameters.evm-version >>
@@ -835,9 +969,9 @@ jobs:
       TERM: xterm
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - dependencies-osx-{{ arch }}-{{ checksum ".circleci/osx_install_dependencies.sh" }}
+      - when:
+          condition: true
+          <<: *steps_install_dependencies_osx
       - attach_workspace:
           at: .
       - run: *run_soltest
@@ -849,9 +983,9 @@ jobs:
     <<: *base_osx
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - dependencies-osx-{{ arch }}-{{ checksum ".circleci/osx_install_dependencies.sh" }}
+      - when:
+          condition: true
+          <<: *steps_install_dependencies_osx
       - attach_workspace:
           at: .
       - run: *run_cmdline_tests
@@ -870,10 +1004,10 @@ jobs:
           command: |
             scripts/ci/build_emscripten.sh
       - store_artifacts:
-          path: emscripten_build/libsolc/soljson.js
+          path: upload/soljson.js
           destination: soljson.js
       - run: mkdir -p workspace
-      - run: cp emscripten_build/libsolc/soljson.js workspace/soljson.js
+      - run: cp upload/soljson.js workspace/soljson.js
       - run: scripts/get_version.sh > workspace/version.txt
       - persist_to_workspace:
           root: workspace
@@ -889,15 +1023,15 @@ jobs:
       - run: *setup_prerelease_commit_hash
       - run:
           name: Build documentation
-          command: ./scripts/docs.sh
+          command: ./docs/docs.sh
       - store_artifacts:
           path: docs/_build/html/
           destination: docs-html
       - gitter_notify_failure_unless_pr
 
   t_ubu_soltest_all: &t_ubu_soltest_all
-    <<: *base_ubuntu2004
-    parallelism: 15 # 7 EVM versions, each with/without optimization + 1 ABIv1/@nooptions run
+    <<: *base_ubuntu2004_large
+    parallelism: 50
     <<: *steps_soltest_all
 
   t_ubu_lsp: &t_ubu_lsp
@@ -906,6 +1040,7 @@ jobs:
 
   t_archlinux_soltest: &t_archlinux_soltest
     <<: *base_archlinux
+    parallelism: 20
     environment:
       EVM: << pipeline.parameters.evm-version >>
       OPTIMIZE: 0
@@ -922,17 +1057,9 @@ jobs:
           condition: true
           <<: *steps_soltest
 
-  t_ubu_soltest_enforce_yul: &t_ubu_soltest_enforce_yul
-    <<: *base_ubuntu2004
-    environment:
-      EVM: << pipeline.parameters.evm-version >>
-      SOLTEST_FLAGS: --enforce-via-yul
-      OPTIMIZE: 0
-      TERM: xterm
-    <<: *steps_soltest
-
   t_ubu_clang_soltest: &t_ubu_clang_soltest
     <<: *base_ubuntu2004_clang
+    parallelism: 20
     environment:
       EVM: << pipeline.parameters.evm-version >>
       OPTIMIZE: 0
@@ -950,6 +1077,20 @@ jobs:
   t_ubu_release_cli: &t_ubu_release_cli
     <<: *t_ubu_cli
 
+  t_ubu_locale:
+    <<: *base_ubuntu2004_small
+    steps:
+      - checkout
+      - attach_workspace:
+          at: build
+      - run:
+          name: Install all locales
+          command: |
+            apt update --assume-yes
+            apt install locales-all --assume-yes --no-install-recommends
+      - run: test/localeTest.sh build/solc/solc
+      - gitter_notify_failure_unless_pr
+
   t_ubu_asan_cli:
     # Runs slightly faster on medium but we only run it nightly so efficiency matters more.
     <<: *base_ubuntu2004_small
@@ -960,6 +1101,7 @@ jobs:
 
   t_ubu_asan_soltest:
     <<: *base_ubuntu2004
+    parallelism: 20
     environment:
       EVM: << pipeline.parameters.evm-version >>
       OPTIMIZE: 0
@@ -969,6 +1111,7 @@ jobs:
 
   t_ubu_asan_clang_soltest:
     <<: *base_ubuntu2004_clang
+    parallelism: 20
     environment:
       EVM: << pipeline.parameters.evm-version >>
       OPTIMIZE: 0
@@ -978,8 +1121,10 @@ jobs:
 
   t_ubu_ubsan_clang_soltest:
     <<: *base_ubuntu2004_clang
+    parallelism: 20
     environment:
       EVM: << pipeline.parameters.evm-version >>
+      SOLTEST_FLAGS: --no-smt
     <<: *steps_soltest
 
   t_ubu_ubsan_clang_cli:
@@ -1008,7 +1153,9 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   t_ems_ext_hardhat:
-    <<: *base_node_latest_small
+    <<: *base_node_small
+    docker:
+      - image: circleci/node:16
     environment:
       TERM: xterm
       HARDHAT_TESTS_SOLC_PATH: /tmp/workspace/soljson.js
@@ -1054,8 +1201,9 @@ jobs:
     docker:
       - image: circleci/node:<<parameters.nodejs_version>>
     resource_class: <<parameters.resource_class>>
-    # NOTE: Each external test does 3 separate compile&test runs
-    parallelism: 3
+    # NOTE: Each external test runs up to 6 independent settings presets. If parallelism is higher than
+    # actual preset count, some runs will exit immediately. If it's lower, some runs will get more than one preset.
+    parallelism: 6
     environment:
       TERM: xterm
       COMPILE_ONLY: <<parameters.compile_only>>
@@ -1084,7 +1232,87 @@ jobs:
                 name: External <<parameters.project>> tests (native)
                 command: |
                   test/externalTests/<<parameters.project>>.sh native /tmp/workspace/solc/solc
+      - store_artifacts:
+          path: reports/externalTests/
+      # persist_to_workspace fails if the directory does not exist and the test script will create
+      # it only if it actually has benchmark results.
+      - run: mkdir -p reports/externalTests/
+      - persist_to_workspace:
+          root: .
+          paths:
+            - reports/externalTests/
       - gitter_notify_failure_unless_pr
+
+  c_ext_benchmarks:
+    <<: *base_node_small
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install dependencies of helper scripts
+          command: |
+            sudo apt update
+            sudo apt install python3-pip --assume-yes --no-install-recommends
+            python3 -m pip install requests --user
+      - run:
+          name: Combine benchmark reports
+          command: cat reports/externalTests/benchmark-*.json | scripts/externalTests/merge_benchmarks.sh > reports/externalTests/all-benchmarks.json
+      - run:
+          name: Summarize reports
+          command: cat reports/externalTests/all-benchmarks.json | scripts/externalTests/summarize_benchmarks.sh > reports/externalTests/summarized-benchmarks.json
+      - run:
+          name: Download reports from base branch
+          command: |
+            if [[ $CIRCLE_PULL_REQUEST != "" ]]; then
+              mkdir reports/externalTests/base-branch/
+              cd reports/externalTests/base-branch/
+
+              pr_id=$(echo "$CIRCLE_PULL_REQUEST" | sed 's|\(.*\)\/||')
+              scripts_dir=../../../scripts
+
+              # Our main goal here is to provide new benchmarks, the diff is optional. When benchmarks from
+              # the previous run are not available for whatever reason, we still succeed and just skip the diff.
+              # download_benchmarks.py exits with status 2 in that case.
+              if "${scripts_dir}/externalTests/download_benchmarks.py" --base-of-pr "$pr_id" || [[ $? == 2 ]]; then
+                echo 'export SKIP_BENCHMARK_DIFF=true' >> $BASH_ENV
+              fi
+            fi
+      - run:
+          name: Diff benchmarks
+          command: |
+            if [[ $CIRCLE_PULL_REQUEST != "" && $SKIP_BENCHMARK_DIFF != "true" ]]; then
+              cd reports/externalTests/
+              mkdir diff/
+              scripts_dir=../../scripts
+
+              "${scripts_dir}/externalTests/benchmark_diff.py" table \
+                --output-format markdown \
+                --style humanized \
+                base-branch/summarized-benchmarks-*.json \
+                summarized-benchmarks.json > diff/benchmark-diff-summarized-table-markdown-humanized.md
+              "${scripts_dir}/externalTests/benchmark_diff.py" table \
+                --output-format markdown \
+                --style absolute \
+                base-branch/summarized-benchmarks-*.json \
+                summarized-benchmarks.json > diff/benchmark-diff-summarized-table-markdown-absolute.md
+              "${scripts_dir}/externalTests/benchmark_diff.py" inplace \
+                --style absolute \
+                base-branch/summarized-benchmarks-*.json \
+                summarized-benchmarks.json > diff/benchmark-diff-summarized-inplace-absolute.md
+              "${scripts_dir}/externalTests/benchmark_diff.py" inplace \
+                --style absolute \
+                base-branch/all-benchmarks-*.json \
+                all-benchmarks.json > diff/benchmark-diff-all-table-inplace-absolute.md
+            fi
+      - store_artifacts:
+          path: reports/externalTests/all-benchmarks.json
+      - store_artifacts:
+          path: reports/externalTests/summarized-benchmarks.json
+      - store_artifacts:
+          path: reports/externalTests/diff/
+      - store_artifacts:
+          path: reports/externalTests/base-branch/
 
   b_win: &b_win
     <<: *base_win_powershell_large
@@ -1136,6 +1364,15 @@ jobs:
       - run:
           name: "Run soltest"
           command: .circleci/soltest.ps1
+      - run:
+          name: Install LSP test dependencies
+          command: python -m pip install --user deepdiff colorama
+      - run:
+          name: Inspect lsp.py
+          command: Get-Content ./test/lsp.py
+      - run:
+          name: Executing solc LSP test suite
+          command: python ./test/lsp.py .\build\solc\Release\solc.exe --non-interactive
       - store_test_results: *store_test_results
       - store_artifacts: *artifacts_test_results
       - gitter_notify_failure_unless_pr
@@ -1210,7 +1447,7 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   b_bytecode_ems:
-    <<: *base_node_latest_small
+    <<: *base_node_small
     environment:
       SOLC_EMSCRIPTEN: "On"
     steps:
@@ -1263,6 +1500,47 @@ jobs:
           path: all-bytecode-reports.zip
       - gitter_notify_failure_unless_pr
 
+  c_release_binaries:
+    <<: *base_ubuntu2004
+    steps:
+      - checkout
+      - attach_workspace:
+          at: workspace
+      - run:
+          name: Gather and rename binaries from dependent jobs
+          command: |
+            mkdir github/
+            cp workspace/solc/solc             github/solc-static-linux
+            cp workspace/build/solc/solc       github/solc-macos
+            cp workspace/solc/Release/solc.exe github/solc-windows.exe
+            cp workspace/soljson.js            github/soljson.js
+
+            cd github/
+            tar --create --file ../github-binaries.tar *
+      - store_artifacts:
+          path: github-binaries.tar
+      - run:
+          name: Rename binaries to solc-bin naming convention
+          command: |
+            full_version=$(
+              github/solc-static-linux --version |
+              sed -En 's/^Version: ([0-9.]+.*\+commit\.[0-9a-f]+(\.mod)?).*$/\1/p'
+            )
+
+            mkdir -p solc-bin/{linux-amd64,macosx-amd64,windows-amd64,bin}
+
+            mv github/solc-static-linux "solc-bin/linux-amd64/solc-linux-amd64-${full_version}"
+            mv github/solc-macos        "solc-bin/macosx-amd64/solc-macosx-amd64-${full_version}"
+            mv github/solc-windows.exe  "solc-bin/windows-amd64/solc-windows-amd64-${full_version}.exe"
+            mv github/soljson.js        "solc-bin/bin/soljson-${full_version}.js"
+
+            cd solc-bin/
+            tar --create --file ../solc-bin-binaries.tar *
+      - store_artifacts:
+          path: solc-bin-binaries.tar
+      - gitter_notify_failure_unless_pr
+      - gitter_notify_release_unless_pr
+
 workflows:
   version: 2
 
@@ -1301,8 +1579,8 @@ workflows:
       # Ubuntu build and tests
       - b_ubu: *workflow_trigger_on_tags
       - t_ubu_cli: *workflow_ubuntu2004
+      - t_ubu_locale: *workflow_ubuntu2004
       - t_ubu_soltest_all: *workflow_ubuntu2004
-      - t_ubu_soltest_enforce_yul: *workflow_ubuntu2004
       - b_ubu_clang: *workflow_trigger_on_tags
       - t_ubu_clang_soltest: *workflow_ubuntu2004_clang
       - t_ubu_lsp: *workflow_ubuntu2004
@@ -1317,53 +1595,43 @@ workflows:
       - t_ems_solcjs: *workflow_emscripten
       - t_ems_ext_hardhat: *workflow_emscripten
 
-      # Separate compile-only runs of those external tests where a full run takes much longer.
-      - t_ems_ext:
-          <<: *workflow_emscripten
-          name: t_ems_compile_ext_colony
-          project: colony
-          binary_type: solcjs
-          compile_only: 1
-          nodejs_version: '14'
-      - t_ems_ext:
-          <<: *workflow_ubuntu2004_static
-          name: t_native_compile_ext_gnosis
-          project: gnosis
-          binary_type: native
-          compile_only: 1
-          nodejs_version: '14'
+      - t_ems_ext: *job_ems_compile_ext_colony
 
-      # FIXME: Gnosis tests are pretty flaky right now. They often fail on CircleCI due to random ProviderError
-      # and there are also other less frequent problems. See https://github.com/gnosis/safe-contracts/issues/216.
-      #- t_ems_ext:
-      #    <<: *workflow_emscripten
-      #    name: t_native_test_ext_gnosis
-      #    project: gnosis
-      #    binary_type: native
-      #    # NOTE: Tests do not start on node.js 14 ("ganache-cli exited early with code 1").
-      #    nodejs_version: '12'
-      - t_ems_ext:
-          <<: *workflow_ubuntu2004_static
-          name: t_native_test_ext_gnosis_v2
-          project: gnosis-v2
-          binary_type: native
-          # NOTE: Tests do not start on node.js 14 ("ganache-cli exited early with code 1").
-          nodejs_version: '12'
-      - t_ems_ext:
-          <<: *workflow_ubuntu2004_static
-          name: t_native_test_ext_zeppelin
-          project: zeppelin
-          binary_type: native
-          # NOTE: Tests crash on nodejs 17: "Error: error:0308010C:digital envelope routines::unsupported"
-          nodejs_version: '16'
-          resource_class: large
-      - t_ems_ext:
-          <<: *workflow_ubuntu2004_static
-          name: t_native_test_ext_ens
-          project: ens
-          binary_type: native
-          # NOTE: One of the dependencies (fsevents) fails to build its native extension on node.js 12+.
-          nodejs_version: '10'
+      - t_ems_ext: *job_native_test_ext_gnosis
+      - t_ems_ext: *job_native_test_ext_zeppelin
+      - t_ems_ext: *job_native_test_ext_ens
+      - t_ems_ext: *job_native_test_ext_trident
+      - t_ems_ext: *job_native_test_ext_euler
+      - t_ems_ext: *job_native_test_ext_yield_liquidator
+      - t_ems_ext: *job_native_test_ext_bleeps
+      - t_ems_ext: *job_native_test_ext_pool_together
+      - t_ems_ext: *job_native_test_ext_perpetual_pools
+      - t_ems_ext: *job_native_test_ext_uniswap
+      - t_ems_ext: *job_native_test_ext_prb_math
+      - t_ems_ext: *job_native_test_ext_elementfi
+      - t_ems_ext: *job_native_test_ext_brink
+      - t_ems_ext: *job_native_test_ext_chainlink
+      - t_ems_ext: *job_native_test_ext_gp2
+
+      - c_ext_benchmarks:
+          <<: *workflow_trigger_on_tags
+          requires:
+            - t_ems_compile_ext_colony
+            - t_native_test_ext_gnosis
+            - t_native_test_ext_zeppelin
+            - t_native_test_ext_ens
+            - t_native_test_ext_trident
+            - t_native_test_ext_euler
+            - t_native_test_ext_yield_liquidator
+            - t_native_test_ext_bleeps
+            - t_native_test_ext_pool_together
+            - t_native_test_ext_perpetual_pools
+            - t_native_test_ext_uniswap
+            - t_native_test_ext_prb_math
+            - t_native_test_ext_elementfi
+            - t_native_test_ext_brink
+            - t_native_test_ext_chainlink
+            - t_native_test_ext_gp2
 
       # Windows build and tests
       - b_win: *workflow_trigger_on_tags
@@ -1373,23 +1641,37 @@ workflows:
 
       # Bytecode comparison:
       - b_bytecode_ubu:
+          <<: *workflow_trigger_on_tags
           requires:
             - b_ubu
       - b_bytecode_win:
+          <<: *workflow_trigger_on_tags
           requires:
             - b_win
       - b_bytecode_osx:
+          <<: *workflow_trigger_on_tags
           requires:
             - b_osx
       - b_bytecode_ems:
+          <<: *workflow_trigger_on_tags
           requires:
             - b_ems
       - t_bytecode_compare:
+          <<: *workflow_trigger_on_tags
           requires:
             - b_bytecode_ubu
             - b_bytecode_win
             - b_bytecode_osx
             - b_bytecode_ems
+
+      # Final artifacts
+      - c_release_binaries:
+          <<: *workflow_trigger_on_releases
+          requires:
+            - b_ubu_static
+            - b_osx
+            - b_win_release
+            - b_ems
 
   nightly:
 
@@ -1412,22 +1694,16 @@ workflows:
 
       # ASan build and tests
       - b_ubu_asan: *workflow_trigger_on_tags
-      - b_ubu_asan_clang: *workflow_trigger_on_tags
+      - b_ubu_san_clang: *job_b_ubu_asan_clang
       - t_ubu_asan_soltest: *workflow_ubuntu2004_asan
       - t_ubu_asan_clang_soltest: *workflow_ubuntu2004_asan_clang
       - t_ubu_asan_cli: *workflow_ubuntu2004_asan
 
       # UBSan build and tests
-      - b_ubu_ubsan_clang: *workflow_trigger_on_tags
+      - b_ubu_san_clang: *job_b_ubu_ubsan_clang
       - t_ubu_ubsan_clang_soltest: *workflow_ubuntu2004_ubsan_clang
       - t_ubu_ubsan_clang_cli: *workflow_ubuntu2004_ubsan_clang
 
       # Emscripten build and tests that take more than 15 minutes to execute
       - b_ems: *workflow_trigger_on_tags
-      - t_ems_ext:
-          <<: *workflow_emscripten
-          name: t_ems_test_ext_colony
-          project: colony
-          binary_type: solcjs
-          nodejs_version: '14'
-          resource_class: medium
+      - t_ems_ext: *job_ems_test_ext_colony

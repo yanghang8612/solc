@@ -20,6 +20,8 @@
 
 #include <libsolutil/Exceptions.h>
 #include <liblangutil/EVMVersion.h>
+#include <liblangutil/Exceptions.h>
+#include <libsolutil/Numeric.h>
 
 #include <test/evmc/evmc.h>
 
@@ -46,7 +48,7 @@ static constexpr auto heraFilename = "libhera.so";
 static constexpr auto heraDownloadLink = "https://github.com/ewasm/hera/releases/download/v0.5.0/hera-0.5.0-linux-x86_64.tar.gz";
 #endif
 
-struct ConfigException : public util::Exception {};
+struct ConfigException: public util::Exception {};
 
 struct CommonOptions
 {
@@ -58,7 +60,6 @@ struct CommonOptions
 	boost::filesystem::path testPath;
 	bool ewasm = false;
 	bool optimize = false;
-	bool enforceViaYul = false;
 	bool enforceCompileToEwasm = false;
 	bool enforceGasTest = false;
 	u256 enforceGasTestMinValue = 100000;
@@ -67,13 +68,24 @@ struct CommonOptions
 	bool useABIEncoderV1 = false;
 	bool showMessages = false;
 	bool showMetadata = false;
+	size_t batches = 1;
+	size_t selectedBatch = 0;
 
 	langutil::EVMVersion evmVersion() const;
 
 	virtual void addOptions();
+	// @returns true if the program should continue, false if it should exit immediately without
+	// reporting an error.
+	// Throws ConfigException or std::runtime_error if parsing fails.
 	virtual bool parse(int argc, char const* const* argv);
 	// Throws a ConfigException on error
 	virtual void validate() const;
+
+	/// @returns string with a key=value list of the options separated by comma
+	/// Ex.: "evmVersion=london, optimize=true, useABIEncoderV1=false"
+	virtual std::string toString(std::vector<std::string> const& _selectedOptions) const;
+	/// Helper to print the value of settings used
+	virtual void printSelectedOptions(std::ostream& _stream, std::string const& _linePrefix, std::vector<std::string> const& _selectedOptions) const;
 
 	static CommonOptions const& get();
 	static void setSingleton(std::unique_ptr<CommonOptions const>&& _instance);
@@ -95,5 +107,28 @@ private:
 bool isValidSemanticTestPath(boost::filesystem::path const& _testPath);
 
 bool loadVMs(CommonOptions const& _options);
+
+/**
+ * Component to help with splitting up all tests into batches.
+ */
+class Batcher
+{
+public:
+	Batcher(size_t _offset, size_t _batches):
+		m_offset(_offset),
+		m_batches(_batches)
+	{
+		solAssert(m_batches > 0 && m_offset < m_batches);
+	}
+	Batcher(Batcher const&) = delete;
+	Batcher& operator=(Batcher const&) = delete;
+
+	bool checkAndAdvance() { return (m_counter++) % m_batches == m_offset; }
+
+private:
+	size_t const m_offset;
+	size_t const m_batches;
+	size_t m_counter = 0;
+};
 
 }

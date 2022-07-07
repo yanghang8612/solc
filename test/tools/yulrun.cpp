@@ -25,7 +25,7 @@
 #include <libyul/AsmAnalysis.h>
 #include <libyul/Dialect.h>
 #include <libyul/backends/evm/EVMDialect.h>
-#include <libyul/AssemblyStack.h>
+#include <libyul/YulStack.h>
 
 #include <liblangutil/DebugInfoSelection.h>
 #include <liblangutil/Exceptions.h>
@@ -56,9 +56,9 @@ namespace
 
 pair<shared_ptr<Block>, shared_ptr<AsmAnalysisInfo>> parse(string const& _source)
 {
-	AssemblyStack stack(
+	YulStack stack(
 		langutil::EVMVersion(),
-		AssemblyStack::Language::StrictAssembly,
+		YulStack::Language::StrictAssembly,
 		solidity::frontend::OptimiserSettings::none(),
 		DebugInfoSelection::Default()
 	);
@@ -87,13 +87,13 @@ void interpret(string const& _source)
 	try
 	{
 		Dialect const& dialect(EVMDialect::strictAssemblyForEVMObjects(langutil::EVMVersion{}));
-		Interpreter::run(state, dialect, *ast);
+		Interpreter::run(state, dialect, *ast, /*disableMemoryTracing=*/false);
 	}
 	catch (InterpreterTerminatedGeneric const&)
 	{
 	}
 
-	state.dumpTraceAndState(cout);
+	state.dumpTraceAndState(cout, /*disableMemoryTracing=*/false);
 }
 
 }

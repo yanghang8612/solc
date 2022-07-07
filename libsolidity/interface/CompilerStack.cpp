@@ -62,7 +62,7 @@
 #include <libyul/YulString.h>
 #include <libyul/AsmPrinter.h>
 #include <libyul/AsmJsonConverter.h>
-#include <libyul/AssemblyStack.h>
+#include <libyul/YulStack.h>
 #include <libyul/AST.h>
 #include <libyul/AsmParser.h>
 
@@ -75,10 +75,13 @@
 #include <libsolutil/IpfsHash.h>
 #include <libsolutil/JSON.h>
 #include <libsolutil/Algorithms.h>
+#include <libsolutil/FunctionSelector.h>
 
 #include <json/json.h>
 
 #include <boost/algorithm/string/replace.hpp>
+
+#include <range/v3/view/concat.hpp>
 
 #include <utility>
 #include <map>
@@ -275,7 +278,7 @@ void CompilerStack::setMetadataHash(MetadataHash _metadataHash)
 void CompilerStack::selectDebugInfo(DebugInfoSelection _debugInfoSelection)
 {
 	if (m_stackState >= CompilationSuccessful)
-		BOOST_THROW_EXCEPTION(CompilerError() << errinfo_comment("Must select debug info components before compilation."));
+		BOOST_THROW_EXCEPTION(CompilerError() << util::errinfo_comment("Must select debug info components before compilation."));
 	m_debugInfoSelection = _debugInfoSelection;
 }
 
@@ -570,7 +573,7 @@ bool CompilerStack::analyze()
 		if (noErrors)
 		{
 			ModelChecker modelChecker(m_errorReporter, *this, m_smtlib2Responses, m_modelCheckerSettings, m_readFile);
-			auto allSources = applyMap(m_sourceOrder, [](Source const* _source) { return _source->ast; });
+			auto allSources = util::applyMap(m_sourceOrder, [](Source const* _source) { return _source->ast; });
 			modelChecker.enableAllEnginesIfPragmaPresent(allSources);
 			modelChecker.checkRequestedSourcesAndContracts(allSources);
 			for (Source const* source: m_sourceOrder)
@@ -1013,15 +1016,34 @@ Json::Value const& CompilerStack::natspecDev(Contract const& _contract) const
 	return _contract.devDocumentation.init([&]{ return Natspec::devDocumentation(*_contract.contract); });
 }
 
-Json::Value CompilerStack::methodIdentifiers(string const& _contractName) const
+Json::Value CompilerStack::interfaceSymbols(string const& _contractName) const
 {
 	if (m_stackState < AnalysisPerformed)
 		solThrow(CompilerError, "Analysis was not successful.");
 
-	Json::Value methodIdentifiers(Json::objectValue);
+	Json::Value interfaceSymbols(Json::objectValue);
+	// Always have a methods object
+	interfaceSymbols["methods"] = Json::objectValue;
+
 	for (auto const& it: contractDefinition(_contractName).interfaceFunctions())
-		methodIdentifiers[it.second->externalSignature()] = it.first.hex();
-	return methodIdentifiers;
+		interfaceSymbols["methods"][it.second->externalSignature()] = it.first.hex();
+	for (ErrorDefinition const* error: contractDefinition(_contractName).interfaceErrors())
+	{
+		string signature = error->functionType(true)->externalSignature();
+		interfaceSymbols["errors"][signature] = util::toHex(toCompactBigEndian(util::selectorFromSignature32(signature), 4));
+	}
+
+	for (EventDefinition const* event: ranges::concat_view(
+		contractDefinition(_contractName).definedInterfaceEvents(),
+		contractDefinition(_contractName).usedInterfaceEvents()
+	))
+		if (!event->isAnonymous())
+		{
+			string signature = event->functionType(true)->externalSignature();
+			interfaceSymbols["events"][signature] = toHex(u256(h256::Arith(util::keccak256(signature))));
+		}
+
+	return interfaceSymbols;
 }
 
 bytes CompilerStack::cborMetadata(string const& _contractName, bool _forIR) const
@@ -1360,9 +1382,9 @@ void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
 		return;
 
 	// Re-parse the Yul IR in EVM dialect
-	yul::AssemblyStack stack(
+	yul::YulStack stack(
 		m_evmVersion,
-		yul::AssemblyStack::Language::StrictAssembly,
+		yul::YulStack::Language::StrictAssembly,
 		m_optimiserSettings,
 		m_debugInfoSelection
 	);
@@ -1392,22 +1414,22 @@ void CompilerStack::generateEwasm(ContractDefinition const& _contract)
 		return;
 
 	// Re-parse the Yul IR in EVM dialect
-	yul::AssemblyStack stack(
+	yul::YulStack stack(
 		m_evmVersion,
-		yul::AssemblyStack::Language::StrictAssembly,
+		yul::YulStack::Language::StrictAssembly,
 		m_optimiserSettings,
 		m_debugInfoSelection
 	);
 	stack.parseAndAnalyze("", compiledContract.yulIROptimized);
 
 	stack.optimize();
-	stack.translate(yul::AssemblyStack::Language::Ewasm);
+	stack.translate(yul::YulStack::Language::Ewasm);
 	stack.optimize();
 
 	//cout << yul::AsmPrinter{}(*stack.parserResult()->code) << endl;
 
 	// Turn into Ewasm text representation.
-	auto result = stack.assemble(yul::AssemblyStack::Machine::Ewasm);
+	auto result = stack.assemble(yul::YulStack::Machine::Ewasm);
 	compiledContract.ewasm = std::move(result.assembly);
 	compiledContract.ewasmObject = std::move(*result.bytecode);
 }
@@ -1472,7 +1494,7 @@ string CompilerStack::createMetadata(Contract const& _contract, bool _forIR) con
 			continue;
 
 		solAssert(s.second.charStream, "Character stream not available");
-		meta["sources"][s.first]["keccak256"] = "0x" + toHex(s.second.keccak256().asBytes());
+		meta["sources"][s.first]["keccak256"] = "0x" + util::toHex(s.second.keccak256().asBytes());
 		if (optional<string> licenseString = s.second.ast->licenseString())
 			meta["sources"][s.first]["license"] = *licenseString;
 		if (m_metadataLiteralSources)
@@ -1480,7 +1502,7 @@ string CompilerStack::createMetadata(Contract const& _contract, bool _forIR) con
 		else
 		{
 			meta["sources"][s.first]["urls"] = Json::arrayValue;
-			meta["sources"][s.first]["urls"].append("bzz-raw://" + toHex(s.second.swarmHash().asBytes()));
+			meta["sources"][s.first]["urls"].append("bzz-raw://" + util::toHex(s.second.swarmHash().asBytes()));
 			meta["sources"][s.first]["urls"].append(s.second.ipfsUrl());
 		}
 	}
@@ -1543,7 +1565,7 @@ string CompilerStack::createMetadata(Contract const& _contract, bool _forIR) con
 
 	meta["settings"]["libraries"] = Json::objectValue;
 	for (auto const& library: m_libraries)
-		meta["settings"]["libraries"][library.first] = "0x" + toHex(library.second.asBytes());
+		meta["settings"]["libraries"][library.first] = "0x" + util::toHex(library.second.asBytes());
 
 	meta["output"]["abi"] = contractABI(_contract);
 	meta["output"]["userdoc"] = natspecUser(_contract);
@@ -1655,7 +1677,7 @@ bytes CompilerStack::createCBORMetadata(Contract const& _contract, bool _forIR) 
 	else
 		solAssert(m_metadataHash == MetadataHash::None, "Invalid metadata hash");
 
-	if (experimentalMode || _forIR)
+	if (experimentalMode)
 		encoder.pushBool("experimental", true);
 	if (m_metadataFormat == MetadataFormat::WithReleaseVersionTag)
 		encoder.pushBytes("solc", VersionCompactBytes);

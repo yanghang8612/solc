@@ -33,6 +33,7 @@
 #include <libsmtutil/CHCSmtLib2Interface.h>
 #include <liblangutil/CharStreamProvider.h>
 #include <libsolutil/Algorithms.h>
+#include <libsolutil/StringUtils.h>
 
 #ifdef HAVE_Z3_DLOPEN
 #include <z3_version.h>
@@ -59,36 +60,42 @@ using namespace solidity::frontend::smt;
 CHC::CHC(
 	EncodingContext& _context,
 	UniqueErrorReporter& _errorReporter,
-	[[maybe_unused]] map<util::h256, string> const& _smtlib2Responses,
-	[[maybe_unused]] ReadCallback::Callback const& _smtCallback,
+	map<util::h256, string> const& _smtlib2Responses,
+	ReadCallback::Callback const& _smtCallback,
 	ModelCheckerSettings const& _settings,
 	CharStreamProvider const& _charStreamProvider
 ):
-	SMTEncoder(_context, _settings, _errorReporter, _charStreamProvider)
+	SMTEncoder(_context, _settings, _errorReporter, _charStreamProvider),
+	m_smtlib2Responses(_smtlib2Responses),
+	m_smtCallback(_smtCallback)
 {
-	bool usesZ3 = m_settings.solvers.z3;
-#ifdef HAVE_Z3
-	usesZ3 = usesZ3 && Z3Interface::available();
-#else
-	usesZ3 = false;
-#endif
-	if (!usesZ3 && m_settings.solvers.smtlib2)
-		m_interface = make_unique<CHCSmtLib2Interface>(_smtlib2Responses, _smtCallback, m_settings.timeout);
 }
 
 void CHC::analyze(SourceUnit const& _source)
 {
-	if (!m_settings.solvers.z3 && !m_settings.solvers.smtlib2)
+	if (!shouldAnalyze(_source))
+		return;
+
+	bool usesZ3 = m_settings.solvers.z3;
+#ifdef HAVE_Z3_DLOPEN
+	if (m_settings.solvers.z3 && !Z3Interface::available())
 	{
-		if (!m_noSolverWarning)
-		{
-			m_noSolverWarning = true;
-			m_errorReporter.warning(
-				7649_error,
-				SourceLocation(),
-				"CHC analysis was not possible since no Horn solver was enabled."
-			);
-		}
+		usesZ3 = false;
+		m_errorReporter.warning(
+			8158_error,
+			SourceLocation(),
+			"z3 was selected as a Horn solver for CHC analysis but libz3.so." + to_string(Z3_MAJOR_VERSION) + "." + to_string(Z3_MINOR_VERSION) + " was not found."
+		);
+	}
+#endif
+
+	if (!usesZ3 && !m_settings.solvers.smtlib2)
+	{
+		m_errorReporter.warning(
+			7649_error,
+			SourceLocation(),
+			"CHC analysis was not possible since no Horn solver was found and enabled."
+		);
 		return;
 	}
 
@@ -111,20 +118,13 @@ void CHC::analyze(SourceUnit const& _source)
 	// actually given and the queries were solved.
 	if (auto const* smtLibInterface = dynamic_cast<CHCSmtLib2Interface const*>(m_interface.get()))
 		ranSolver = smtLibInterface->unhandledQueries().empty();
-	if (!ranSolver && !m_noSolverWarning)
-	{
-		m_noSolverWarning = true;
+	if (!ranSolver)
 		m_errorReporter.warning(
 			3996_error,
 			SourceLocation(),
-#ifdef HAVE_Z3_DLOPEN
-			"CHC analysis was not possible since libz3.so." + to_string(Z3_MAJOR_VERSION) + "." + to_string(Z3_MINOR_VERSION) + " was not found."
-#else
 			"CHC analysis was not possible. No Horn solver was available."
 			" None of the installed solvers was enabled."
-#endif
 		);
-	}
 }
 
 vector<string> CHC::unhandledQueries() const
@@ -137,6 +137,9 @@ vector<string> CHC::unhandledQueries() const
 
 bool CHC::visit(ContractDefinition const& _contract)
 {
+	if (!shouldAnalyze(_contract))
+		return false;
+
 	resetContractAnalysis();
 	initContract(_contract);
 	clearIndices(&_contract);
@@ -152,6 +155,9 @@ bool CHC::visit(ContractDefinition const& _contract)
 
 void CHC::endVisit(ContractDefinition const& _contract)
 {
+	if (!shouldAnalyze(_contract))
+		return;
+
 	for (auto base: _contract.annotation().linearizedBaseContracts)
 	{
 		if (auto constructor = base->constructor())
@@ -1002,6 +1008,11 @@ void CHC::resetSourceAnalysis()
 #endif
 	if (!usesZ3)
 	{
+		solAssert(m_settings.solvers.smtlib2);
+
+		if (!m_interface)
+			m_interface = make_unique<CHCSmtLib2Interface>(m_smtlib2Responses, m_smtCallback, m_settings.timeout);
+
 		auto smtlib2Interface = dynamic_cast<CHCSmtLib2Interface*>(m_interface.get());
 		solAssert(smtlib2Interface, "");
 		smtlib2Interface->reset();
@@ -1488,7 +1499,7 @@ smtutil::Expression CHC::predicate(FunctionCall const& _funCall)
 
 	auto const* contract = function->annotation().contract;
 	auto const& hierarchy = m_currentContract->annotation().linearizedBaseContracts;
-	solAssert(kind != FunctionType::Kind::Internal || function->isFree() || (contract && contract->isLibrary()) || contains(hierarchy, contract), "");
+	solAssert(kind != FunctionType::Kind::Internal || function->isFree() || (contract && contract->isLibrary()) || util::contains(hierarchy, contract), "");
 
 	bool usesStaticCall = function->stateMutability() == StateMutability::Pure || function->stateMutability() == StateMutability::View;
 
@@ -1989,9 +2000,9 @@ map<unsigned, vector<unsigned>> CHC::summaryCalls(CHCSolverInterface::CexGraph c
 			// Predicates that do not have a CALLID have a predicate id at the end of <suffix>,
 			// so the assertion below should still hold.
 			auto beg = _s.data();
-			while (beg != _s.data() + _s.size() && !isdigit(*beg)) ++beg;
+			while (beg != _s.data() + _s.size() && !isDigit(*beg)) ++beg;
 			auto end = beg;
-			while (end != _s.data() + _s.size() && isdigit(*end)) ++end;
+			while (end != _s.data() + _s.size() && isDigit(*end)) ++end;
 
 			solAssert(beg != end, "Expected to find numerical call or predicate id.");
 

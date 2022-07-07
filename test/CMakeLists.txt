@@ -83,6 +83,8 @@ set(libsolidity_sources
     libsolidity/InlineAssembly.cpp
     libsolidity/LibSolc.cpp
     libsolidity/Metadata.cpp
+    libsolidity/MemoryGuardTest.cpp
+    libsolidity/MemoryGuardTest.h
     libsolidity/SemanticTest.cpp
     libsolidity/SemanticTest.h
     libsolidity/SemVerMatcher.cpp
@@ -147,6 +149,7 @@ set(libyul_sources
     libyul/Parser.cpp
     libyul/StackLayoutGeneratorTest.cpp
     libyul/StackLayoutGeneratorTest.h
+    libyul/StackShufflingTest.cpp
     libyul/SyntaxTest.h
     libyul/SyntaxTest.cpp
     libyul/YulInterpreterTest.cpp

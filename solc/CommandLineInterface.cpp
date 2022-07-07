@@ -41,9 +41,10 @@
 #include <libsolidity/lsp/LanguageServer.h>
 #include <libsolidity/lsp/Transport.h>
 
-#include <libyul/AssemblyStack.h>
+#include <libyul/YulStack.h>
 
 #include <libevmasm/Instruction.h>
+#include <libevmasm/Disassemble.h>
 #include <libevmasm/GasMeter.h>
 
 #include <liblangutil/Exceptions.h>
@@ -270,15 +271,29 @@ void CommandLineInterface::handleSignatureHashes(string const& _contract)
 	if (!m_options.compiler.outputs.signatureHashes)
 		return;
 
-	Json::Value methodIdentifiers = m_compiler->methodIdentifiers(_contract);
-	string out;
-	for (auto const& name: methodIdentifiers.getMemberNames())
-		out += methodIdentifiers[name].asString() + ": " + name + "\n";
+	Json::Value interfaceSymbols = m_compiler->interfaceSymbols(_contract);
+	string out = "Function signatures:\n";
+	for (auto const& name: interfaceSymbols["methods"].getMemberNames())
+		out += interfaceSymbols["methods"][name].asString() + ": " + name + "\n";
+
+	if (interfaceSymbols.isMember("errors"))
+	{
+		out += "\nError signatures:\n";
+		for (auto const& name: interfaceSymbols["errors"].getMemberNames())
+			out += interfaceSymbols["errors"][name].asString() + ": " + name + "\n";
+	}
+
+	if (interfaceSymbols.isMember("events"))
+	{
+		out += "\nEvent signatures:\n";
+		for (auto const& name: interfaceSymbols["events"].getMemberNames())
+			out += interfaceSymbols["events"][name].asString() + ": " + name + "\n";
+	}
 
 	if (!m_options.output.dir.empty())
 		createFile(m_compiler->filesystemFriendlyName(_contract) + ".signatures", out);
 	else
-		sout() << "Function signatures:" << endl << out;
+		sout() << out;
 }
 
 void CommandLineInterface::handleMetadata(string const& _contract)
@@ -302,7 +317,7 @@ void CommandLineInterface::handleABI(string const& _contract)
 	if (!m_options.compiler.outputs.abi)
 		return;
 
-	string data = jsonCompactPrint(removeNullMembers(m_compiler->contractABI(_contract)));
+	string data = jsonPrint(removeNullMembers(m_compiler->contractABI(_contract)), m_options.formatting.json);
 	if (!m_options.output.dir.empty())
 		createFile(m_compiler->filesystemFriendlyName(_contract) + ".abi", data);
 	else
@@ -316,7 +331,7 @@ void CommandLineInterface::handleStorageLayout(string const& _contract)
 	if (!m_options.compiler.outputs.storageLayout)
 		return;
 
-	string data = jsonCompactPrint(removeNullMembers(m_compiler->storageLayout(_contract)));
+	string data = jsonPrint(removeNullMembers(m_compiler->storageLayout(_contract)), m_options.formatting.json);
 	if (!m_options.output.dir.empty())
 		createFile(m_compiler->filesystemFriendlyName(_contract) + "_storage.json", data);
 	else
@@ -346,12 +361,13 @@ void CommandLineInterface::handleNatspec(bool _natspecDev, string const& _contra
 
 	if (enabled)
 	{
-		std::string output = jsonPrettyPrint(
+		std::string output = jsonPrint(
 			removeNullMembers(
 				_natspecDev ?
 				m_compiler->natspecDev(_contract) :
 				m_compiler->natspecUser(_contract)
-			)
+			),
+			m_options.formatting.json
 		);
 
 		if (!m_options.output.dir.empty())
@@ -449,7 +465,7 @@ void CommandLineInterface::readInputFiles()
 		for (auto const& [sourceUnitName, normalizedInputPaths]: collisions)
 		{
 			message += sourceUnitName + " matches: ";
-			message += joinHumanReadable(normalizedInputPaths | ranges::views::transform(pathToQuotedString)) + "\n";
+			message += util::joinHumanReadable(normalizedInputPaths | ranges::views::transform(pathToQuotedString)) + "\n";
 		}
 
 		solThrow(CommandLineValidationError, message);
@@ -678,7 +694,7 @@ void CommandLineInterface::compile()
 			m_compiler->setModelCheckerSettings(m_options.modelChecker.settings);
 		m_compiler->setRemappings(m_options.input.remappings);
 		m_compiler->setLibraries(m_options.linker.libraries);
-		m_compiler->setViaIR(m_options.output.experimentalViaIR);
+		m_compiler->setViaIR(m_options.output.viaIR);
 		m_compiler->setEVMVersion(m_options.output.evmVersion);
 		m_compiler->setRevertStringBehaviour(m_options.output.revertStrings);
 		if (m_options.output.debugInfoSelection.has_value())
@@ -822,7 +838,7 @@ void CommandLineInterface::handleCombinedJSON()
 				m_compiler->runtimeObject(contractName).functionDebugData
 			);
 		if (m_options.compiler.combinedJsonRequests->signatureHashes)
-			contractData[g_strSignatureHashes] = m_compiler->methodIdentifiers(contractName);
+			contractData[g_strSignatureHashes] = m_compiler->interfaceSymbols(contractName)["methods"];
 		if (m_options.compiler.combinedJsonRequests->natspecDev)
 			contractData[g_strNatspecDev] = m_compiler->natspecDev(contractName);
 		if (m_options.compiler.combinedJsonRequests->natspecUser)
@@ -877,7 +893,7 @@ void CommandLineInterface::handleAst()
 		{
 			stringstream data;
 			string postfix = "";
-			ASTJsonConverter(m_compiler->state(), m_compiler->sourceIndices()).print(data, m_compiler->ast(sourceCode.first));
+			ASTJsonConverter(m_compiler->state(), m_compiler->sourceIndices()).print(data, m_compiler->ast(sourceCode.first), m_options.formatting.json);
 			postfix += "_json";
 			boost::filesystem::path path(sourceCode.first);
 			createFile(path.filename().string() + postfix + ".ast", data.str());
@@ -889,14 +905,14 @@ void CommandLineInterface::handleAst()
 		for (auto const& sourceCode: m_fileReader.sourceUnits())
 		{
 			sout() << endl << "======= " << sourceCode.first << " =======" << endl;
-			ASTJsonConverter(m_compiler->state(), m_compiler->sourceIndices()).print(sout(), m_compiler->ast(sourceCode.first));
+			ASTJsonConverter(m_compiler->state(), m_compiler->sourceIndices()).print(sout(), m_compiler->ast(sourceCode.first), m_options.formatting.json);
 		}
 	}
 }
 
 void CommandLineInterface::serveLSP()
 {
-	lsp::IOStreamTransport transport;
+	lsp::StdioTransport transport;
 	if (!lsp::LanguageServer{transport}.run())
 		solThrow(CommandLineExecutionError, "LSP terminated abnormally.");
 }
@@ -948,7 +964,7 @@ void CommandLineInterface::link()
 			string foundPlaceholder(it, it + placeholderSize);
 			if (librariesReplacements.count(foundPlaceholder))
 			{
-				string hexStr(toHex(librariesReplacements.at(foundPlaceholder).asBytes()));
+				string hexStr(util::toHex(librariesReplacements.at(foundPlaceholder).asBytes()));
 				copy(hexStr.begin(), hexStr.end(), it);
 			}
 			else
@@ -998,20 +1014,18 @@ string CommandLineInterface::objectWithLinkRefsHex(evmasm::LinkerObject const& _
 	return out;
 }
 
-void CommandLineInterface::assemble(yul::AssemblyStack::Language _language, yul::AssemblyStack::Machine _targetMachine)
+void CommandLineInterface::assemble(yul::YulStack::Language _language, yul::YulStack::Machine _targetMachine)
 {
 	solAssert(m_options.input.mode == InputMode::Assembler, "");
 
-	serr() << "Warning: Yul is still experimental. Please use the output with care." << endl;
-
 	bool successful = true;
-	map<string, yul::AssemblyStack> assemblyStacks;
+	map<string, yul::YulStack> yulStacks;
 	for (auto const& src: m_fileReader.sourceUnits())
 	{
 		// --no-optimize-yul option is not accepted in assembly mode.
 		solAssert(!m_options.optimizer.noOptimizeYul, "");
 
-		auto& stack = assemblyStacks[src.first] = yul::AssemblyStack(
+		auto& stack = yulStacks[src.first] = yul::YulStack(
 			m_options.output.evmVersion,
 			_language,
 			m_options.optimiserSettings(),
@@ -1026,7 +1040,7 @@ void CommandLineInterface::assemble(yul::AssemblyStack::Language _language, yul:
 			stack.optimize();
 	}
 
-	for (auto const& sourceAndStack: assemblyStacks)
+	for (auto const& sourceAndStack: yulStacks)
 	{
 		auto const& stack = sourceAndStack.second;
 		SourceReferenceFormatter formatter(serr(false), stack, coloredOutput(m_options), m_options.formatting.withErrorIds);
@@ -1049,11 +1063,11 @@ void CommandLineInterface::assemble(yul::AssemblyStack::Language _language, yul:
 	for (auto const& src: m_fileReader.sourceUnits())
 	{
 		string machine =
-			_targetMachine == yul::AssemblyStack::Machine::EVM ? "EVM" :
+			_targetMachine == yul::YulStack::Machine::EVM ? "EVM" :
 			"Ewasm";
 		sout() << endl << "======= " << src.first << " (" << machine << ") =======" << endl;
 
-		yul::AssemblyStack& stack = assemblyStacks[src.first];
+		yul::YulStack& stack = yulStacks[src.first];
 
 		if (m_options.compiler.outputs.irOptimized)
 		{
@@ -1063,9 +1077,9 @@ void CommandLineInterface::assemble(yul::AssemblyStack::Language _language, yul:
 			sout() << stack.print() << endl;
 		}
 
-		if (_language != yul::AssemblyStack::Language::Ewasm && _targetMachine == yul::AssemblyStack::Machine::Ewasm)
+		if (_language != yul::YulStack::Language::Ewasm && _targetMachine == yul::YulStack::Machine::Ewasm)
 		{
-			stack.translate(yul::AssemblyStack::Language::Ewasm);
+			stack.translate(yul::YulStack::Language::Ewasm);
 			stack.optimize();
 
 			if (m_options.compiler.outputs.ewasmIR)
@@ -1089,10 +1103,10 @@ void CommandLineInterface::assemble(yul::AssemblyStack::Language _language, yul:
 				serr() << "No binary representation found." << endl;
 		}
 
-		solAssert(_targetMachine == yul::AssemblyStack::Machine::Ewasm || _targetMachine == yul::AssemblyStack::Machine::EVM, "");
+		solAssert(_targetMachine == yul::YulStack::Machine::Ewasm || _targetMachine == yul::YulStack::Machine::EVM, "");
 		if (
-			(_targetMachine == yul::AssemblyStack::Machine::EVM && m_options.compiler.outputs.asm_) ||
-			(_targetMachine == yul::AssemblyStack::Machine::Ewasm && m_options.compiler.outputs.ewasm)
+			(_targetMachine == yul::YulStack::Machine::EVM && m_options.compiler.outputs.asm_) ||
+			(_targetMachine == yul::YulStack::Machine::Ewasm && m_options.compiler.outputs.ewasm)
 		)
 		{
 			sout() << endl << "Text representation:" << endl;
@@ -1133,7 +1147,7 @@ void CommandLineInterface::outputCompilationResults()
 		{
 			string ret;
 			if (m_options.compiler.outputs.asmJson)
-				ret = jsonPrettyPrint(removeNullMembers(m_compiler->assemblyJSON(contract)));
+				ret = util::jsonPrint(removeNullMembers(m_compiler->assemblyJSON(contract)), m_options.formatting.json);
 			else
 				ret = m_compiler->assemblyString(contract, m_fileReader.sourceUnits());
 

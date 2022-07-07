@@ -117,6 +117,9 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 			case Token::Type:
 				nodes.push_back(parseUserDefinedValueTypeDefinition());
 				break;
+			case Token::Using:
+				nodes.push_back(parseUsingDirective());
+				break;
 			case Token::Function:
 				nodes.push_back(parseFunctionDefinition(true));
 				break;
@@ -139,7 +142,7 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 					expectToken(Token::Semicolon);
 				}
 				else
-					fatalParserError(7858_error, "Expected pragma, import directive or contract/interface/library/struct/enum/constant/function definition.");
+					fatalParserError(7858_error, "Expected pragma, import directive or contract/interface/library/struct/enum/constant/function/error definition.");
 			}
 		}
 		solAssert(m_recursionDepth == 0, "");
@@ -962,16 +965,37 @@ ASTPointer<UsingForDirective> Parser::parseUsingDirective()
 	ASTNodeFactory nodeFactory(*this);
 
 	expectToken(Token::Using);
-	ASTPointer<IdentifierPath> library(parseIdentifierPath());
+
+	vector<ASTPointer<IdentifierPath>> functions;
+	bool const usesBraces = m_scanner->currentToken() == Token::LBrace;
+	if (usesBraces)
+	{
+		do
+		{
+			advance();
+			functions.emplace_back(parseIdentifierPath());
+		}
+		while (m_scanner->currentToken() == Token::Comma);
+		expectToken(Token::RBrace);
+	}
+	else
+		functions.emplace_back(parseIdentifierPath());
+
 	ASTPointer<TypeName> typeName;
 	expectToken(Token::For);
 	if (m_scanner->currentToken() == Token::Mul)
 		advance();
 	else
 		typeName = parseTypeName();
+	bool global = false;
+	if (m_scanner->currentToken() == Token::Identifier && currentLiteral() == "global")
+	{
+		global = true;
+		advance();
+	}
 	nodeFactory.markEndPosition();
 	expectToken(Token::Semicolon);
-	return nodeFactory.createNode<UsingForDirective>(library, typeName);
+	return nodeFactory.createNode<UsingForDirective>(move(functions), usesBraces, typeName, global);
 }
 
 ASTPointer<ModifierInvocation> Parser::parseModifierInvocation()
@@ -1321,13 +1345,28 @@ ASTPointer<InlineAssembly> Parser::parseInlineAssembly(ASTPointer<ASTString> con
 		advance();
 	}
 
+	ASTPointer<vector<ASTPointer<ASTString>>> flags;
+	if (m_scanner->currentToken() == Token::LParen)
+	{
+		flags = make_shared<vector<ASTPointer<ASTString>>>();
+		do
+		{
+			advance();
+			expectToken(Token::StringLiteral, false);
+			flags->emplace_back(make_shared<ASTString>(m_scanner->currentLiteral()));
+			advance();
+		}
+		while (m_scanner->currentToken() == Token::Comma);
+		expectToken(Token::RParen);
+	}
+
 	yul::Parser asmParser(m_errorReporter, dialect);
 	shared_ptr<yul::Block> block = asmParser.parseInline(m_scanner);
 	if (block == nullptr)
 		BOOST_THROW_EXCEPTION(FatalError());
 
 	location.end = nativeLocationOf(*block).end;
-	return make_shared<InlineAssembly>(nextID(), location, _docString, dialect, block);
+	return make_shared<InlineAssembly>(nextID(), location, _docString, dialect, move(flags), block);
 }
 
 ASTPointer<IfStatement> Parser::parseIfStatement(ASTPointer<ASTString> const& _docString)
@@ -1598,7 +1637,7 @@ ASTPointer<Statement> Parser::parseSimpleStatement(ASTPointer<ASTString> const& 
 			return parseExpressionStatement(_docString, nodeFactory.createNode<TupleExpression>(components, false));
 		}
 		default:
-			solAssert(false, "");
+			solAssert(false);
 		}
 	}
 	else
@@ -1611,17 +1650,19 @@ ASTPointer<Statement> Parser::parseSimpleStatement(ASTPointer<ASTString> const& 
 		case LookAheadInfo::Expression:
 			return parseExpressionStatement(_docString, expressionFromIndexAccessStructure(iap));
 		default:
-			solAssert(false, "");
+			solAssert(false);
 		}
 	}
+
+	// FIXME: Workaround for spurious GCC 12.1 warning (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105794)
+	util::unreachable();
 }
 
 bool Parser::IndexAccessedPath::empty() const
 {
 	if (!indices.empty())
-	{
-		solAssert(!path.empty(), "");
-	}
+		solAssert(!path.empty());
+
 	return path.empty() && indices.empty();
 }
 

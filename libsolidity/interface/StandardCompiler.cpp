@@ -25,11 +25,11 @@
 #include <libsolidity/interface/ImportRemapper.h>
 
 #include <libsolidity/ast/ASTJsonConverter.h>
-#include <libyul/AssemblyStack.h>
+#include <libyul/YulStack.h>
 #include <libyul/Exceptions.h>
 #include <libyul/optimiser/Suite.h>
 
-#include <libevmasm/Instruction.h>
+#include <libevmasm/Disassemble.h>
 
 #include <libsmtutil/Exceptions.h>
 
@@ -1298,7 +1298,7 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "evm.legacyAssembly", wildcardMatchesExperimental))
 			evmData["legacyAssembly"] = compilerStack.assemblyJSON(contractName);
 		if (isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "evm.methodIdentifiers", wildcardMatchesExperimental))
-			evmData["methodIdentifiers"] = compilerStack.methodIdentifiers(contractName);
+			evmData["methodIdentifiers"] = compilerStack.interfaceSymbols(contractName)["methods"];
 		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "evm.gasEstimates", wildcardMatchesExperimental))
 			evmData["gasEstimates"] = compilerStack.gasEstimates(contractName);
 
@@ -1407,9 +1407,9 @@ Json::Value StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 		return output;
 	}
 
-	AssemblyStack stack(
+	YulStack stack(
 		_inputsAndSettings.evmVersion,
-		AssemblyStack::Language::StrictAssembly,
+		YulStack::Language::StrictAssembly,
 		_inputsAndSettings.optimiserSettings,
 		_inputsAndSettings.debugInfoSelection.has_value() ?
 			_inputsAndSettings.debugInfoSelection.value() :
@@ -1448,10 +1448,6 @@ Json::Value StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 		return output;
 	}
 
-	// TODO: move this warning to AssemblyStack
-	output["errors"] = Json::arrayValue;
-	output["errors"].append(formatError(Error::Severity::Warning, "Warning", "general", "Yul is still experimental. Please use the output with care."));
-
 	string contractName = stack.parserResult()->name.str();
 
 	bool const wildcardMatchesExperimental = true;
@@ -1461,36 +1457,36 @@ Json::Value StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 	stack.optimize();
 
 	MachineAssemblyObject object;
-	MachineAssemblyObject runtimeObject;
-	tie(object, runtimeObject) = stack.assembleWithDeployed();
+	MachineAssemblyObject deployedObject;
+	tie(object, deployedObject) = stack.assembleWithDeployed();
 
 	if (object.bytecode)
 		object.bytecode->link(_inputsAndSettings.libraries);
-	if (runtimeObject.bytecode)
-		runtimeObject.bytecode->link(_inputsAndSettings.libraries);
+	if (deployedObject.bytecode)
+		deployedObject.bytecode->link(_inputsAndSettings.libraries);
 
-	for (string const& objectKind: vector<string>{"bytecode", "deployedBytecode"})
+	for (auto&& [kind, isDeployed]: {make_pair("bytecode"s, false), make_pair("deployedBytecode"s, true)})
 		if (isArtifactRequested(
 			_inputsAndSettings.outputSelection,
 			sourceName,
 			contractName,
-			evmObjectComponents(objectKind),
+			evmObjectComponents(kind),
 			wildcardMatchesExperimental
 		))
 		{
-			MachineAssemblyObject const& o = objectKind == "bytecode" ? object : runtimeObject;
+			MachineAssemblyObject const& o = isDeployed ? deployedObject : object;
 			if (o.bytecode)
-				output["contracts"][sourceName][contractName]["evm"][objectKind] =
+				output["contracts"][sourceName][contractName]["evm"][kind] =
 					collectEVMObject(
 						*o.bytecode,
 						o.sourceMappings.get(),
 						Json::arrayValue,
-						false,
-						[&](string const& _element) { return isArtifactRequested(
+						isDeployed,
+						[&, kind = kind](string const& _element) { return isArtifactRequested(
 							_inputsAndSettings.outputSelection,
 							sourceName,
 							contractName,
-							"evm." + objectKind + "." + _element,
+							"evm." + kind + "." + _element,
 							wildcardMatchesExperimental
 						); }
 					);

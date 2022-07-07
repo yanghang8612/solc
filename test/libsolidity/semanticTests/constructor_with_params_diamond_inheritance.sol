@@ -19,11 +19,9 @@ contract C is A {
 contract D is B, C {
     constructor(uint newI, uint newK) B(newI) C(newI, newK + 1) {}
 }
-// ====
-// compileViaYul: also
 // ----
 // constructor(): 2, 0 ->
-// gas irOptimized: 159542
+// gas irOptimized: 154366
 // gas legacy: 170665
 // gas legacyOptimized: 145396
 // i() -> 2

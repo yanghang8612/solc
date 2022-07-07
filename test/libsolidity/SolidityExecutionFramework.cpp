@@ -62,6 +62,7 @@ bytes SolidityExecutionFramework::multiSourceCompileContract(
 	m_compiler.enableEvmBytecodeGeneration(!m_compileViaYul);
 	m_compiler.enableIRGeneration(m_compileViaYul);
 	m_compiler.setRevertStringBehaviour(m_revertStrings);
+	m_compiler.setMetadataHash(m_metadataHash);
 	if (!m_compiler.compile())
 	{
 		// The testing framework expects an exception for
@@ -96,9 +97,9 @@ bytes SolidityExecutionFramework::multiSourceCompileContract(
 				else if (forceEnableOptimizer)
 					optimiserSettings = OptimiserSettings::full();
 
-				yul::AssemblyStack asmStack(
+				yul::YulStack asmStack(
 					m_evmVersion,
-					yul::AssemblyStack::Language::StrictAssembly,
+					yul::YulStack::Language::StrictAssembly,
 					optimiserSettings,
 					DebugInfoSelection::All()
 				);
@@ -108,7 +109,7 @@ bytes SolidityExecutionFramework::multiSourceCompileContract(
 				try
 				{
 					asmStack.optimize();
-					obj = move(*asmStack.assemble(yul::AssemblyStack::Machine::EVM).bytecode);
+					obj = move(*asmStack.assemble(yul::YulStack::Machine::EVM).bytecode);
 					obj.link(_libraryAddresses);
 					break;
 				}

@@ -28,6 +28,7 @@
 #include <libyul/optimiser/ConditionalUnsimplifier.h>
 #include <libyul/optimiser/ConditionalSimplifier.h>
 #include <libyul/optimiser/CommonSubexpressionEliminator.h>
+#include <libyul/optimiser/EqualStoreEliminator.h>
 #include <libyul/optimiser/EquivalentFunctionCombiner.h>
 #include <libyul/optimiser/ExpressionSplitter.h>
 #include <libyul/optimiser/FunctionGrouper.h>
@@ -53,6 +54,7 @@
 #include <libyul/optimiser/SSATransform.h>
 #include <libyul/optimiser/Semantics.h>
 #include <libyul/optimiser/UnusedAssignEliminator.h>
+#include <libyul/optimiser/UnusedStoreEliminator.h>
 #include <libyul/optimiser/StructuralSimplifier.h>
 #include <libyul/optimiser/StackCompressor.h>
 #include <libyul/optimiser/Suite.h>
@@ -235,6 +237,21 @@ YulOptimizerTestCommon::YulOptimizerTestCommon(
 			disambiguate();
 			ForLoopInitRewriter::run(*m_context, *m_ast);
 			UnusedAssignEliminator::run(*m_context, *m_ast);
+		}},
+		{"unusedStoreEliminator", [&]() {
+			disambiguate();
+			ForLoopInitRewriter::run(*m_context, *m_ast);
+			ExpressionSplitter::run(*m_context, *m_ast);
+			SSATransform::run(*m_context, *m_ast);
+			UnusedStoreEliminator::run(*m_context, *m_ast);
+			SSAReverser::run(*m_context, *m_ast);
+			ExpressionJoiner::run(*m_context, *m_ast);
+		}},
+		{"equalStoreEliminator", [&]() {
+			disambiguate();
+			FunctionHoister::run(*m_context, *m_ast);
+			ForLoopInitRewriter::run(*m_context, *m_ast);
+			EqualStoreEliminator::run(*m_context, *m_ast);
 		}},
 		{"ssaPlusCleanup", [&]() {
 			disambiguate();

@@ -73,6 +73,7 @@ void UnusedStoreBase::operator()(FunctionDefinition const& _functionDefinition)
 {
 	ScopedSaveAndRestore outerAssignments(m_stores, {});
 	ScopedSaveAndRestore forLoopInfo(m_forLoopInfo, {});
+	ScopedSaveAndRestore forLoopNestingDepth(m_forLoopNestingDepth, 0);
 
 	(*this)(_functionDefinition.body);
 
@@ -155,19 +156,4 @@ void UnusedStoreBase::merge(TrackedStores& _target, vector<TrackedStores>&& _sou
 	for (TrackedStores& ts: _source)
 		merge(_target, move(ts));
 	_source.clear();
-}
-
-void StatementRemover::operator()(Block& _block)
-{
-	util::iterateReplacing(
-		_block.statements,
-		[&](Statement& _statement) -> std::optional<vector<Statement>>
-		{
-			if (m_toRemove.count(&_statement))
-				return {vector<Statement>{}};
-			else
-				return nullopt;
-		}
-	);
-	ASTModifier::operator()(_block);
 }

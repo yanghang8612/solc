@@ -20,6 +20,8 @@
 
 #include <test/libsolidity/util/SoltestErrors.h>
 
+#include <fstream>
+
 using namespace std;
 using namespace solidity;
 using namespace solidity::test;
@@ -81,5 +83,6 @@ bool solidity::test::createSymlinkIfSupportedByFilesystem(
 		BOOST_THROW_EXCEPTION(runtime_error(
 			"Failed to create a symbolic link: \"" + _linkName.string() + "\""
 			" -> " + _targetPath.string() + "\"."
+			" " + symlinkCreationError.message() + "."
 		));
 }

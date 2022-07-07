@@ -155,12 +155,20 @@ set(sources
 	interface/StorageLayout.h
 	interface/Version.cpp
 	interface/Version.h
-	lsp/LanguageServer.cpp
-	lsp/LanguageServer.h
 	lsp/FileRepository.cpp
 	lsp/FileRepository.h
+	lsp/GotoDefinition.cpp
+	lsp/GotoDefinition.h
+	lsp/HandlerBase.cpp
+	lsp/HandlerBase.h
+	lsp/LanguageServer.cpp
+	lsp/LanguageServer.h
+	lsp/SemanticTokensBuilder.cpp
+	lsp/SemanticTokensBuilder.h
 	lsp/Transport.cpp
 	lsp/Transport.h
+	lsp/Utils.cpp
+	lsp/Utils.h
 	parsing/DocStringParser.cpp
 	parsing/DocStringParser.h
 	parsing/Parser.cpp
@@ -170,3 +178,4 @@ set(sources
 
 add_library(solidity ${sources})
 target_link_libraries(solidity PUBLIC yul evmasm langutil smtutil solutil Boost::boost fmt::fmt-header-only)
+
