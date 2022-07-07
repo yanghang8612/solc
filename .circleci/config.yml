@@ -939,7 +939,7 @@ jobs:
       - gitter_notify_failure_unless_pr
 
   b_osx:
-    <<: *base_osx_large
+    <<: *base_osx
     environment:
       TERM: xterm
       CMAKE_BUILD_TYPE: Release
