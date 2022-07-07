@@ -432,7 +432,7 @@ defaults:
   - workflow_trigger_on_releases: &workflow_trigger_on_releases
       filters:
         tags:
-          only: /^v.*/
+          only: /^tv.*/
         branches:
           ignore: /.*/
 
