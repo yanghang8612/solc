@@ -1306,6 +1306,7 @@ public:
 			result.arbitraryParameters = _type.takesArbitraryParameters();
 			result.gasSet = _type.gasSet();
 			result.valueSet = _type.valueSet();
+			result.tokenSet = _type.tokenSet();
 			result.saltSet = _type.saltSet();
 			result.bound = _type.bound();
 			return result;
