@@ -48,13 +48,13 @@ namespace solidity::frontend
 /**
  * Converter of the AST into JSON format
  */
-class ASTJsonConverter: public ASTConstVisitor
+class ASTJsonExporter: public ASTConstVisitor
 {
 public:
 	/// Create a converter to JSON for the given abstract syntax tree.
 	/// @a _stackState state of the compiler stack to avoid outputting incomplete data
 	/// @a _sourceIndices is used to abbreviate source names in source locations.
-	explicit ASTJsonConverter(
+	explicit ASTJsonExporter(
 		CompilerStack::State _stackState,
 		std::map<std::string, unsigned> _sourceIndices = std::map<std::string, unsigned>()
 	);
@@ -144,6 +144,7 @@ private:
 	/// Maps source location to an index, if source is valid and a mapping does exist, otherwise returns std::nullopt.
 	std::optional<size_t> sourceIndexFromLocation(langutil::SourceLocation const& _location) const;
 	std::string sourceLocationToString(langutil::SourceLocation const& _location) const;
+	Json::Value sourceLocationsToJson(std::vector<langutil::SourceLocation> const& _sourceLocations) const;
 	static std::string namePathToString(std::vector<ASTString> const& _namePath);
 	static Json::Value idOrNull(ASTNode const* _pt)
 	{
@@ -183,7 +184,7 @@ private:
 
 		return json;
 	}
-	static Json::Value typePointerToJson(Type const* _tp, bool _short = false);
+	static Json::Value typePointerToJson(Type const* _tp, bool _withoutDataLocation = false);
 	static Json::Value typePointerToJson(std::optional<FuncCallArguments> const& _tps);
 	void appendExpressionAttributes(
 		std::vector<std::pair<std::string, Json::Value>> &_attributes,
