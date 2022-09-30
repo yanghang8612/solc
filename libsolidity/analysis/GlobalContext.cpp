@@ -39,68 +39,37 @@ namespace
 /// Magic variables get negative ids for easy differentiation
 int magicVariableToID(std::string const& _name)
 {
-	if (_name == "abi")
-		return -1;
-	else if (_name == "addmod")
-		return -2;
-	else if (_name == "assert")
-		return -3;
-	else if (_name == "block")
-		return -4;
-	else if (_name == "blockhash")
-		return -5;
-	else if (_name == "ecrecover")
-		return -6;
-	else if (_name == "gasleft")
-		return -7;
-	else if (_name == "keccak256")
-		return -8;
-	else if (_name == "msg")
-		return -15;
-	else if (_name == "mulmod")
-		return -16;
-	else if (_name == "now")
-		return -17;
-	else if (_name == "require")
-		return -18;
-	else if (_name == "revert")
-		return -19;
-	else if (_name == "ripemd160")
-		return -20;
-	else if (_name == "selfdestruct")
-		return -21;
-	else if (_name == "sha256")
-		return -22;
-	else if (_name == "sha3")
-		return -23;
-	else if (_name == "suicide")
-		return -24;
-	else if (_name == "super")
-		return -25;
-	else if (_name == "tx")
-		return -26;
-	else if (_name == "type")
-		return -27;
-	else if (_name == "this")
-		return -28;
-	else if (_name == "verifyMintProof")
-		return -29;
-	else if (_name == "verifyBurnProof")
-		return -30;
-	else if (_name == "verifyTransferProof")
-		return -31;
-	else if (_name == "pedersenHash")
-		return -32;
-	else if (_name == "batchvalidatesign")
-		return -33;
-	else if (_name == "validatemultisign")
-		return -34;
-	else if (_name == "freeze")
-		return -35;
-	else if (_name == "unfreeze")
-		return -36;
-	else if (_name == "freezeExpireTime")
-		return -37;
+	if (_name == "abi") return -1;
+	else if (_name == "addmod") return -2;
+	else if (_name == "assert") return -3;
+	else if (_name == "block") return -4;
+	else if (_name == "blockhash") return -5;
+	else if (_name == "ecrecover") return -6;
+	else if (_name == "gasleft") return -7;
+	else if (_name == "keccak256") return -8;
+	else if (_name == "msg") return -15;
+	else if (_name == "mulmod") return -16;
+	else if (_name == "now") return -17;
+	else if (_name == "require") return -18;
+	else if (_name == "revert") return -19;
+	else if (_name == "ripemd160") return -20;
+	else if (_name == "selfdestruct") return -21;
+	else if (_name == "sha256") return -22;
+	else if (_name == "sha3") return -23;
+	else if (_name == "suicide") return -24;
+	else if (_name == "super") return -25;
+	else if (_name == "tx") return -26;
+	else if (_name == "type") return -27;
+	else if (_name == "this") return -28;
+	else if (_name == "verifyMintProof") return -29;
+	else if (_name == "verifyBurnProof") return -30;
+	else if (_name == "verifyTransferProof") return -31;
+	else if (_name == "pedersenHash") return -32;
+	else if (_name == "batchvalidatesign") return -33;
+	else if (_name == "validatemultisign") return -34;
+	else if (_name == "freeze") return -35;
+	else if (_name == "unfreeze") return -36;
+	else if (_name == "freezeExpireTime") return -37;
 	else if (_name == "withdrawreward") return -38;
 	else if (_name == "vote") return -39;
 	else if (_name == "rewardBalance") return -40;
@@ -115,129 +84,45 @@ int magicVariableToID(std::string const& _name)
 
 inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariables()
 {
-	static auto const magicVarDecl = [](string const& _name, Type const* _type)
-	{ return make_shared<MagicVariableDeclaration>(magicVariableToID(_name), _name, _type); };
+	static auto const magicVarDecl = [](string const& _name, Type const* _type) {
+		return make_shared<MagicVariableDeclaration>(magicVariableToID(_name), _name, _type);
+	};
 
 	return {
 		magicVarDecl("abi", TypeProvider::magic(MagicType::Kind::ABI)),
-		magicVarDecl(
-			"addmod",
-			TypeProvider::function(
-				strings{"uint256", "uint256", "uint256"},
-				strings{"uint256"},
-				FunctionType::Kind::AddMod,
-				false,
-				StateMutability::Pure)),
-		magicVarDecl(
-			"assert",
-			TypeProvider::
-				function(strings{"bool"}, strings{}, FunctionType::Kind::Assert, false, StateMutability::Pure)),
+		magicVarDecl("addmod", TypeProvider::function(strings{"uint256", "uint256", "uint256"}, strings{"uint256"}, FunctionType::Kind::AddMod, StateMutability::Pure)),
+		magicVarDecl("assert", TypeProvider::function(strings{"bool"}, strings{}, FunctionType::Kind::Assert, StateMutability::Pure)),
 		magicVarDecl("block", TypeProvider::magic(MagicType::Kind::Block)),
-		magicVarDecl(
-			"blockhash",
-			TypeProvider::function(
-				strings{"uint256"}, strings{"bytes32"}, FunctionType::Kind::BlockHash, false, StateMutability::View)),
-		magicVarDecl(
-			"ecrecover",
-			TypeProvider::function(
-				strings{"bytes32", "uint8", "bytes32", "bytes32"},
-				strings{"address"},
-				FunctionType::Kind::ECRecover,
-				false,
-				StateMutability::Pure)),
-		magicVarDecl(
-			"gasleft",
-			TypeProvider::
-				function(strings(), strings{"uint256"}, FunctionType::Kind::GasLeft, false, StateMutability::View)),
-		magicVarDecl(
-			"keccak256",
-			TypeProvider::function(
-				strings{"bytes memory"},
-				strings{"bytes32"},
-				FunctionType::Kind::KECCAK256,
-				false,
-				StateMutability::Pure)),
+		magicVarDecl("blockhash", TypeProvider::function(strings{"uint256"}, strings{"bytes32"}, FunctionType::Kind::BlockHash, StateMutability::View)),
+		magicVarDecl("ecrecover", TypeProvider::function(strings{"bytes32", "uint8", "bytes32", "bytes32"}, strings{"address"}, FunctionType::Kind::ECRecover, StateMutability::Pure)),
+		magicVarDecl("gasleft", TypeProvider::function(strings(), strings{"uint256"}, FunctionType::Kind::GasLeft, StateMutability::View)),
+		magicVarDecl("keccak256", TypeProvider::function(strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::KECCAK256, StateMutability::Pure)),
 		magicVarDecl("msg", TypeProvider::magic(MagicType::Kind::Message)),
-		magicVarDecl(
-			"mulmod",
-			TypeProvider::function(
-				strings{"uint256", "uint256", "uint256"},
-				strings{"uint256"},
-				FunctionType::Kind::MulMod,
-				false,
-				StateMutability::Pure)),
+		magicVarDecl("mulmod", TypeProvider::function(strings{"uint256", "uint256", "uint256"}, strings{"uint256"}, FunctionType::Kind::MulMod, StateMutability::Pure)),
 		magicVarDecl("now", TypeProvider::uint256()),
-		magicVarDecl(
-			"require",
-			TypeProvider::
-				function(strings{"bool"}, strings{}, FunctionType::Kind::Require, false, StateMutability::Pure)),
-		magicVarDecl(
-			"require",
-			TypeProvider::function(
-				strings{"bool", "string memory"},
-				strings{},
-				FunctionType::Kind::Require,
-				false,
-				StateMutability::Pure)),
-		magicVarDecl(
-			"revert",
-			TypeProvider::function(strings(), strings(), FunctionType::Kind::Revert, false, StateMutability::Pure)),
-		magicVarDecl(
-			"revert",
-			TypeProvider::function(
-				strings{"string memory"}, strings(), FunctionType::Kind::Revert, false, StateMutability::Pure)),
-		magicVarDecl(
-			"ripemd160",
-			TypeProvider::function(
-				strings{"bytes memory"},
-				strings{"bytes20"},
-				FunctionType::Kind::RIPEMD160,
-				false,
-				StateMutability::Pure)),
-		magicVarDecl(
-			"selfdestruct",
-			TypeProvider::function(strings{"address payable"}, strings{}, FunctionType::Kind::Selfdestruct)),
-		magicVarDecl(
-			"sha256",
-			TypeProvider::function(
-				strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::SHA256, false, StateMutability::Pure)),
-		magicVarDecl(
-			"sha3",
-			TypeProvider::function(
-				strings{"bytes memory"},
-				strings{"bytes32"},
-				FunctionType::Kind::KECCAK256,
-				false,
-				StateMutability::Pure)),
-		magicVarDecl(
-			"suicide", TypeProvider::function(strings{"address payable"}, strings{}, FunctionType::Kind::Selfdestruct)),
-		magicVarDecl(
-			"freeze",
-			TypeProvider::function(
-				strings{"uint", "uint"},
-				strings{"bool"},
-				FunctionType::Kind::Freeze,
-				false,
-				StateMutability::NonPayable)),
-		magicVarDecl(
-			"unfreeze",
-			TypeProvider::function(
-				strings{"uint"}, strings{"bool"}, FunctionType::Kind::Unfreeze, false, StateMutability::NonPayable)),
-		magicVarDecl(
-			"freezeExpireTime",
-			TypeProvider::function(
-				strings{"uint"},
-				strings{"uint"},
-				FunctionType::Kind::FreezeExpireTime,
-				false,
-				StateMutability::NonPayable)),
-		magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
+		magicVarDecl("require", TypeProvider::function(strings{"bool"}, strings{}, FunctionType::Kind::Require, StateMutability::Pure)),
+		magicVarDecl("require", TypeProvider::function(strings{"bool", "string memory"}, strings{}, FunctionType::Kind::Require, StateMutability::Pure)),
+		magicVarDecl("revert", TypeProvider::function(strings(), strings(), FunctionType::Kind::Revert, StateMutability::Pure)),
+		magicVarDecl("revert", TypeProvider::function(strings{"string memory"}, strings(), FunctionType::Kind::Revert, StateMutability::Pure)),
+		magicVarDecl("ripemd160", TypeProvider::function(strings{"bytes memory"}, strings{"bytes20"}, FunctionType::Kind::RIPEMD160, StateMutability::Pure)),
+		magicVarDecl("selfdestruct", TypeProvider::function(strings{"address payable"}, strings{}, FunctionType::Kind::Selfdestruct)),
+		magicVarDecl("sha256", TypeProvider::function(strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::SHA256, StateMutability::Pure)),
+		magicVarDecl("sha3", TypeProvider::function(strings{"bytes memory"}, strings{"bytes32"}, FunctionType::Kind::KECCAK256, StateMutability::Pure)),
+		magicVarDecl("suicide", TypeProvider::function(strings{"address payable"}, strings{}, FunctionType::Kind::Selfdestruct)),
 		magicVarDecl("tx", TypeProvider::magic(MagicType::Kind::Transaction)),
+		magicVarDecl("freeze", TypeProvider::function(strings{"uint", "uint"}, strings{"bool"}, FunctionType::Kind::Freeze, StateMutability::NonPayable)),
+		magicVarDecl("unfreeze", TypeProvider::function(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Unfreeze, StateMutability::NonPayable)),
+		magicVarDecl("freezeExpireTime",TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::NonPayable)),
+		magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
 		// Accepts a MagicType that can be any contract type or an Integer type and returns a
 		// MagicType. The TypeChecker handles the correctness of the input and output types.
-		magicVarDecl(
-			"type",
-			TypeProvider::function(strings{}, strings{}, FunctionType::Kind::MetaType, true, StateMutability::Pure)),
+		magicVarDecl("type", TypeProvider::function(
+			strings{},
+			strings{},
+			FunctionType::Kind::MetaType,
+			StateMutability::Pure,
+			FunctionType::Options::withArbitraryParameters()
+		)),
 	};
 }
 
@@ -294,13 +179,8 @@ void GlobalContext::addVerifyMintProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyMintProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -337,13 +217,8 @@ void GlobalContext::addVerifyBurnProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyBurnProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)));
+			nullptr)));
 
 }
 
@@ -394,13 +269,8 @@ void GlobalContext::addVerifyTransferProofMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::verifyTransferProof,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -431,14 +301,9 @@ void GlobalContext::addPedersenHashMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::pedersenHash,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)));
-
+			nullptr)
+	));
 }
 
 
@@ -464,13 +329,8 @@ void GlobalContext::addBatchValidateSignMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::BatchValidateSign,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -499,13 +359,8 @@ void GlobalContext::addValidateMultiSignMethod() {
 			parameterNames,
 			returnParameterNames,
 			FunctionType::Kind::ValidateMultiSign,
-			false,
 			StateMutability::Pure,
-			nullptr,
-			false,
-			false,
-			false,
-			false)
+			nullptr)
 	));
 }
 
@@ -528,13 +383,8 @@ void GlobalContext::addVoteMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::vote,
-		false,
 		StateMutability::NonPayable,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -553,13 +403,8 @@ void GlobalContext::addRewardBalanceMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::rewardBalance,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -581,13 +426,8 @@ void GlobalContext::addIsSRCandidateMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::isSrCandidate,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -611,13 +451,8 @@ void GlobalContext::addVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::voteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -639,13 +474,8 @@ void GlobalContext::addTotalVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::totalVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -667,13 +497,8 @@ void GlobalContext::addReceivedVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::receivedVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 
@@ -695,13 +520,8 @@ void GlobalContext::addUsedVoteCountMethod() {
 		parameterNames,
 		returnParameterNames,
 		FunctionType::Kind::usedVoteCount,
-		false,
 		StateMutability::View,
-		nullptr,
-		false,
-		false,
-		false,
-		false)
+		nullptr)
 	));
 }
 

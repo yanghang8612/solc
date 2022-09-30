@@ -10,16 +10,15 @@ contract C {
 }
 // ====
 // EVMVersion: >=petersburg
-// compileViaYul: also
 // ----
 // pushEmpty(uint256): 128
-// gas irOptimized: 412570
-// gas legacy: 417287
-// gas legacyOptimized: 399048
+// gas irOptimized: 406801
+// gas legacy: 416903
+// gas legacyOptimized: 398280
 // pushEmpty(uint256): 256
-// gas irOptimized: 702558
-// gas legacy: 715083
-// gas legacyOptimized: 688908
+// gas irOptimized: 691029
+// gas legacy: 714315
+// gas legacyOptimized: 687372
 // pushEmpty(uint256): 38869 -> FAILURE # out-of-gas #
 // gas irOptimized: 100000000
 // gas legacy: 100000000

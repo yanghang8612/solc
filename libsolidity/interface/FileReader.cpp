@@ -116,7 +116,6 @@ ReadCallback::Result FileReader::readFile(string const& _kind, string const& _so
 		for (auto const& prefix: prefixes)
 		{
 			boost::filesystem::path canonicalPath = normalizeCLIPathForVFS(prefix / strippedSourceUnitName, SymlinkResolution::Enabled);
-
 			if (boost::filesystem::exists(canonicalPath))
 				candidates.push_back(std::move(canonicalPath));
 		}
@@ -124,7 +123,12 @@ ReadCallback::Result FileReader::readFile(string const& _kind, string const& _so
 		auto pathToQuotedString = [](boost::filesystem::path const& _path){ return "\"" + _path.string() + "\""; };
 
 		if (candidates.empty())
-			return ReadCallback::Result{false, "File not found."};
+			return ReadCallback::Result{
+				false,
+				"File not found. Searched the following locations: " +
+				joinHumanReadable(prefixes | ranges::views::transform(pathToQuotedString), ", ") +
+				"."
+			};
 
 		if (candidates.size() >= 2)
 			return ReadCallback::Result{
@@ -135,11 +139,13 @@ ReadCallback::Result FileReader::readFile(string const& _kind, string const& _so
 				"."
 			};
 
-		FileSystemPathSet extraAllowedPaths = {m_basePath.empty() ? "." : m_basePath};
-		extraAllowedPaths += m_includePaths;
+		FileSystemPathSet allowedPaths =
+			m_allowedDirectories +
+			decltype(allowedPaths){m_basePath.empty() ? "." : m_basePath} +
+			m_includePaths;
 
 		bool isAllowed = false;
-		for (boost::filesystem::path const& allowedDir: m_allowedDirectories + extraAllowedPaths)
+		for (boost::filesystem::path const& allowedDir: allowedPaths)
 			if (isPathPrefix(normalizeCLIPathForVFS(allowedDir, SymlinkResolution::Enabled), candidates[0]))
 			{
 				isAllowed = true;
@@ -147,7 +153,12 @@ ReadCallback::Result FileReader::readFile(string const& _kind, string const& _so
 			}
 
 		if (!isAllowed)
-			return ReadCallback::Result{false, "File outside of allowed directories."};
+			return ReadCallback::Result{
+				false,
+				"File outside of allowed directories. The following are allowed: " +
+				joinHumanReadable(allowedPaths | ranges::views::transform(pathToQuotedString), ", ") +
+				"."
+			};
 
 		if (!boost::filesystem::is_regular_file(candidates[0]))
 			return ReadCallback::Result{false, "Not a valid file."};
@@ -265,13 +276,8 @@ boost::filesystem::path FileReader::normalizeCLIPathForVFS(
 	// If the path is on the same drive as the working dir, for portability we prefer not to
 	// include the root name. Do this only for non-UNC paths - my experiments show that on Windows
 	// when the working dir is an UNC path, / does not not actually refer to the root of the UNC path.
-	boost::filesystem::path normalizedRootPath = normalizedPath.root_path();
-	if (!isUNCPath(normalizedPath))
-	{
-		boost::filesystem::path workingDirRootPath = canonicalWorkDir.root_path();
-		if (normalizedRootPath == workingDirRootPath)
-			normalizedRootPath = "/";
-	}
+
+	boost::filesystem::path normalizedRootPath = normalizeCLIRootPathForVFS(normalizedPath, canonicalWorkDir);
 
 	// lexically_normal() will not squash paths like "/../../" into "/". We have to do it manually.
 	boost::filesystem::path dotDotPrefix = absoluteDotDotPrefix(normalizedPath);
@@ -294,6 +300,27 @@ boost::filesystem::path FileReader::normalizeCLIPathForVFS(
 		return "/";
 
 	return normalizedPathNoDotDot;
+}
+
+boost::filesystem::path FileReader::normalizeCLIRootPathForVFS(
+	boost::filesystem::path const& _path,
+	boost::filesystem::path const& _workDir
+)
+{
+	solAssert(_workDir.is_absolute(), "");
+
+	boost::filesystem::path absolutePath = boost::filesystem::absolute(_path, _workDir);
+	boost::filesystem::path rootPath = absolutePath.root_path();
+	boost::filesystem::path baseRootPath = _workDir.root_path();
+
+	if (isUNCPath(absolutePath))
+		return rootPath;
+
+	// Ignore drive letter case on Windows (C:\ <=> c:\).
+	if (boost::filesystem::equivalent(rootPath, baseRootPath))
+		return "/";
+
+	return rootPath;
 }
 
 bool FileReader::isPathPrefix(boost::filesystem::path const& _prefix, boost::filesystem::path const& _path)

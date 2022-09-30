@@ -21,16 +21,14 @@ contract C {
 		return array[uint256(idx)];
 	}
 }
-// ====
-// compileViaYul: also
 // ----
 // index(uint256): 0 -> true
 // index(uint256): 10 -> true
 // index(uint256): 20 -> true
 // index(uint256): 0xFF -> true
-// gas irOptimized: 138441
-// gas legacy: 248854
-// gas legacyOptimized: 152638
+// gas irOptimized: 135578
+// gas legacy: 247324
+// gas legacyOptimized: 149578
 // accessIndex(uint256,int256): 10, 1 -> 2
 // accessIndex(uint256,int256): 10, 0 -> 1
 // accessIndex(uint256,int256): 10, 11 -> FAILURE, hex"4e487b71", 0x32

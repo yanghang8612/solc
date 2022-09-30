@@ -25,6 +25,7 @@
 #include <liblangutil/ErrorReporter.h>
 
 #include <libsolutil/Algorithms.h>
+#include <libsolutil/Visitor.h>
 
 #include <range/v3/view/transform.hpp>
 
@@ -296,7 +297,7 @@ void DeclarationTypeChecker::endVisit(ArrayTypeName const& _typeName)
 		else if (optional<ConstantEvaluator::TypedRational> value = ConstantEvaluator::evaluate(m_errorReporter, *length))
 			lengthValue = value->value;
 
-		if (!lengthValue || lengthValue > TypeProvider::uint256()->max())
+		if (!lengthValue)
 			m_errorReporter.typeError(
 				5462_error,
 				length->location(),
@@ -308,6 +309,12 @@ void DeclarationTypeChecker::endVisit(ArrayTypeName const& _typeName)
 			m_errorReporter.typeError(3208_error, length->location(), "Array with fractional length specified.");
 		else if (*lengthValue < 0)
 			m_errorReporter.typeError(3658_error, length->location(), "Array with negative length specified.");
+		else if (lengthValue > TypeProvider::uint256()->max())
+			m_errorReporter.typeError(
+				1847_error,
+				length->location(),
+				"Array length too large, maximum is 2**256 - 1."
+			);
 
 		_typeName.annotation().type = TypeProvider::array(
 			DataLocation::Storage,
@@ -437,28 +444,53 @@ void DeclarationTypeChecker::endVisit(VariableDeclaration const& _variable)
 		type = TypeProvider::withLocation(ref, typeLoc, isPointer);
 	}
 
-	if (
-		_variable.isConstant() &&
-		!dynamic_cast<UserDefinedValueType const*>(type) &&
-		type->containsNestedMapping()
-	)
-		m_errorReporter.fatalDeclarationError(
-			3530_error,
-			_variable.location(),
-			"The type contains a (nested) mapping and therefore cannot be a constant."
-		);
+	if (_variable.isConstant() && !type->isValueType())
+	{
+		bool allowed = false;
+		if (auto arrayType = dynamic_cast<ArrayType const*>(type))
+			allowed = arrayType->isByteArrayOrString();
+		if (!allowed)
+			m_errorReporter.fatalTypeError(9259_error, _variable.location(), "Only constants of value type and byte array type are implemented.");
+	}
 
 	_variable.annotation().type = type;
 }
 
 bool DeclarationTypeChecker::visit(UsingForDirective const& _usingFor)
 {
-	ContractDefinition const* library = dynamic_cast<ContractDefinition const*>(
-		_usingFor.libraryName().annotation().referencedDeclaration
-	);
+	if (_usingFor.usesBraces())
+	{
+		for (ASTPointer<IdentifierPath> const& function: _usingFor.functionsOrLibrary())
+			if (auto functionDefinition = dynamic_cast<FunctionDefinition const*>(function->annotation().referencedDeclaration))
+			{
+				if (!functionDefinition->isFree() && !(
+					dynamic_cast<ContractDefinition const*>(functionDefinition->scope()) &&
+					dynamic_cast<ContractDefinition const*>(functionDefinition->scope())->isLibrary()
+				))
+					m_errorReporter.typeError(
+						4167_error,
+						function->location(),
+						"Only file-level functions and library functions can be bound to a type in a \"using\" statement"
+					);
+			}
+			else
+				m_errorReporter.fatalTypeError(8187_error, function->location(), "Expected function name." );
+	}
+	else
+	{
+		ContractDefinition const* library = dynamic_cast<ContractDefinition const*>(
+			_usingFor.functionsOrLibrary().front()->annotation().referencedDeclaration
+		);
+		if (!library || !library->isLibrary())
+			m_errorReporter.fatalTypeError(
+				4357_error,
+				_usingFor.functionsOrLibrary().front()->location(),
+				"Library name expected. If you want to attach a function, use '{...}'."
+			);
+	}
 
-	if (!library || !library->isLibrary())
-		m_errorReporter.fatalTypeError(4357_error, _usingFor.libraryName().location(), "Library name expected.");
+	// We do not visit _usingFor.functions() because it will lead to an error since
+	// library names cannot be mentioned stand-alone.
 
 	if (_usingFor.typeName())
 		_usingFor.typeName()->accept(*this);

@@ -31,13 +31,11 @@ contract test {
         ret = prb_scale(1).div(ret);
     }
 }
-// ====
-// compileViaYul: also
 // ----
 // constructor()
-// gas irOptimized: 465357
-// gas legacy: 672749
-// gas legacyOptimized: 479606
+// gas irOptimized: 438112
+// gas legacy: 671453
+// gas legacyOptimized: 480242
 // prb_pi() -> 3141592656369545286
 // gas irOptimized: 57478
 // gas legacy: 98903

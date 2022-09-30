@@ -110,13 +110,11 @@ contract ERC20 {
         _approve(account, msg.sender, _allowances[account][msg.sender].sub(value));
     }
 }
-// ====
-// compileViaYul: also
 // ----
 // constructor()
 // ~ emit Transfer(address,address,uint256): #0x00, #0x1212121212121212121212121212120000000012, 0x14
-// gas irOptimized: 442239
-// gas legacy: 861559
+// gas irOptimized: 364503
+// gas legacy: 860880
 // gas legacyOptimized: 420959
 // totalSupply() -> 20
 // gas irOptimized: 23415

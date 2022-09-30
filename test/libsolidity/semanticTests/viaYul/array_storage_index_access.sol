@@ -13,38 +13,36 @@ contract C {
             require(storageArray[i] == i + 1);
     }
 }
-// ====
-// compileViaYul: also
 // ----
 // test_indices(uint256): 1 ->
 // test_indices(uint256): 129 ->
-// gas irOptimized: 3032986
-// gas legacy: 3071205
-// gas legacyOptimized: 3011873
+// gas irOptimized: 3018687
+// gas legacy: 3070431
+// gas legacyOptimized: 3010325
 // test_indices(uint256): 5 ->
-// gas irOptimized: 367642
-// gas legacy: 369241
-// gas legacyOptimized: 366149
+// gas irOptimized: 372543
+// gas legacy: 369211
+// gas legacyOptimized: 366089
 // test_indices(uint256): 10 ->
 // test_indices(uint256): 15 ->
 // gas irOptimized: 72860
 // test_indices(uint256): 0xFF ->
-// gas irOptimized: 3438610
-// gas legacy: 3514167
-// gas legacyOptimized: 3398107
+// gas irOptimized: 3410255
+// gas legacy: 3512637
+// gas legacyOptimized: 3395047
 // test_indices(uint256): 1000 ->
-// gas irOptimized: 18318372
-// gas legacy: 18617999
-// gas legacyOptimized: 18178944
+// gas irOptimized: 18206122
+// gas legacy: 18611999
+// gas legacyOptimized: 18166944
 // test_indices(uint256): 129 ->
-// gas irOptimized: 2733570
-// gas legacy: 2772735
-// gas legacyOptimized: 2716547
+// gas irOptimized: 2756955
+// gas legacy: 2771961
+// gas legacyOptimized: 2714999
 // test_indices(uint256): 128 ->
-// gas irOptimized: 426682
-// gas legacy: 467272
-// gas legacyOptimized: 418424
+// gas irOptimized: 411903
+// gas legacy: 466504
+// gas legacyOptimized: 416888
 // test_indices(uint256): 1 ->
-// gas irOptimized: 363074
-// gas legacy: 363407
-// gas legacyOptimized: 361811
+// gas irOptimized: 368571
+// gas legacy: 363401
+// gas legacyOptimized: 361799

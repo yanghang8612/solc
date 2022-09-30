@@ -115,6 +115,12 @@ void SMTEncoder::endVisit(ContractDefinition const& _contract)
 		m_context.popSolver();
 }
 
+bool SMTEncoder::visit(ImportDirective const&)
+{
+	// do not visit because the identifier therein will confuse us.
+	return false;
+}
+
 void SMTEncoder::endVisit(VariableDeclaration const& _varDecl)
 {
 	// State variables are handled by the constructor.
@@ -313,7 +319,7 @@ bool SMTEncoder::visit(InlineAssembly const& _inlineAsm)
 		{
 			auto const& vars = _assignment.variableNames;
 			for (auto const& identifier: vars)
-				if (auto externalInfo = valueOrNullptr(externalReferences, &identifier))
+				if (auto externalInfo = util::valueOrNullptr(externalReferences, &identifier))
 					if (auto varDecl = dynamic_cast<VariableDeclaration const*>(externalInfo->declaration))
 						assignedVars.insert(varDecl);
 		}
@@ -580,6 +586,16 @@ bool SMTEncoder::visit(FunctionCall const& _funCall)
 			arg->accept(*this);
 		return false;
 	}
+	else if (funType.kind() == FunctionType::Kind::ABIEncodeCall)
+	{
+		auto fun = _funCall.arguments().front();
+		createExpr(*fun);
+		auto const* functionType = dynamic_cast<FunctionType const*>(fun->annotation().type);
+		if (functionType->hasDeclaration())
+			defineExpr(*fun, functionType->externalIdentifier());
+		return true;
+	}
+
 	// We do not really need to visit the expression in a wrap/unwrap no-op call,
 	// so we just ignore the function call expression to avoid "unsupported" warnings.
 	else if (
@@ -959,7 +975,7 @@ bool isReturnedFromStructGetter(Type const* _type)
 	if (category == Type::Category::Mapping)
 		return false;
 	if (category == Type::Category::Array)
-		return dynamic_cast<ArrayType const&>(*_type).isByteArray();
+		return dynamic_cast<ArrayType const&>(*_type).isByteArrayOrString();
 	// default
 	return true;
 }
@@ -996,7 +1012,7 @@ void SMTEncoder::visitPublicGetter(FunctionCall const& _funCall)
 	{
 		if (
 			type->isValueType() ||
-			(type->category() == Type::Category::Array && dynamic_cast<ArrayType const&>(*type).isByteArray())
+			(type->category() == Type::Category::Array && dynamic_cast<ArrayType const&>(*type).isByteArrayOrString())
 		)
 		{
 			solAssert(symbArguments.empty(), "");
@@ -1041,6 +1057,12 @@ void SMTEncoder::visitPublicGetter(FunctionCall const& _funCall)
 	}
 }
 
+bool SMTEncoder::shouldAnalyze(SourceUnit const& _source) const
+{
+	return m_settings.contracts.isDefault() ||
+		m_settings.contracts.has(*_source.annotation().path);
+}
+
 bool SMTEncoder::shouldAnalyze(ContractDefinition const& _contract) const
 {
 	if (!_contract.canBeDeployed())
@@ -1071,7 +1093,7 @@ void SMTEncoder::visitTypeConversion(FunctionCall const& _funCall)
 	if (auto sliceType = dynamic_cast<ArraySliceType const*>(argType))
 		arrayType = &sliceType->arrayType();
 
-	if (arrayType && arrayType->isByteArray() && smt::isFixedBytes(*funCallType))
+	if (arrayType && arrayType->isByteArrayOrString() && smt::isFixedBytes(*funCallType))
 	{
 		auto array = dynamic_pointer_cast<smt::SymbolicArrayVariable>(m_context.expression(*argument));
 		bytesToFixedBytesAssertions(*array, _funCall);
@@ -1317,6 +1339,7 @@ bool SMTEncoder::visit(MemberAccess const& _memberAccess)
 
 	auto const& exprType = memberExpr->annotation().type;
 	solAssert(exprType, "");
+
 	if (exprType->category() == Type::Category::Magic)
 	{
 		if (auto const* identifier = dynamic_cast<Identifier const*>(memberExpr))
@@ -2695,14 +2718,14 @@ Expression const* SMTEncoder::cleanExpression(Expression const& _expr)
 			auto typeType = dynamic_cast<TypeType const*>(functionCall->expression().annotation().type);
 			solAssert(typeType, "");
 			if (auto const* arrayType = dynamic_cast<ArrayType const*>(typeType->actualType()))
-				if (arrayType->isByteArray())
+				if (arrayType->isByteArrayOrString())
 				{
 					// this is a cast to `bytes`
 					solAssert(functionCall->arguments().size() == 1, "");
 					Expression const& arg = *functionCall->arguments()[0];
 					if (
 						auto const* argArrayType = dynamic_cast<ArrayType const*>(arg.annotation().type);
-						argArrayType && argArrayType->isByteArray()
+						argArrayType && argArrayType->isByteArrayOrString()
 					)
 						return cleanExpression(arg);
 				}

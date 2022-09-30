@@ -136,6 +136,7 @@ protected:
 	// because the order of expression evaluation is undefined
 	// TODO: or just force a certain order, but people might have a different idea about that.
 
+	bool visit(ImportDirective const& _node) override;
 	bool visit(ContractDefinition const& _node) override;
 	void endVisit(ContractDefinition const& _node) override;
 	void endVisit(VariableDeclaration const& _node) override;
@@ -223,6 +224,8 @@ protected:
 	/// @returns true if @param _contract is set for analysis in the settings
 	/// and it is not abstract.
 	bool shouldAnalyze(ContractDefinition const& _contract) const;
+	/// @returns true if @param _source is set for analysis in the settings.
+	bool shouldAnalyze(SourceUnit const& _source) const;
 
 	bool isPublicGetter(Expression const& _expr);
 
@@ -423,8 +426,6 @@ protected:
 
 	smt::VariableUsage m_variableUsage;
 	bool m_arrayAssignmentHappened = false;
-	// True if the "No SMT solver available" warning was already created.
-	bool m_noSolverWarning = false;
 
 	/// Stores the instances of an Uninterpreted Function applied to arguments.
 	/// These may be direct application of UFs or Array index access.

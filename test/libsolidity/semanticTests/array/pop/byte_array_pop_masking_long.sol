@@ -8,10 +8,8 @@ contract c {
     }
 }
 
-// ====
-// compileViaYul: also
 // ----
 // test() -> 0x20, 33, 0x303030303030303030303030303030303030303030303030303030303030303, 0x0300000000000000000000000000000000000000000000000000000000000000
-// gas irOptimized: 108493
-// gas legacy: 126187
-// gas legacyOptimized: 123261
+// gas irOptimized: 108146
+// gas legacy: 125610
+// gas legacyOptimized: 122582
