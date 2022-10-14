@@ -1237,21 +1237,31 @@ public:
         BatchValidateSign, /// CALL to special contract for validate batch signatures
 		SHA256, ///< CALL to special contract for sha256
 		RIPEMD160, ///< CALL to special contract for ripemd160
-        verifyBurnProof,///< CALL to special contract for verifyBurnProof which is used for shielded transaction for TRC-20
-        verifyTransferProof,///< CALL to special contract for verifyTransferProof which is used for shielded transaction for TRC-20
-		verifyMintProof,/// < CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
-		pedersenHash,/// < CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
-		Freeze,/// < CALL to freeze balance
-		Unfreeze,/// < CALL to unfreeze balance
-		FreezeExpireTime,/// < CALL to freeze expire time
-		vote,///< CALL to vote witness
+        VerifyBurnProof,///< CALL to special contract for verifyBurnProof which is used for shielded transaction for TRC-20
+        VerifyTransferProof,///< CALL to special contract for verifyTransferProof which is used for shielded transaction for TRC-20
+		VerifyMintProof,///< CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
+		PedersenHash,///< CALL to special contract for verifyMintProof which is used for shielded transaction for TRC-20
+		Freeze,///< CALL to freeze balance
+		Unfreeze,///< CALL to unfreeze balance
+		FreezeExpireTime,///< CALL to freeze expire time
+		Vote,///< CALL to vote witness
 		WithdrawReward,///< CALL to withdrawReward to address
-		rewardBalance, ///< get reward balance
-		isSrCandidate, ///< Judge witness whether or not
-		voteCount, ///< get vote count
-		totalVoteCount, /// get total vote count
-		receivedVoteCount, /// get total received vote count
-		usedVoteCount, /// get total used vote count
+		RewardBalance, ///< get reward balance
+		IsSrCandidate, ///< Judge witness whether or not
+		VoteCount, ///< get vote count
+		TotalVoteCount, ///< get total vote count
+		ReceivedVoteCount, ///< get total received vote count
+		UsedVoteCount, ///< get total used vote count
+		FreezeBalanceV2, ///< similar to FreezeBalanceV2 system contract
+		UnFreezeBalanceV2, ///< similar to UnFreezeBalanceV2 system contract
+		WithdrawExpireUnfreeze, ///< similar to WithdrawExpireUnfreeze system contract
+		DelegateResource, ///< similar to DelegateResource system contract
+		UnDelegateResource, ///< similar to UndelegateResource system contract
+		ExpireFreezeV2Balance, ///< CALL to special contract for querying ExpireFreezeV2Balance
+		TotalFrozenBalance, ///< CALL to special contract for querying TotalFrozenBalance
+		FrozenBalance, ///< CALL to special contract for querying FrozenBalance
+		FrozenBalanceUsage, ///< CALL to special contract for querying FrozenBalanceUsage
+		ChainParamUnfreezeDelayDays, ///<
 		Event, ///< syntactic sugar for LOG*
 		Error, ///< creating an error instance in revert or require
 		Wrap, ///< customType.wrap(...) for user defined value types

@@ -520,6 +520,9 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		{"staticcall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareStaticCall, StateMutability::View)},
 		{"tokenBalance", TypeProvider::function(strings{"trcToken"}, strings{"uint"}, FunctionType::Kind::TokenBalance, StateMutability::View)},
         {"freezeExpireTime", TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::View)},
+        {"totalFrozenBalance", TypeProvider::function(strings{"uint8"}, strings{"uint64"}, FunctionType::Kind::TotalFrozenBalance, StateMutability::View)},
+        {"frozenBalance", TypeProvider::function(strings{"address", "uint8"}, strings{"uint64"}, FunctionType::Kind::FrozenBalance, StateMutability::View)},
+        {"frozenBalanceUsage", TypeProvider::function(strings{"uint8"}, strings{"uint64", "uint64"}, FunctionType::Kind::FrozenBalanceUsage, StateMutability::View)},
     };
 	if (m_stateMutability == StateMutability::Payable)
 	{
@@ -528,6 +531,8 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		members.emplace_back(MemberList::Member{"transferToken", TypeProvider::function(strings{"uint", "trcToken"}, strings(), FunctionType::Kind::TransferToken)});
         members.emplace_back(MemberList::Member{"freeze", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::Freeze, StateMutability::NonPayable)});
         members.emplace_back(MemberList::Member{"unfreeze", TypeProvider::function(strings{"uint"}, strings(), FunctionType::Kind::Unfreeze, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"delegateResource", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::DelegateResource, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"unDelegateResource", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::UnDelegateResource, StateMutability::NonPayable)});
     }
 	return members;
 }
@@ -3036,10 +3041,10 @@ string FunctionType::richIdentifier() const
 	case Kind::ECRecover: id += "ecrecover"; break;
 	case Kind::ValidateMultiSign: id += "validatemultisign"; break;
 	case Kind::BatchValidateSign: id += "batchvalidatesign"; break;
-	case Kind::verifyBurnProof: id += "verifyBurnProof";break;
-	case Kind::verifyTransferProof: id += "verifyTransferProof";break;
-	case Kind::verifyMintProof: id += "verifyMintProof";break;
-	case Kind::pedersenHash: id += "pedersenHash";break;
+	case Kind::VerifyBurnProof: id += "verifyBurnProof";break;
+	case Kind::VerifyTransferProof: id += "verifyTransferProof";break;
+	case Kind::VerifyMintProof: id += "verifyMintProof";break;
+	case Kind::PedersenHash: id += "pedersenHash";break;
 	case Kind::SHA256: id += "sha256"; break;
 	case Kind::RIPEMD160: id += "ripemd160"; break;
 	case Kind::GasLeft: id += "gasleft"; break;
@@ -3069,14 +3074,24 @@ string FunctionType::richIdentifier() const
 	case Kind::Freeze: id += "freeze"; break;
 	case Kind::Unfreeze: id += "unfreeze"; break;
 	case Kind::FreezeExpireTime: id += "freezeExpireTime"; break;
-	case Kind::vote: id += "vote"; break;
+	case Kind::Vote: id += "vote"; break;
 	case Kind::WithdrawReward: id += "withdrawreward"; break;
-	case Kind::rewardBalance: id += "rewardBalance"; break;
-	case Kind::isSrCandidate: id += "isSrCandidate"; break;
-	case Kind::voteCount: id += "voteCount"; break;
-	case Kind::totalVoteCount: id += "totalVoteCount"; break;
-	case Kind::receivedVoteCount: id += "receivedVoteCount"; break;
-	case Kind::usedVoteCount: id += "usedVoteCount"; break;
+	case Kind::RewardBalance: id += "rewardBalance"; break;
+	case Kind::IsSrCandidate: id += "isSrCandidate"; break;
+	case Kind::VoteCount: id += "voteCount"; break;
+	case Kind::TotalVoteCount: id += "totalVoteCount"; break;
+	case Kind::ReceivedVoteCount: id += "receivedVoteCount"; break;
+	case Kind::UsedVoteCount: id += "usedVoteCount"; break;
+	case Kind::FreezeBalanceV2: id += "freezeBalanceV2"; break;
+	case Kind::UnFreezeBalanceV2: id += "unFreezeBalanceV2"; break;
+	case Kind::WithdrawExpireUnfreeze: id += "withdrawExpireUnfreeze"; break;
+	case Kind::DelegateResource: id += "delegateResource"; break;
+	case Kind::UnDelegateResource: id += "unDelegateResource"; break;
+	case Kind::ExpireFreezeV2Balance: id += "expireFreezeV2Balance"; break;
+	case Kind::TotalFrozenBalance: id += "totalFrozenBalance"; break;
+	case Kind::FrozenBalance: id += "frozenBalance"; break;
+	case Kind::FrozenBalanceUsage: id += "frozenBalanceUsage"; break;
+	case Kind::ChainParamUnfreezeDelayDays: id += "chainParamUnfreezeDelayDays"; break;
 	}
 	id += "_" + stateMutabilityToString(m_stateMutability);
 	id += identifierList(m_parameterTypes) + "returns" + identifierList(m_returnParameterTypes);
@@ -3583,16 +3598,23 @@ bool FunctionType::isBareCall() const
 	case Kind::ECRecover:
 	case Kind::ValidateMultiSign:
 	case Kind::BatchValidateSign:
-	case Kind::verifyBurnProof:
-	case Kind::verifyTransferProof:
-	case Kind::verifyMintProof:
-	case Kind::pedersenHash:
-	case Kind::rewardBalance:
-	case Kind::isSrCandidate:
-	case Kind::voteCount:
-	case Kind::totalVoteCount:
-	case Kind::receivedVoteCount:
-	case Kind::usedVoteCount:
+	case Kind::VerifyBurnProof:
+	case Kind::VerifyTransferProof:
+	case Kind::VerifyMintProof:
+	case Kind::PedersenHash:
+	case Kind::RewardBalance:
+	case Kind::IsSrCandidate:
+
+
+	case Kind::VoteCount:
+	case Kind::TotalVoteCount:
+	case Kind::ReceivedVoteCount:
+	case Kind::UsedVoteCount:
+	case Kind::ExpireFreezeV2Balance:
+	case Kind::TotalFrozenBalance:
+	case Kind::FrozenBalance:
+	case Kind::FrozenBalanceUsage:
+	case Kind::ChainParamUnfreezeDelayDays:
 	case Kind::SHA256:
 	case Kind::RIPEMD160:
 		return true;
@@ -3658,10 +3680,10 @@ bool FunctionType::isPure() const
 		m_kind == Kind::ECRecover ||
 		m_kind == Kind::ValidateMultiSign ||
 		m_kind == Kind::BatchValidateSign ||
-		m_kind == Kind::verifyBurnProof ||
-		m_kind == Kind::verifyTransferProof ||
-		m_kind == Kind::verifyMintProof ||
-		m_kind == Kind::pedersenHash ||
+		m_kind == Kind::VerifyBurnProof ||
+		m_kind == Kind::VerifyTransferProof ||
+		m_kind == Kind::VerifyMintProof ||
+		m_kind == Kind::PedersenHash ||
 		m_kind == Kind::SHA256 ||
 		m_kind == Kind::RIPEMD160 ||
 		m_kind == Kind::AddMod ||

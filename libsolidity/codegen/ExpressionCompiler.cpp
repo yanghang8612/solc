@@ -1080,34 +1080,44 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::RIPEMD160:
 		case FunctionType::Kind::ValidateMultiSign:
         case FunctionType::Kind::BatchValidateSign:
-        case FunctionType::Kind::verifyBurnProof:
-        case FunctionType::Kind::verifyTransferProof:
-        case FunctionType::Kind::verifyMintProof:
-        case FunctionType::Kind::pedersenHash:
-		case FunctionType::Kind::rewardBalance:
-		case FunctionType::Kind::isSrCandidate:
-		case FunctionType::Kind::voteCount:
-		case FunctionType::Kind::totalVoteCount:
-		case FunctionType::Kind::receivedVoteCount:
-		case FunctionType::Kind::usedVoteCount:
+        case FunctionType::Kind::VerifyBurnProof:
+        case FunctionType::Kind::VerifyTransferProof:
+        case FunctionType::Kind::VerifyMintProof:
+        case FunctionType::Kind::PedersenHash:
+		case FunctionType::Kind::RewardBalance:
+		case FunctionType::Kind::IsSrCandidate:
+		case FunctionType::Kind::VoteCount:
+		case FunctionType::Kind::TotalVoteCount:
+		case FunctionType::Kind::ReceivedVoteCount:
+		case FunctionType::Kind::UsedVoteCount:
+		case FunctionType::Kind::ExpireFreezeV2Balance:
+		case FunctionType::Kind::TotalFrozenBalance:
+		case FunctionType::Kind::FrozenBalance:
+		case FunctionType::Kind::FrozenBalanceUsage:
+		case FunctionType::Kind::ChainParamUnfreezeDelayDays:
 		{
 			_functionCall.expression().accept(*this);
 			static map<FunctionType::Kind, u256> const contractAddresses{
-				{FunctionType::Kind::ECRecover, 1},
-				{FunctionType::Kind::SHA256, 2},
-				{FunctionType::Kind::RIPEMD160, 3},
-				{FunctionType::Kind::BatchValidateSign, 9},
-                {FunctionType::Kind::ValidateMultiSign, 10},
-                {FunctionType::Kind::verifyMintProof, 16777217},
-                {FunctionType::Kind::verifyTransferProof, 16777218},
-                {FunctionType::Kind::verifyBurnProof, 16777219},
-				{FunctionType::Kind::pedersenHash, 16777220},
-				{FunctionType::Kind::rewardBalance, 16777221},
-				{FunctionType::Kind::isSrCandidate, 16777222},
-				{FunctionType::Kind::voteCount, 16777223},
-				{FunctionType::Kind::usedVoteCount, 16777224},
-				{FunctionType::Kind::receivedVoteCount, 16777225},
-				{FunctionType::Kind::totalVoteCount, 16777226}
+				{FunctionType::Kind::ECRecover, 0x1},
+				{FunctionType::Kind::SHA256, 0x2},
+				{FunctionType::Kind::RIPEMD160, 0x3},
+				{FunctionType::Kind::BatchValidateSign, 0x9},
+                {FunctionType::Kind::ValidateMultiSign, 0xa},
+                {FunctionType::Kind::VerifyMintProof, 0x1000001},
+                {FunctionType::Kind::VerifyTransferProof, 0x1000002},
+                {FunctionType::Kind::VerifyBurnProof, 0x1000003},
+				{FunctionType::Kind::PedersenHash, 0x1000004},
+				{FunctionType::Kind::RewardBalance, 0x1000005},
+				{FunctionType::Kind::IsSrCandidate, 0x1000006},
+				{FunctionType::Kind::VoteCount, 0x1000007},
+				{FunctionType::Kind::UsedVoteCount, 0x1000008},
+				{FunctionType::Kind::ReceivedVoteCount, 0x1000009},
+				{FunctionType::Kind::TotalVoteCount, 0x100000a},
+				{FunctionType::Kind::ExpireFreezeV2Balance, 0x100000b},
+				{FunctionType::Kind::TotalFrozenBalance, 0x100000c},
+				{FunctionType::Kind::FrozenBalance, 0x100000d},
+				{FunctionType::Kind::FrozenBalanceUsage, 0x100000e},
+				{FunctionType::Kind::ChainParamUnfreezeDelayDays, 0x100000f},
 			};
 			m_context << contractAddresses.at(function.kind());
 			for (unsigned i = function.sizeOnStack(); i > 0; --i)
@@ -1541,7 +1551,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
             m_context << Instruction::NATIVEFREEZEEXPIRETIME;
             break;
         }
-		case FunctionType::Kind::vote:
+		case FunctionType::Kind::Vote:
 		{
 			_functionCall.expression().accept(*this);
 			for (unsigned i = 0; i < arguments.size(); ++i)
@@ -1558,6 +1568,56 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		{
 			_functionCall.expression().accept(*this);
 			m_context << Instruction::NATIVEWITHDRAWREWARD;
+			break;
+		}
+		case FunctionType::Kind::FreezeBalanceV2:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEFREEZEBALANCEV2;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+		case FunctionType::Kind::UnFreezeBalanceV2:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEUNFREEZEBALANCEV2;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+		case FunctionType::Kind::WithdrawExpireUnfreeze:
+		{
+			_functionCall.expression().accept(*this);
+			m_context << Instruction::NATIVEWITHDRAWEXPIREUNFREEZE;
+			break;
+		}
+		case FunctionType::Kind::DelegateResource:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEDELEGATERESOURCE;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+		case FunctionType::Kind::UnDelegateResource:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEUNDELEGATERESOURCE;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
 			break;
 		}
 		default:
@@ -1716,16 +1776,21 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 					case FunctionType::Kind::ECRecover:
 					case FunctionType::Kind::ValidateMultiSign:
 					case FunctionType::Kind::BatchValidateSign:
-					case FunctionType::Kind::verifyBurnProof:
-					case FunctionType::Kind::verifyTransferProof:
-					case FunctionType::Kind::verifyMintProof:
-					case FunctionType::Kind::pedersenHash:
-					case FunctionType::Kind::rewardBalance:
-					case FunctionType::Kind::isSrCandidate:
-					case FunctionType::Kind::voteCount:
-					case FunctionType::Kind::totalVoteCount:
-					case FunctionType::Kind::receivedVoteCount:
-					case FunctionType::Kind::usedVoteCount:
+					case FunctionType::Kind::VerifyBurnProof:
+					case FunctionType::Kind::VerifyTransferProof:
+					case FunctionType::Kind::VerifyMintProof:
+					case FunctionType::Kind::PedersenHash:
+					case FunctionType::Kind::RewardBalance:
+					case FunctionType::Kind::IsSrCandidate:
+					case FunctionType::Kind::VoteCount:
+					case FunctionType::Kind::TotalVoteCount:
+					case FunctionType::Kind::ReceivedVoteCount:
+					case FunctionType::Kind::UsedVoteCount:
+					case FunctionType::Kind::ExpireFreezeV2Balance:
+					case FunctionType::Kind::TotalFrozenBalance:
+					case FunctionType::Kind::FrozenBalance:
+					case FunctionType::Kind::FrozenBalanceUsage:
+					case FunctionType::Kind::ChainParamUnfreezeDelayDays:
 					case FunctionType::Kind::SHA256:
 					case FunctionType::Kind::RIPEMD160:
 					default:
@@ -1941,7 +2006,17 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				true
 			);
 		}
-		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall", "freezeExpireTime"}).count(member))
+		else if ((set<string>{"delegateResource", "unDelegateResource"}).count(member))
+		{
+			solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
+			utils().convertType(
+				*_memberAccess.expression().annotation().type,
+				AddressType(StateMutability::Payable),
+				true
+			);
+		}
+		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall",
+							  "freezeExpireTime", "totalFrozenBalance", "frozenBalance", "frozenBalanceUsage"}).count(member))
 			utils().convertType(
 				*_memberAccess.expression().annotation().type,
 				*TypeProvider::address(),
@@ -2846,16 +2921,21 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	if (_functionType.kind() == FunctionType::Kind::ECRecover
 		|| _functionType.kind() == FunctionType::Kind::ValidateMultiSign
 		|| _functionType.kind() == FunctionType::Kind::BatchValidateSign
-		|| _functionType.kind() == FunctionType::Kind::verifyBurnProof
-		|| _functionType.kind() == FunctionType::Kind::verifyTransferProof
-		|| _functionType.kind() == FunctionType::Kind::verifyMintProof
-		|| _functionType.kind() == FunctionType::Kind::pedersenHash
-		|| _functionType.kind() == FunctionType::Kind::rewardBalance
-		|| _functionType.kind() == FunctionType::Kind::isSrCandidate
-		|| _functionType.kind() == FunctionType::Kind::voteCount
-		|| _functionType.kind() == FunctionType::Kind::totalVoteCount
-		|| _functionType.kind() == FunctionType::Kind::receivedVoteCount
-		|| _functionType.kind() == FunctionType::Kind::usedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::VerifyBurnProof
+		|| _functionType.kind() == FunctionType::Kind::VerifyTransferProof
+		|| _functionType.kind() == FunctionType::Kind::VerifyMintProof
+		|| _functionType.kind() == FunctionType::Kind::PedersenHash
+		|| _functionType.kind() == FunctionType::Kind::RewardBalance
+		|| _functionType.kind() == FunctionType::Kind::IsSrCandidate
+		|| _functionType.kind() == FunctionType::Kind::VoteCount
+		|| _functionType.kind() == FunctionType::Kind::TotalVoteCount
+		|| _functionType.kind() == FunctionType::Kind::ReceivedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::UsedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::ExpireFreezeV2Balance
+		|| _functionType.kind() == FunctionType::Kind::TotalFrozenBalance
+		|| _functionType.kind() == FunctionType::Kind::FrozenBalance
+		|| _functionType.kind() == FunctionType::Kind::FrozenBalanceUsage
+		|| _functionType.kind() == FunctionType::Kind::ChainParamUnfreezeDelayDays
 	)
 		// This would be the only combination of padding and in-place encoding,
 		// but all parameters of ecrecover are value types anyway.
@@ -2999,7 +3079,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		if (!_functionType.returnParameterTypes().empty())
 			utils().returnDataToArray();
 	}
-	else if (funKind == FunctionType::Kind::verifyTransferProof ||funKind == FunctionType::Kind::verifyMintProof){
+	else if (funKind == FunctionType::Kind::VerifyTransferProof ||funKind == FunctionType::Kind::VerifyMintProof){
 	    //in this kind of precompiled contracts , return type is dynamicType
 	    if (haveReturndatacopy)
 	    {

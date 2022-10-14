@@ -665,10 +665,10 @@ void SMTEncoder::endVisit(FunctionCall const& _funCall)
 	case FunctionType::Kind::ECRecover:
 	case FunctionType::Kind::ValidateMultiSign:
     case FunctionType::Kind::BatchValidateSign:
-    case FunctionType::Kind::verifyBurnProof:
-    case FunctionType::Kind::verifyTransferProof:
-    case FunctionType::Kind::verifyMintProof:
-    case FunctionType::Kind::pedersenHash:
+    case FunctionType::Kind::VerifyBurnProof:
+    case FunctionType::Kind::VerifyTransferProof:
+    case FunctionType::Kind::VerifyMintProof:
+    case FunctionType::Kind::PedersenHash:
 	case FunctionType::Kind::SHA256:
 	case FunctionType::Kind::RIPEMD160:
 		visitCryptoFunction(_funCall);
