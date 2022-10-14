@@ -438,6 +438,11 @@ u256 EVMInstructionInterpreter::eval(
 	case Instruction::NATIVEFREEZEEXPIRETIME:
 	case Instruction::NATIVEVOTE:
 	case Instruction::NATIVEWITHDRAWREWARD:
+	case Instruction::NATIVEFREEZEBALANCEV2:
+	case Instruction::NATIVEUNFREEZEBALANCEV2:
+	case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
+	case Instruction::NATIVEDELEGATERESOURCE:
+	case Instruction::NATIVEUNDELEGATERESOURCE:
 	{
 		yulAssert(false, "");
 		return 0;
