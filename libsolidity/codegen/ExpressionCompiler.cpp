@@ -2973,7 +2973,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		|| _functionType.kind() == FunctionType::Kind::TotalFrozenBalance
 		|| _functionType.kind() == FunctionType::Kind::FrozenBalance
 		|| _functionType.kind() == FunctionType::Kind::FrozenBalanceUsage
-		|| _functionType.kind() == FunctionType::Kind::ChainParamUnfreezeDelayDays
+		|| _functionType.kind() == FunctionType::Kind::GetChainParameter
 	)
 		// This would be the only combination of padding and in-place encoding,
 		// but all parameters of ecrecover are value types anyway.
