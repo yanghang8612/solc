@@ -1094,7 +1094,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::TotalFrozenBalance:
 		case FunctionType::Kind::FrozenBalance:
 		case FunctionType::Kind::FrozenBalanceUsage:
-		case FunctionType::Kind::ChainParamUnfreezeDelayDays:
+		case FunctionType::Kind::GetChainParameter:
 		{
 			_functionCall.expression().accept(*this);
 			static map<FunctionType::Kind, u256> const contractAddresses{
@@ -1113,11 +1113,11 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				{FunctionType::Kind::UsedVoteCount, 0x1000008},
 				{FunctionType::Kind::ReceivedVoteCount, 0x1000009},
 				{FunctionType::Kind::TotalVoteCount, 0x100000a},
-				{FunctionType::Kind::ExpireFreezeV2Balance, 0x100000b},
-				{FunctionType::Kind::TotalFrozenBalance, 0x100000c},
-				{FunctionType::Kind::FrozenBalance, 0x100000d},
-				{FunctionType::Kind::FrozenBalanceUsage, 0x100000e},
-				{FunctionType::Kind::ChainParamUnfreezeDelayDays, 0x100000f},
+				{FunctionType::Kind::GetChainParameter, 0x100000b},
+				{FunctionType::Kind::ExpireFreezeV2Balance, 0x100000c},
+				{FunctionType::Kind::TotalFrozenBalance, 0x100000d},
+				{FunctionType::Kind::FrozenBalance, 0x100000e},
+				{FunctionType::Kind::FrozenBalanceUsage, 0x100000f},
 			};
 			m_context << contractAddresses.at(function.kind());
 			for (unsigned i = function.sizeOnStack(); i > 0; --i)
@@ -1790,7 +1790,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 					case FunctionType::Kind::TotalFrozenBalance:
 					case FunctionType::Kind::FrozenBalance:
 					case FunctionType::Kind::FrozenBalanceUsage:
-					case FunctionType::Kind::ChainParamUnfreezeDelayDays:
+					case FunctionType::Kind::GetChainParameter:
 					case FunctionType::Kind::SHA256:
 					case FunctionType::Kind::RIPEMD160:
 					default:
@@ -2053,8 +2053,45 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			);
 		break;
 	case Type::Category::Magic:
+	{
 		// we can ignore the kind of magic and only look at the name of the member
-		if (member == "coinbase")
+		string routine = R"({
+			// load free mem ptr
+			let memPtr := mload(64)
+			// save index param to mem
+			mstore8(add(memPtr, 31), index)
+			// do static call to get chain parameter, if return zero, revert
+			if iszero(staticcall(gas(), 0x100000b, memPtr, 32, memPtr, 32)) {
+				let pos := mload(64)
+				returndatacopy(pos, 0, returndatasize())
+				revert(pos, returndatasize())
+			}
+			// finalize the mem allocation
+			mstore(64, add(memPtr, 32))
+			// load the return value
+			value := mload(memPtr)
+			// do check the value is a valid uint64
+			if iszero(eq(value, and(value, 0xffffffffffffffff))) { revert(0, 0) }
+		})";
+		if (member == "totalEnergyCurrentLimit")
+		{
+			m_context << u256(0) << u256(1);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "totalEnergyWeight")
+		{
+			m_context << u256(0) << u256(2);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "unfreezeDelayDays")
+		{
+			m_context << u256(0) << u256(3);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "coinbase")
 			m_context << Instruction::COINBASE;
 		else if (member == "timestamp")
 			m_context << Instruction::TIMESTAMP;
@@ -2146,6 +2183,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 		else
 			solAssert(false, "Unknown magic member.");
 		break;
+    }
 	case Type::Category::Struct:
 	{
 		StructType const& type = dynamic_cast<StructType const&>(*_memberAccess.expression().annotation().type);

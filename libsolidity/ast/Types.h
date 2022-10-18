@@ -1261,7 +1261,7 @@ public:
 		TotalFrozenBalance, ///< CALL to special contract for querying TotalFrozenBalance
 		FrozenBalance, ///< CALL to special contract for querying FrozenBalance
 		FrozenBalanceUsage, ///< CALL to special contract for querying FrozenBalanceUsage
-		ChainParamUnfreezeDelayDays, ///<
+		GetChainParameter, ///< CALL to special contract for querying ChainParameter
 		Event, ///< syntactic sugar for LOG*
 		Error, ///< creating an error instance in revert or require
 		Wrap, ///< customType.wrap(...) for user defined value types
@@ -1663,6 +1663,7 @@ class MagicType: public Type
 {
 public:
 	enum class Kind {
+		Chain, ///< "chain"
 		Block, ///< "block"
 		Message, ///< "msg"
 		Transaction, ///< "tx"

@@ -147,7 +147,8 @@ array<unique_ptr<FixedBytesType>, 32> const TypeProvider::m_bytesM{{
 	{make_unique<FixedBytesType>(32)}
 }};
 
-array<unique_ptr<MagicType>, 4> const TypeProvider::m_magics{{
+array<unique_ptr<MagicType>, 5> const TypeProvider::m_magics{{
+	{make_unique<MagicType>(MagicType::Kind::Chain)},
 	{make_unique<MagicType>(MagicType::Kind::Block)},
 	{make_unique<MagicType>(MagicType::Kind::Message)},
 	{make_unique<MagicType>(MagicType::Kind::Transaction)},

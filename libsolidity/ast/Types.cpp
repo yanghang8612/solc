@@ -3091,7 +3091,7 @@ string FunctionType::richIdentifier() const
 	case Kind::TotalFrozenBalance: id += "totalFrozenBalance"; break;
 	case Kind::FrozenBalance: id += "frozenBalance"; break;
 	case Kind::FrozenBalanceUsage: id += "frozenBalanceUsage"; break;
-	case Kind::ChainParamUnfreezeDelayDays: id += "chainParamUnfreezeDelayDays"; break;
+	case Kind::GetChainParameter: id += "getChainParameter"; break;
 	}
 	id += "_" + stateMutabilityToString(m_stateMutability);
 	id += identifierList(m_parameterTypes) + "returns" + identifierList(m_returnParameterTypes);
@@ -3604,8 +3604,6 @@ bool FunctionType::isBareCall() const
 	case Kind::PedersenHash:
 	case Kind::RewardBalance:
 	case Kind::IsSrCandidate:
-
-
 	case Kind::VoteCount:
 	case Kind::TotalVoteCount:
 	case Kind::ReceivedVoteCount:
@@ -3614,7 +3612,7 @@ bool FunctionType::isBareCall() const
 	case Kind::TotalFrozenBalance:
 	case Kind::FrozenBalance:
 	case Kind::FrozenBalanceUsage:
-	case Kind::ChainParamUnfreezeDelayDays:
+	case Kind::GetChainParameter:
 	case Kind::SHA256:
 	case Kind::RIPEMD160:
 		return true;
@@ -4113,6 +4111,8 @@ string MagicType::richIdentifier() const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return "t_magic_chain";
 	case Kind::Block:
 		return "t_magic_block";
 	case Kind::Message:
@@ -4140,6 +4140,12 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return MemberList::MemberMap({
+			{"totalEnergyCurrentLimit", TypeProvider::uint(64)},
+			{"totalEnergyWeight", TypeProvider::uint(64)},
+			{"unfreezeDelayDays", TypeProvider::uint(64)},
+		});
 	case Kind::Block:
 		return MemberList::MemberMap({
 			{"coinbase", TypeProvider::payableAddress()},
@@ -4281,6 +4287,8 @@ string MagicType::toString(bool _withoutDataLocation) const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return "chain";
 	case Kind::Block:
 		return "block";
 	case Kind::Message:
