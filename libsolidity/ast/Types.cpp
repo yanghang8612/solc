@@ -569,9 +569,9 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 StateMutability::View
         )->asBoundFunction()},
         {"resourceUsage", TypeProvider::function(
-                TypePointers{TypeProvider::address(), TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256(), TypeProvider::uint256()},
-                strings{"", "", ""},
+                strings{"", ""},
                 strings{"", ""},
                 FunctionType::Kind::ResourceUsage,
                 StateMutability::View
