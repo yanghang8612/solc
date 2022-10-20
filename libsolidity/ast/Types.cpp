@@ -520,9 +520,86 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		{"staticcall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareStaticCall, StateMutability::View)},
 		{"tokenBalance", TypeProvider::function(strings{"trcToken"}, strings{"uint"}, FunctionType::Kind::TokenBalance, StateMutability::View)},
         {"freezeExpireTime", TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::View)},
-        {"totalFrozenBalance", TypeProvider::function(strings{"uint8"}, strings{"uint64"}, FunctionType::Kind::TotalFrozenBalance, StateMutability::View)},
-        {"frozenBalance", TypeProvider::function(strings{"address", "uint8"}, strings{"uint64"}, FunctionType::Kind::FrozenBalance, StateMutability::View)},
-        {"frozenBalanceUsage", TypeProvider::function(strings{"uint8"}, strings{"uint64", "uint64"}, FunctionType::Kind::FrozenBalanceUsage, StateMutability::View)},
+        {"availableUnfreezeV2Size", TypeProvider::function(
+            TypePointers{TypeProvider::address()},
+            TypePointers{TypeProvider::uint256()},
+            strings{""},
+            strings{""},
+            FunctionType::Kind::AvailableUnfreezeV2Size,
+            StateMutability::View
+        )->asBoundFunction()},
+        {"unfreezableBalanceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::UnfreezableBalanceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"expireUnfreezeBalanceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::ExpireUnfreezeBalanceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"delegatableResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::DelegatableResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"resourceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", "", ""},
+                strings{""},
+                FunctionType::Kind::ResourceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"checkUnDelegateResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256(), TypeProvider::uint256(), TypeProvider::uint256()},
+                strings{"", "", ""},
+                strings{"", "", ""},
+                FunctionType::Kind::CheckUnDelegateResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"resourceUsage", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256(), TypeProvider::uint256()},
+                strings{"", "", ""},
+                strings{"", ""},
+                FunctionType::Kind::ResourceUsage,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalDelegatedResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalDelegatedResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalAcquiredResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalAcquiredResource,
+                StateMutability::View
+        )->asBoundFunction()},
     };
 	if (m_stateMutability == StateMutability::Payable)
 	{
@@ -531,8 +608,8 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		members.emplace_back(MemberList::Member{"transferToken", TypeProvider::function(strings{"uint", "trcToken"}, strings(), FunctionType::Kind::TransferToken)});
         members.emplace_back(MemberList::Member{"freeze", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::Freeze, StateMutability::NonPayable)});
         members.emplace_back(MemberList::Member{"unfreeze", TypeProvider::function(strings{"uint"}, strings(), FunctionType::Kind::Unfreeze, StateMutability::NonPayable)});
-        members.emplace_back(MemberList::Member{"delegateResource", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::DelegateResource, StateMutability::NonPayable)});
-        members.emplace_back(MemberList::Member{"unDelegateResource", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::UnDelegateResource, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"delegateResource", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::DelegateResource, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"unDelegateResource", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::UnDelegateResource, StateMutability::NonPayable)});
     }
 	return members;
 }
@@ -3083,15 +3160,22 @@ string FunctionType::richIdentifier() const
 	case Kind::ReceivedVoteCount: id += "receivedVoteCount"; break;
 	case Kind::UsedVoteCount: id += "usedVoteCount"; break;
 	case Kind::FreezeBalanceV2: id += "freezeBalanceV2"; break;
-	case Kind::UnFreezeBalanceV2: id += "unFreezeBalanceV2"; break;
+	case Kind::UnfreezeBalanceV2: id += "unfreezeBalanceV2"; break;
+	case Kind::CancelAllUnfreezeBalanceV2: id += "cancelAllUnfreezeBalanceV2"; break;
 	case Kind::WithdrawExpireUnfreeze: id += "withdrawExpireUnfreeze"; break;
 	case Kind::DelegateResource: id += "delegateResource"; break;
 	case Kind::UnDelegateResource: id += "unDelegateResource"; break;
-	case Kind::ExpireFreezeV2Balance: id += "expireFreezeV2Balance"; break;
-	case Kind::TotalFrozenBalance: id += "totalFrozenBalance"; break;
-	case Kind::FrozenBalance: id += "frozenBalance"; break;
-	case Kind::FrozenBalanceUsage: id += "frozenBalanceUsage"; break;
-	case Kind::GetChainParameter: id += "getChainParameter"; break;
+    case Kind::GetChainParameter: id += "getChainParameter"; break;
+    case Kind::AvailableUnfreezeV2Size: id += "availableUnfreezeV2Size"; break;
+    case Kind::UnfreezableBalanceV2: id += "unfreezableBalanceV2"; break;
+    case Kind::ExpireUnfreezeBalanceV2: id += "expireUnfreezeBalanceV2"; break;
+    case Kind::DelegatableResource: id += "delegatableResource"; break;
+    case Kind::ResourceV2: id += "resourceV2"; break;
+    case Kind::CheckUnDelegateResource: id += "checkUnDelegateResource"; break;
+    case Kind::ResourceUsage: id += "resourceUsage"; break;
+    case Kind::TotalResource: id += "totalResource"; break;
+    case Kind::TotalDelegatedResource: id += "totalDelegatedResource"; break;
+    case Kind::TotalAcquiredResource: id += "totalAcquiredResource"; break;
 	}
 	id += "_" + stateMutabilityToString(m_stateMutability);
 	id += identifierList(m_parameterTypes) + "returns" + identifierList(m_returnParameterTypes);
@@ -3608,11 +3692,17 @@ bool FunctionType::isBareCall() const
 	case Kind::TotalVoteCount:
 	case Kind::ReceivedVoteCount:
 	case Kind::UsedVoteCount:
-	case Kind::ExpireFreezeV2Balance:
-	case Kind::TotalFrozenBalance:
-	case Kind::FrozenBalance:
-	case Kind::FrozenBalanceUsage:
 	case Kind::GetChainParameter:
+    case Kind::AvailableUnfreezeV2Size:
+    case Kind::UnfreezableBalanceV2:
+    case Kind::ExpireUnfreezeBalanceV2:
+    case Kind::DelegatableResource:
+    case Kind::ResourceV2:
+    case Kind::CheckUnDelegateResource:
+    case Kind::ResourceUsage:
+	case Kind::TotalResource:
+	case Kind::TotalDelegatedResource:
+	case Kind::TotalAcquiredResource:
 	case Kind::SHA256:
 	case Kind::RIPEMD160:
 		return true;

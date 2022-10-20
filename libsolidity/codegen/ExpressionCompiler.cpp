@@ -617,7 +617,17 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				function.kind() == FunctionType::Kind::DelegateCall ||
 				function.kind() == FunctionType::Kind::Internal ||
 				function.kind() == FunctionType::Kind::ArrayPush ||
-				function.kind() == FunctionType::Kind::ArrayPop,
+				function.kind() == FunctionType::Kind::ArrayPop ||
+                function.kind() == FunctionType::Kind::AvailableUnfreezeV2Size ||
+                function.kind() == FunctionType::Kind::UnfreezableBalanceV2 ||
+                function.kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2 ||
+                function.kind() == FunctionType::Kind::DelegatableResource ||
+                function.kind() == FunctionType::Kind::ResourceV2 ||
+                function.kind() == FunctionType::Kind::CheckUnDelegateResource ||
+                function.kind() == FunctionType::Kind::ResourceUsage ||
+                function.kind() == FunctionType::Kind::TotalResource ||
+                function.kind() == FunctionType::Kind::TotalDelegatedResource ||
+                function.kind() == FunctionType::Kind::TotalAcquiredResource,
 			"");
 		switch (function.kind())
 		{
@@ -1090,11 +1100,17 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::TotalVoteCount:
 		case FunctionType::Kind::ReceivedVoteCount:
 		case FunctionType::Kind::UsedVoteCount:
-		case FunctionType::Kind::ExpireFreezeV2Balance:
-		case FunctionType::Kind::TotalFrozenBalance:
-		case FunctionType::Kind::FrozenBalance:
-		case FunctionType::Kind::FrozenBalanceUsage:
-		case FunctionType::Kind::GetChainParameter:
+        case FunctionType::Kind::GetChainParameter:
+        case FunctionType::Kind::AvailableUnfreezeV2Size:
+        case FunctionType::Kind::UnfreezableBalanceV2:
+        case FunctionType::Kind::ExpireUnfreezeBalanceV2:
+        case FunctionType::Kind::DelegatableResource:
+        case FunctionType::Kind::ResourceV2:
+        case FunctionType::Kind::CheckUnDelegateResource:
+        case FunctionType::Kind::ResourceUsage:
+        case FunctionType::Kind::TotalResource:
+        case FunctionType::Kind::TotalDelegatedResource:
+        case FunctionType::Kind::TotalAcquiredResource:
 		{
 			_functionCall.expression().accept(*this);
 			static map<FunctionType::Kind, u256> const contractAddresses{
@@ -1114,10 +1130,16 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				{FunctionType::Kind::ReceivedVoteCount, 0x1000009},
 				{FunctionType::Kind::TotalVoteCount, 0x100000a},
 				{FunctionType::Kind::GetChainParameter, 0x100000b},
-				{FunctionType::Kind::ExpireFreezeV2Balance, 0x100000c},
-				{FunctionType::Kind::TotalFrozenBalance, 0x100000d},
-				{FunctionType::Kind::FrozenBalance, 0x100000e},
-				{FunctionType::Kind::FrozenBalanceUsage, 0x100000f},
+				{FunctionType::Kind::AvailableUnfreezeV2Size, 0x100000c},
+				{FunctionType::Kind::UnfreezableBalanceV2, 0x100000d},
+				{FunctionType::Kind::ExpireUnfreezeBalanceV2, 0x100000e},
+				{FunctionType::Kind::DelegatableResource, 0x100000f},
+				{FunctionType::Kind::ResourceV2, 0x1000010},
+				{FunctionType::Kind::CheckUnDelegateResource, 0x1000011},
+				{FunctionType::Kind::ResourceUsage, 0x1000012},
+				{FunctionType::Kind::TotalResource, 0x1000013},
+				{FunctionType::Kind::TotalDelegatedResource, 0x1000014},
+				{FunctionType::Kind::TotalAcquiredResource, 0x1000015},
 			};
 			m_context << contractAddresses.at(function.kind());
 			for (unsigned i = function.sizeOnStack(); i > 0; --i)
@@ -1581,7 +1603,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			m_context.appendConditionalRevert(true);
 			break;
 		}
-		case FunctionType::Kind::UnFreezeBalanceV2:
+		case FunctionType::Kind::UnfreezeBalanceV2:
 		{
 			_functionCall.expression().accept(*this);
 			for (unsigned i = 0; i < arguments.size(); ++i){
@@ -1592,6 +1614,12 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			m_context.appendConditionalRevert(true);
 			break;
 		}
+        case FunctionType::Kind::CancelAllUnfreezeBalanceV2:
+        {
+            _functionCall.expression().accept(*this);
+            m_context << Instruction::NATIVECANCELALLUNFREEZEBALANCEV2;
+            break;
+        }
 		case FunctionType::Kind::WithdrawExpireUnfreeze:
 		{
 			_functionCall.expression().accept(*this);
@@ -1694,7 +1722,17 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			}
 			else if (
 				funType->kind() == FunctionType::Kind::ArrayPop ||
-				funType->kind() == FunctionType::Kind::ArrayPush
+				funType->kind() == FunctionType::Kind::ArrayPush ||
+				funType->kind() == FunctionType::Kind::AvailableUnfreezeV2Size ||
+				funType->kind() == FunctionType::Kind::UnfreezableBalanceV2 ||
+				funType->kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2 ||
+				funType->kind() == FunctionType::Kind::DelegatableResource ||
+				funType->kind() == FunctionType::Kind::ResourceV2 ||
+				funType->kind() == FunctionType::Kind::CheckUnDelegateResource ||
+				funType->kind() == FunctionType::Kind::ResourceUsage ||
+				funType->kind() == FunctionType::Kind::TotalResource ||
+				funType->kind() == FunctionType::Kind::TotalDelegatedResource ||
+				funType->kind() == FunctionType::Kind::TotalAcquiredResource
 			)
 			{
 			}
@@ -1786,11 +1824,17 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 					case FunctionType::Kind::TotalVoteCount:
 					case FunctionType::Kind::ReceivedVoteCount:
 					case FunctionType::Kind::UsedVoteCount:
-					case FunctionType::Kind::ExpireFreezeV2Balance:
-					case FunctionType::Kind::TotalFrozenBalance:
-					case FunctionType::Kind::FrozenBalance:
-					case FunctionType::Kind::FrozenBalanceUsage:
-					case FunctionType::Kind::GetChainParameter:
+                    case FunctionType::Kind::GetChainParameter:
+                    case FunctionType::Kind::AvailableUnfreezeV2Size:
+                    case FunctionType::Kind::UnfreezableBalanceV2:
+                    case FunctionType::Kind::ExpireUnfreezeBalanceV2:
+                    case FunctionType::Kind::DelegatableResource:
+                    case FunctionType::Kind::ResourceV2:
+                    case FunctionType::Kind::CheckUnDelegateResource:
+                    case FunctionType::Kind::ResourceUsage:
+                    case FunctionType::Kind::TotalResource:
+                    case FunctionType::Kind::TotalDelegatedResource:
+                    case FunctionType::Kind::TotalAcquiredResource:
 					case FunctionType::Kind::SHA256:
 					case FunctionType::Kind::RIPEMD160:
 					default:
@@ -2969,11 +3013,16 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		|| _functionType.kind() == FunctionType::Kind::TotalVoteCount
 		|| _functionType.kind() == FunctionType::Kind::ReceivedVoteCount
 		|| _functionType.kind() == FunctionType::Kind::UsedVoteCount
-		|| _functionType.kind() == FunctionType::Kind::ExpireFreezeV2Balance
-		|| _functionType.kind() == FunctionType::Kind::TotalFrozenBalance
-		|| _functionType.kind() == FunctionType::Kind::FrozenBalance
-		|| _functionType.kind() == FunctionType::Kind::FrozenBalanceUsage
-		|| _functionType.kind() == FunctionType::Kind::GetChainParameter
+		|| _functionType.kind() == FunctionType::Kind::AvailableUnfreezeV2Size
+		|| _functionType.kind() == FunctionType::Kind::UnfreezableBalanceV2
+		|| _functionType.kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2
+		|| _functionType.kind() == FunctionType::Kind::DelegatableResource
+		|| _functionType.kind() == FunctionType::Kind::ResourceV2
+		|| _functionType.kind() == FunctionType::Kind::CheckUnDelegateResource
+		|| _functionType.kind() == FunctionType::Kind::ResourceUsage
+		|| _functionType.kind() == FunctionType::Kind::TotalResource
+		|| _functionType.kind() == FunctionType::Kind::TotalDelegatedResource
+		|| _functionType.kind() == FunctionType::Kind::TotalAcquiredResource
 	)
 		// This would be the only combination of padding and in-place encoding,
 		// but all parameters of ecrecover are value types anyway.

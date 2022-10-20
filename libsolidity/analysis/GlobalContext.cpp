@@ -80,8 +80,8 @@ int magicVariableToID(std::string const& _name)
 	else if (_name == "usedVoteCount") return -45;
 	else if (_name == "freezebalancev2") return -46;
 	else if (_name == "unfreezebalancev2") return -47;
-	else if (_name == "withdrawexpireunfreeze") return -48;
-	else if (_name == "expirefreezev2balance") return -49;
+	else if (_name == "cancelallunfreezebalancev2") return -48;
+	else if (_name == "withdrawexpireunfreeze") return -49;
 	else if (_name == "chain") return -50;
 	else if (_name == "getchainparameter") return -51;
 	else
@@ -120,12 +120,12 @@ inline vector<shared_ptr<MagicVariableDeclaration const>> constructMagicVariable
 		magicVarDecl("unfreeze", TypeProvider::function(strings{"uint"}, strings{"bool"}, FunctionType::Kind::Unfreeze, StateMutability::NonPayable)),
 		magicVarDecl("freezeExpireTime",TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::NonPayable)),
 		magicVarDecl("withdrawreward", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawReward)),
-		magicVarDecl("freezebalancev2", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::FreezeBalanceV2, StateMutability::NonPayable)),
-		magicVarDecl("unfreezebalancev2", TypeProvider::function(strings{"uint64", "uint8"}, strings(), FunctionType::Kind::UnFreezeBalanceV2, StateMutability::NonPayable)),
-		magicVarDecl("withdrawexpireunfreeze", TypeProvider::function(strings{}, strings{"uint64"}, FunctionType::Kind::WithdrawExpireUnfreeze, StateMutability::NonPayable)),
-		magicVarDecl("expirefreezev2balance", TypeProvider::function(strings{"uint64"}, strings{"uint64"}, FunctionType::Kind::ExpireFreezeV2Balance, StateMutability::View)),
+		magicVarDecl("freezebalancev2", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::FreezeBalanceV2, StateMutability::NonPayable)),
+		magicVarDecl("unfreezebalancev2", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::UnfreezeBalanceV2, StateMutability::NonPayable)),
+		magicVarDecl("cancelallunfreezebalancev2", TypeProvider::function(strings(), strings{"uint"}, FunctionType::Kind::CancelAllUnfreezeBalanceV2, StateMutability::NonPayable)),
+		magicVarDecl("withdrawexpireunfreeze", TypeProvider::function(strings{}, strings{"uint"}, FunctionType::Kind::WithdrawExpireUnfreeze, StateMutability::NonPayable)),
 		magicVarDecl("chain", TypeProvider::magic(MagicType::Kind::Chain)),
-		magicVarDecl("getchainparameter", TypeProvider::function(strings{"uint8"}, strings{"uint64"}, FunctionType::Kind::GetChainParameter, StateMutability::View)),
+		magicVarDecl("getchainparameter", TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::GetChainParameter, StateMutability::View)),
 		// Accepts a MagicType that can be any contract type or an Integer type and returns a
 		// MagicType. The TypeChecker handles the correctness of the input and output types.
 		magicVarDecl("type", TypeProvider::function(

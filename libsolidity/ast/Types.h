@@ -1253,15 +1253,22 @@ public:
 		ReceivedVoteCount, ///< get total received vote count
 		UsedVoteCount, ///< get total used vote count
 		FreezeBalanceV2, ///< similar to FreezeBalanceV2 system contract
-		UnFreezeBalanceV2, ///< similar to UnFreezeBalanceV2 system contract
+		UnfreezeBalanceV2, ///< similar to UnFreezeBalanceV2 system contract
+		CancelAllUnfreezeBalanceV2, ///< cancel all pending unfreeze
 		WithdrawExpireUnfreeze, ///< similar to WithdrawExpireUnfreeze system contract
 		DelegateResource, ///< similar to DelegateResource system contract
 		UnDelegateResource, ///< similar to UndelegateResource system contract
-		ExpireFreezeV2Balance, ///< CALL to special contract for querying ExpireFreezeV2Balance
-		TotalFrozenBalance, ///< CALL to special contract for querying TotalFrozenBalance
-		FrozenBalance, ///< CALL to special contract for querying FrozenBalance
-		FrozenBalanceUsage, ///< CALL to special contract for querying FrozenBalanceUsage
 		GetChainParameter, ///< CALL to special contract for querying ChainParameter
+		AvailableUnfreezeV2Size, ///< CALL to special contract for querying AvailableUnfreezeV2Size
+		UnfreezableBalanceV2, ///< CALL to special contract for querying UnfreezableBalanceV2
+		ExpireUnfreezeBalanceV2, ///< CALL to special contract for querying ExpireUnfreezeBalanceV2
+		DelegatableResource, ///< CALL to special contract for querying DelegatableResource
+		ResourceV2, ///< CALL to special contract for querying ResourceV2
+		CheckUnDelegateResource, ///< CALL to special contract for querying CheckUnDelegateResource
+		ResourceUsage, ///< CALL to special contract for querying ResourceUsage
+		TotalResource, ///< CALL to special contract for querying TotalResource
+		TotalDelegatedResource, ///< CALL to special contract for querying TotalDelegatedResource
+		TotalAcquiredResource, ///< CALL to special contract for querying TotalAcquiredResource
 		Event, ///< syntactic sugar for LOG*
 		Error, ///< creating an error instance in revert or require
 		Wrap, ///< customType.wrap(...) for user defined value types
