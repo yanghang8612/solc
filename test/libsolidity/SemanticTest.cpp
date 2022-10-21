@@ -61,7 +61,7 @@ SemanticTest::SemanticTest(
 	m_sideEffectHooks(makeSideEffectHooks()),
 	m_enforceCompileToEwasm(_enforceCompileToEwasm),
 	m_enforceGasCost(_enforceGasCost),
-	m_enforceGasCostMinValue(move(_enforceGasCostMinValue))
+	m_enforceGasCostMinValue(std::move(_enforceGasCostMinValue))
 {
 	static set<string> const compileViaYulAllowedValues{"also", "true", "false"};
 	static set<string> const yulRunTriggers{"also", "true"};
@@ -386,10 +386,7 @@ TestCase::TestResult SemanticTest::runTest(
 			// For convenience, in semantic tests we assume that an unqualified name like `L` is equivalent to one
 			// with an empty source unit name (`:L`). This is fine because the compiler never uses unqualified
 			// names in the Yul code it produces and does not allow `linkersymbol()` at all in inline assembly.
-			if (test.call().signature.find(':') == string::npos)
-				libraries[":" + test.call().signature] = m_contractAddress;
-			else
-				libraries[test.call().signature] = m_contractAddress;
+			libraries[test.call().libraryFile + ":" + test.call().signature] = m_contractAddress;
 			continue;
 		}
 		else
@@ -460,14 +457,14 @@ TestCase::TestResult SemanticTest::runTest(
 				success = false;
 
 			test.setFailure(!m_transactionSuccessful);
-			test.setRawBytes(move(output));
+			test.setRawBytes(std::move(output));
 			test.setContractABI(m_compiler.contractABI(m_compiler.lastContractName(m_sources.mainSourceFile)));
 		}
 
 		vector<string> effects;
 		for (SideEffectHook const& hook: m_sideEffectHooks)
 			effects += hook(test.call());
-		test.setSideEffects(move(effects));
+		test.setSideEffects(std::move(effects));
 
 		success &= test.call().expectedSideEffects == test.call().actualSideEffects;
 	}

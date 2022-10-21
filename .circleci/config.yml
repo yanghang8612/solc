@@ -9,20 +9,20 @@ version: 2.1
 parameters:
   ubuntu-2004-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004-13
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:aa64242ecba4f040a839eadfaf20e8489cf93d1cb96ab90df2b240cdbbfe7f7c"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004-14
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:d1ef23849db4c5462b248d89c111da4009b153cbd5002cb8755b0580312be581"
   ubuntu-2004-clang-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004.clang-13
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:caaf8d42aaf07397d1540e570f096a4fb1ef11fda7da3f1141d8852ec8322a9e"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu2004.clang-14
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:beb8c91998ec0df99a488900b3723a06f1122f0954fc73786b6c53fd73a6408d"
   ubuntu-1604-clang-ossfuzz-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:ubuntu1604.clang.ossfuzz-18
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:048002d71a1f86f83dedb79dd057760b752256c75646ba5ad5c1bbe92e1695aa"
+    # solbuildpackpusher/solidity-buildpack-deps:ubuntu1604.clang.ossfuzz-19
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:8c9bf1813c261d781f4c65fceed2dfb3ecf5be9ecf49bddbd250b570a7f3baea"
   emscripten-docker-image:
     type: string
-    # solbuildpackpusher/solidity-buildpack-deps:emscripten-11
-    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:0ad7c65e8c54d926ba9cb80d56246e4fc49f9284ad5188aaaa4834f46ab0c315"
+    # solbuildpackpusher/solidity-buildpack-deps:emscripten-13
+    default: "solbuildpackpusher/solidity-buildpack-deps@sha256:f1c13f3450d1f2e53ea18ac1ac1a17e932573cb9a5ccd0fd9ef6dd44f6402fa9"
   evm-version:
     type: string
     default: london
@@ -91,6 +91,27 @@ commands:
       - gitter_notify_unless_pr:
           event: release
           condition: on_success
+
+  prepare_bytecode_report:
+    description: "Generate bytecode report and upload it as an artifact."
+    parameters:
+      label:
+        type: string
+    steps:
+      - run: mkdir test-cases/
+      - run: cd test-cases && ../scripts/isolate_tests.py ../test/
+      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface standard-json --report-file "../bytecode-report-<< parameters.label >>-json.txt"
+      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface cli --report-file "../bytecode-report-<< parameters.label >>-cli.txt"
+      - store_artifacts:
+          path: bytecode-report-<< parameters.label >>-json.txt
+      - store_artifacts:
+          path: bytecode-report-<< parameters.label >>-cli.txt
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bytecode-report-<< parameters.label >>-json.txt
+            - bytecode-report-<< parameters.label >>-cli.txt
+      - gitter_notify_failure_unless_pr
 
 defaults:
 
@@ -652,7 +673,7 @@ jobs:
             pip install --user codespell
       - run:
           name: Check spelling
-          command: ~/.local/bin/codespell -S "*.enc,.git,Dockerfile*" -I ./scripts/codespell_whitelist.txt
+          command: ~/.local/bin/codespell --skip "*.enc,.git,Dockerfile*,LICENSE,codespell_whitelist.txt,codespell_ignored_lines.txt" --ignore-words ./scripts/codespell_whitelist.txt --exclude-file ./scripts/codespell_ignored_lines.txt
       - gitter_notify_failure_unless_pr
 
   chk_docs_examples:
@@ -927,11 +948,14 @@ jobs:
     environment:
       TERM: xterm
       MAKEFLAGS: -j 5
+      # Build without Z3. We won't be running SMT tests on Arch because that requires a specific
+      # version of Z3 and the one with the official repos is often not the one we need.
+      USE_Z3: OFF
     steps:
       - run:
           name: Install build dependencies
           command: |
-            pacman --noconfirm -Syu --noprogressbar --needed base-devel boost cmake z3 cvc4 git openssh tar
+            pacman --noconfirm -Syu --noprogressbar --needed base-devel boost cmake cvc4 git openssh tar
       - checkout
       - run: *run_build
       - store_artifacts: *artifacts_solc
@@ -1047,7 +1071,7 @@ jobs:
       TERM: xterm
       # For Archlinux we do not have prebuilt docker images and we would need to build evmone from source,
       # thus we forgo semantics tests to speed things up.
-      SOLTEST_FLAGS: --no-semantic-tests
+      SOLTEST_FLAGS: --no-semantic-tests --no-smt
     steps:
       - run:
           name: Install runtime dependencies
@@ -1063,6 +1087,9 @@ jobs:
     environment:
       EVM: << pipeline.parameters.evm-version >>
       OPTIMIZE: 0
+      # The high parallelism in this job is causing the SMT tests to run out of memory,
+      # so disabling for now.
+      SOLTEST_FLAGS: --no-smt
     <<: *steps_soltest
 
   t_ubu_release_soltest_all: &t_ubu_release_soltest_all
@@ -1386,20 +1413,8 @@ jobs:
       - checkout
       - attach_workspace:
           at: build
-      - run: mkdir test-cases/
-      - run: cd test-cases && ../scripts/isolate_tests.py ../test/
-      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface standard-json --report-file ../bytecode-report-ubuntu-json.txt
-      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface cli --report-file ../bytecode-report-ubuntu-cli.txt
-      - store_artifacts:
-          path: bytecode-report-ubuntu-json.txt
-      - store_artifacts:
-          path: bytecode-report-ubuntu-cli.txt
-      - persist_to_workspace:
-          root: .
-          paths:
-            - bytecode-report-ubuntu-json.txt
-            - bytecode-report-ubuntu-cli.txt
-      - gitter_notify_failure_unless_pr
+      - prepare_bytecode_report:
+          label: "ubuntu"
 
   b_bytecode_osx:
     <<: *base_osx
@@ -1407,20 +1422,8 @@ jobs:
       - checkout
       - attach_workspace:
           at: .
-      - run: mkdir test-cases/
-      - run: cd test-cases && ../scripts/isolate_tests.py ../test/
-      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface standard-json --report-file ../bytecode-report-osx-json.txt
-      - run: cd test-cases && ../scripts/bytecodecompare/prepare_report.py ../build/solc/solc --interface cli --report-file ../bytecode-report-osx-cli.txt
-      - store_artifacts:
-          path: bytecode-report-osx-json.txt
-      - store_artifacts:
-          path: bytecode-report-osx-cli.txt
-      - persist_to_workspace:
-          root: .
-          paths:
-            - bytecode-report-osx-json.txt
-            - bytecode-report-osx-cli.txt
-      - gitter_notify_failure_unless_pr
+      - prepare_bytecode_report:
+          label: "osx"
 
   b_bytecode_win:
     <<: *base_win_cmd
@@ -1529,10 +1532,10 @@ jobs:
 
             mkdir -p solc-bin/{linux-amd64,macosx-amd64,windows-amd64,bin}
 
-            mv github/solc-static-linux "solc-bin/linux-amd64/solc-linux-amd64-${full_version}"
-            mv github/solc-macos        "solc-bin/macosx-amd64/solc-macosx-amd64-${full_version}"
-            mv github/solc-windows.exe  "solc-bin/windows-amd64/solc-windows-amd64-${full_version}.exe"
-            mv github/soljson.js        "solc-bin/bin/soljson-${full_version}.js"
+            mv github/solc-static-linux "solc-bin/linux-amd64/solc-linux-amd64-v${full_version}"
+            mv github/solc-macos        "solc-bin/macosx-amd64/solc-macosx-amd64-v${full_version}"
+            mv github/solc-windows.exe  "solc-bin/windows-amd64/solc-windows-amd64-v${full_version}.exe"
+            mv github/soljson.js        "solc-bin/bin/soljson-v${full_version}.js"
 
             cd solc-bin/
             tar --create --file ../solc-bin-binaries.tar *

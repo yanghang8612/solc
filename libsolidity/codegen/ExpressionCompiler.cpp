@@ -71,7 +71,7 @@ Type const* closestType(Type const* _type, Type const* _targetType, bool _isShif
 				solAssert(tempComponents[i], "");
 			}
 		}
-		return TypeProvider::tuple(move(tempComponents));
+		return TypeProvider::tuple(std::move(tempComponents));
 	}
 	else
 		return _targetType->dataStoredIn(DataLocation::Storage) ? _type->mobileType() : _targetType;
@@ -391,7 +391,7 @@ bool ExpressionCompiler::visit(TupleExpression const& _tuple)
 				if (_tuple.annotation().willBeWrittenTo)
 				{
 					solAssert(!!m_currentLValue, "");
-					lvalues.push_back(move(m_currentLValue));
+					lvalues.push_back(std::move(m_currentLValue));
 				}
 			}
 			else if (_tuple.annotation().willBeWrittenTo)
@@ -399,9 +399,9 @@ bool ExpressionCompiler::visit(TupleExpression const& _tuple)
 		if (_tuple.annotation().willBeWrittenTo)
 		{
 			if (_tuple.components().size() == 1)
-				m_currentLValue = move(lvalues[0]);
+				m_currentLValue = std::move(lvalues[0]);
 			else
-				m_currentLValue = make_unique<TupleObject>(m_context, move(lvalues));
+				m_currentLValue = make_unique<TupleObject>(m_context, std::move(lvalues));
 		}
 	}
 	return false;
@@ -617,7 +617,17 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				function.kind() == FunctionType::Kind::DelegateCall ||
 				function.kind() == FunctionType::Kind::Internal ||
 				function.kind() == FunctionType::Kind::ArrayPush ||
-				function.kind() == FunctionType::Kind::ArrayPop,
+				function.kind() == FunctionType::Kind::ArrayPop ||
+                function.kind() == FunctionType::Kind::AvailableUnfreezeV2Size ||
+                function.kind() == FunctionType::Kind::UnfreezableBalanceV2 ||
+                function.kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2 ||
+                function.kind() == FunctionType::Kind::DelegatableResource ||
+                function.kind() == FunctionType::Kind::ResourceV2 ||
+                function.kind() == FunctionType::Kind::CheckUnDelegateResource ||
+                function.kind() == FunctionType::Kind::ResourceUsage ||
+                function.kind() == FunctionType::Kind::TotalResource ||
+                function.kind() == FunctionType::Kind::TotalDelegatedResource ||
+                function.kind() == FunctionType::Kind::TotalAcquiredResource,
 			"");
 		switch (function.kind())
 		{
@@ -1080,34 +1090,56 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::RIPEMD160:
 		case FunctionType::Kind::ValidateMultiSign:
         case FunctionType::Kind::BatchValidateSign:
-        case FunctionType::Kind::verifyBurnProof:
-        case FunctionType::Kind::verifyTransferProof:
-        case FunctionType::Kind::verifyMintProof:
-        case FunctionType::Kind::pedersenHash:
-		case FunctionType::Kind::rewardBalance:
-		case FunctionType::Kind::isSrCandidate:
-		case FunctionType::Kind::voteCount:
-		case FunctionType::Kind::totalVoteCount:
-		case FunctionType::Kind::receivedVoteCount:
-		case FunctionType::Kind::usedVoteCount:
+        case FunctionType::Kind::VerifyBurnProof:
+        case FunctionType::Kind::VerifyTransferProof:
+        case FunctionType::Kind::VerifyMintProof:
+        case FunctionType::Kind::PedersenHash:
+		case FunctionType::Kind::RewardBalance:
+		case FunctionType::Kind::IsSrCandidate:
+		case FunctionType::Kind::VoteCount:
+		case FunctionType::Kind::TotalVoteCount:
+		case FunctionType::Kind::ReceivedVoteCount:
+		case FunctionType::Kind::UsedVoteCount:
+        case FunctionType::Kind::GetChainParameter:
+        case FunctionType::Kind::AvailableUnfreezeV2Size:
+        case FunctionType::Kind::UnfreezableBalanceV2:
+        case FunctionType::Kind::ExpireUnfreezeBalanceV2:
+        case FunctionType::Kind::DelegatableResource:
+        case FunctionType::Kind::ResourceV2:
+        case FunctionType::Kind::CheckUnDelegateResource:
+        case FunctionType::Kind::ResourceUsage:
+        case FunctionType::Kind::TotalResource:
+        case FunctionType::Kind::TotalDelegatedResource:
+        case FunctionType::Kind::TotalAcquiredResource:
 		{
 			_functionCall.expression().accept(*this);
 			static map<FunctionType::Kind, u256> const contractAddresses{
-				{FunctionType::Kind::ECRecover, 1},
-				{FunctionType::Kind::SHA256, 2},
-				{FunctionType::Kind::RIPEMD160, 3},
-				{FunctionType::Kind::BatchValidateSign, 9},
-                {FunctionType::Kind::ValidateMultiSign, 10},
-                {FunctionType::Kind::verifyMintProof, 16777217},
-                {FunctionType::Kind::verifyTransferProof, 16777218},
-                {FunctionType::Kind::verifyBurnProof, 16777219},
-				{FunctionType::Kind::pedersenHash, 16777220},
-				{FunctionType::Kind::rewardBalance, 16777221},
-				{FunctionType::Kind::isSrCandidate, 16777222},
-				{FunctionType::Kind::voteCount, 16777223},
-				{FunctionType::Kind::usedVoteCount, 16777224},
-				{FunctionType::Kind::receivedVoteCount, 16777225},
-				{FunctionType::Kind::totalVoteCount, 16777226}
+				{FunctionType::Kind::ECRecover, 0x1},
+				{FunctionType::Kind::SHA256, 0x2},
+				{FunctionType::Kind::RIPEMD160, 0x3},
+				{FunctionType::Kind::BatchValidateSign, 0x9},
+                {FunctionType::Kind::ValidateMultiSign, 0xa},
+                {FunctionType::Kind::VerifyMintProof, 0x1000001},
+                {FunctionType::Kind::VerifyTransferProof, 0x1000002},
+                {FunctionType::Kind::VerifyBurnProof, 0x1000003},
+				{FunctionType::Kind::PedersenHash, 0x1000004},
+				{FunctionType::Kind::RewardBalance, 0x1000005},
+				{FunctionType::Kind::IsSrCandidate, 0x1000006},
+				{FunctionType::Kind::VoteCount, 0x1000007},
+				{FunctionType::Kind::UsedVoteCount, 0x1000008},
+				{FunctionType::Kind::ReceivedVoteCount, 0x1000009},
+				{FunctionType::Kind::TotalVoteCount, 0x100000a},
+				{FunctionType::Kind::GetChainParameter, 0x100000b},
+				{FunctionType::Kind::AvailableUnfreezeV2Size, 0x100000c},
+				{FunctionType::Kind::UnfreezableBalanceV2, 0x100000d},
+				{FunctionType::Kind::ExpireUnfreezeBalanceV2, 0x100000e},
+				{FunctionType::Kind::DelegatableResource, 0x100000f},
+				{FunctionType::Kind::ResourceV2, 0x1000010},
+				{FunctionType::Kind::CheckUnDelegateResource, 0x1000011},
+				{FunctionType::Kind::ResourceUsage, 0x1000012},
+				{FunctionType::Kind::TotalResource, 0x1000013},
+				{FunctionType::Kind::TotalDelegatedResource, 0x1000014},
+				{FunctionType::Kind::TotalAcquiredResource, 0x1000015},
 			};
 			m_context << contractAddresses.at(function.kind());
 			for (unsigned i = function.sizeOnStack(); i > 0; --i)
@@ -1541,7 +1573,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
             m_context << Instruction::NATIVEFREEZEEXPIRETIME;
             break;
         }
-		case FunctionType::Kind::vote:
+		case FunctionType::Kind::Vote:
 		{
 			_functionCall.expression().accept(*this);
 			for (unsigned i = 0; i < arguments.size(); ++i)
@@ -1558,6 +1590,62 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		{
 			_functionCall.expression().accept(*this);
 			m_context << Instruction::NATIVEWITHDRAWREWARD;
+			break;
+		}
+		case FunctionType::Kind::FreezeBalanceV2:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEFREEZEBALANCEV2;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+		case FunctionType::Kind::UnfreezeBalanceV2:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEUNFREEZEBALANCEV2;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+        case FunctionType::Kind::CancelAllUnfreezeBalanceV2:
+        {
+            _functionCall.expression().accept(*this);
+            m_context << Instruction::NATIVECANCELALLUNFREEZEBALANCEV2;
+            break;
+        }
+		case FunctionType::Kind::WithdrawExpireUnfreeze:
+		{
+			_functionCall.expression().accept(*this);
+			m_context << Instruction::NATIVEWITHDRAWEXPIREUNFREEZE;
+			break;
+		}
+		case FunctionType::Kind::DelegateResource:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEDELEGATERESOURCE;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
+			break;
+		}
+		case FunctionType::Kind::UnDelegateResource:
+		{
+			_functionCall.expression().accept(*this);
+			for (unsigned i = 0; i < arguments.size(); ++i){
+				acceptAndConvert(*arguments[i], *function.parameterTypes()[i]);
+			}
+			m_context << Instruction::NATIVEUNDELEGATERESOURCE;
+			m_context << Instruction::ISZERO;
+			m_context.appendConditionalRevert(true);
 			break;
 		}
 		default:
@@ -1634,7 +1722,17 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			}
 			else if (
 				funType->kind() == FunctionType::Kind::ArrayPop ||
-				funType->kind() == FunctionType::Kind::ArrayPush
+				funType->kind() == FunctionType::Kind::ArrayPush ||
+				funType->kind() == FunctionType::Kind::AvailableUnfreezeV2Size ||
+				funType->kind() == FunctionType::Kind::UnfreezableBalanceV2 ||
+				funType->kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2 ||
+				funType->kind() == FunctionType::Kind::DelegatableResource ||
+				funType->kind() == FunctionType::Kind::ResourceV2 ||
+				funType->kind() == FunctionType::Kind::CheckUnDelegateResource ||
+				funType->kind() == FunctionType::Kind::ResourceUsage ||
+				funType->kind() == FunctionType::Kind::TotalResource ||
+				funType->kind() == FunctionType::Kind::TotalDelegatedResource ||
+				funType->kind() == FunctionType::Kind::TotalAcquiredResource
 			)
 			{
 			}
@@ -1716,16 +1814,27 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 					case FunctionType::Kind::ECRecover:
 					case FunctionType::Kind::ValidateMultiSign:
 					case FunctionType::Kind::BatchValidateSign:
-					case FunctionType::Kind::verifyBurnProof:
-					case FunctionType::Kind::verifyTransferProof:
-					case FunctionType::Kind::verifyMintProof:
-					case FunctionType::Kind::pedersenHash:
-					case FunctionType::Kind::rewardBalance:
-					case FunctionType::Kind::isSrCandidate:
-					case FunctionType::Kind::voteCount:
-					case FunctionType::Kind::totalVoteCount:
-					case FunctionType::Kind::receivedVoteCount:
-					case FunctionType::Kind::usedVoteCount:
+					case FunctionType::Kind::VerifyBurnProof:
+					case FunctionType::Kind::VerifyTransferProof:
+					case FunctionType::Kind::VerifyMintProof:
+					case FunctionType::Kind::PedersenHash:
+					case FunctionType::Kind::RewardBalance:
+					case FunctionType::Kind::IsSrCandidate:
+					case FunctionType::Kind::VoteCount:
+					case FunctionType::Kind::TotalVoteCount:
+					case FunctionType::Kind::ReceivedVoteCount:
+					case FunctionType::Kind::UsedVoteCount:
+                    case FunctionType::Kind::GetChainParameter:
+                    case FunctionType::Kind::AvailableUnfreezeV2Size:
+                    case FunctionType::Kind::UnfreezableBalanceV2:
+                    case FunctionType::Kind::ExpireUnfreezeBalanceV2:
+                    case FunctionType::Kind::DelegatableResource:
+                    case FunctionType::Kind::ResourceV2:
+                    case FunctionType::Kind::CheckUnDelegateResource:
+                    case FunctionType::Kind::ResourceUsage:
+                    case FunctionType::Kind::TotalResource:
+                    case FunctionType::Kind::TotalDelegatedResource:
+                    case FunctionType::Kind::TotalAcquiredResource:
 					case FunctionType::Kind::SHA256:
 					case FunctionType::Kind::RIPEMD160:
 					default:
@@ -1941,7 +2050,17 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 				true
 			);
 		}
-		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall", "freezeExpireTime"}).count(member))
+		else if ((set<string>{"delegateResource", "unDelegateResource"}).count(member))
+		{
+			solAssert(dynamic_cast<AddressType const&>(*_memberAccess.expression().annotation().type).stateMutability() == StateMutability::Payable, "");
+			utils().convertType(
+				*_memberAccess.expression().annotation().type,
+				AddressType(StateMutability::Payable),
+				true
+			);
+		}
+		else if ((set<string>{"tokenBalance", "call", "callcode", "delegatecall", "staticcall",
+							  "freezeExpireTime", "totalFrozenBalance", "frozenBalance", "frozenBalanceUsage"}).count(member))
 			utils().convertType(
 				*_memberAccess.expression().annotation().type,
 				*TypeProvider::address(),
@@ -1978,8 +2097,45 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			);
 		break;
 	case Type::Category::Magic:
+	{
 		// we can ignore the kind of magic and only look at the name of the member
-		if (member == "coinbase")
+		string routine = R"({
+			// load free mem ptr
+			let memPtr := mload(64)
+			// save index param to mem
+			mstore8(add(memPtr, 31), index)
+			// do static call to get chain parameter, if return zero, revert
+			if iszero(staticcall(gas(), 0x100000b, memPtr, 32, memPtr, 32)) {
+				let pos := mload(64)
+				returndatacopy(pos, 0, returndatasize())
+				revert(pos, returndatasize())
+			}
+			// finalize the mem allocation
+			mstore(64, add(memPtr, 32))
+			// load the return value
+			value := mload(memPtr)
+			// do check the value is a valid uint64
+			if iszero(eq(value, and(value, 0xffffffffffffffff))) { revert(0, 0) }
+		})";
+		if (member == "totalEnergyCurrentLimit")
+		{
+			m_context << u256(0) << u256(1);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "totalEnergyWeight")
+		{
+			m_context << u256(0) << u256(2);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "unfreezeDelayDays")
+		{
+			m_context << u256(0) << u256(3);
+			m_context.appendInlineAssembly(routine, {"value", "index"});
+			m_context << Instruction::POP;
+		}
+		else if (member == "coinbase")
 			m_context << Instruction::COINBASE;
 		else if (member == "timestamp")
 			m_context << Instruction::TIMESTAMP;
@@ -2071,6 +2227,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 		else
 			solAssert(false, "Unknown magic member.");
 		break;
+    }
 	case Type::Category::Struct:
 	{
 		StructType const& type = dynamic_cast<StructType const&>(*_memberAccess.expression().annotation().type);
@@ -2846,16 +3003,26 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	if (_functionType.kind() == FunctionType::Kind::ECRecover
 		|| _functionType.kind() == FunctionType::Kind::ValidateMultiSign
 		|| _functionType.kind() == FunctionType::Kind::BatchValidateSign
-		|| _functionType.kind() == FunctionType::Kind::verifyBurnProof
-		|| _functionType.kind() == FunctionType::Kind::verifyTransferProof
-		|| _functionType.kind() == FunctionType::Kind::verifyMintProof
-		|| _functionType.kind() == FunctionType::Kind::pedersenHash
-		|| _functionType.kind() == FunctionType::Kind::rewardBalance
-		|| _functionType.kind() == FunctionType::Kind::isSrCandidate
-		|| _functionType.kind() == FunctionType::Kind::voteCount
-		|| _functionType.kind() == FunctionType::Kind::totalVoteCount
-		|| _functionType.kind() == FunctionType::Kind::receivedVoteCount
-		|| _functionType.kind() == FunctionType::Kind::usedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::VerifyBurnProof
+		|| _functionType.kind() == FunctionType::Kind::VerifyTransferProof
+		|| _functionType.kind() == FunctionType::Kind::VerifyMintProof
+		|| _functionType.kind() == FunctionType::Kind::PedersenHash
+		|| _functionType.kind() == FunctionType::Kind::RewardBalance
+		|| _functionType.kind() == FunctionType::Kind::IsSrCandidate
+		|| _functionType.kind() == FunctionType::Kind::VoteCount
+		|| _functionType.kind() == FunctionType::Kind::TotalVoteCount
+		|| _functionType.kind() == FunctionType::Kind::ReceivedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::UsedVoteCount
+		|| _functionType.kind() == FunctionType::Kind::AvailableUnfreezeV2Size
+		|| _functionType.kind() == FunctionType::Kind::UnfreezableBalanceV2
+		|| _functionType.kind() == FunctionType::Kind::ExpireUnfreezeBalanceV2
+		|| _functionType.kind() == FunctionType::Kind::DelegatableResource
+		|| _functionType.kind() == FunctionType::Kind::ResourceV2
+		|| _functionType.kind() == FunctionType::Kind::CheckUnDelegateResource
+		|| _functionType.kind() == FunctionType::Kind::ResourceUsage
+		|| _functionType.kind() == FunctionType::Kind::TotalResource
+		|| _functionType.kind() == FunctionType::Kind::TotalDelegatedResource
+		|| _functionType.kind() == FunctionType::Kind::TotalAcquiredResource
 	)
 		// This would be the only combination of padding and in-place encoding,
 		// but all parameters of ecrecover are value types anyway.
@@ -2999,7 +3166,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		if (!_functionType.returnParameterTypes().empty())
 			utils().returnDataToArray();
 	}
-	else if (funKind == FunctionType::Kind::verifyTransferProof ||funKind == FunctionType::Kind::verifyMintProof){
+	else if (funKind == FunctionType::Kind::VerifyTransferProof ||funKind == FunctionType::Kind::VerifyMintProof){
 	    //in this kind of precompiled contracts , return type is dynamicType
 	    if (haveReturndatacopy)
 	    {

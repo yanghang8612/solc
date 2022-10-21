@@ -110,10 +110,10 @@ util::Result<TypePointers> transformParametersToExternal(TypePointers const& _pa
 	return transformed;
 }
 
-string toStringInParentheses(TypePointers const& _types, bool _short)
+string toStringInParentheses(TypePointers const& _types, bool _withoutDataLocation)
 {
 	return '(' + util::joinHumanReadable(
-		_types | ranges::views::transform([&](auto const* _type) { return _type->toString(_short); }),
+		_types | ranges::views::transform([&](auto const* _type) { return _type->toString(_withoutDataLocation); }),
 		","
 	) + ')';
 }
@@ -125,7 +125,7 @@ MemberList::Member::Member(Declaration const* _declaration, Type const* _type):
 {}
 
 MemberList::Member::Member(Declaration const* _declaration, Type const* _type, string _name):
-	name(move(_name)),
+	name(std::move(_name)),
 	type(_type),
 	declaration(_declaration)
 {
@@ -305,7 +305,7 @@ MemberList const& Type::members(ASTNode const* _currentScope) const
 		MemberList::MemberMap members = nativeMembers(_currentScope);
 		if (_currentScope)
 			members += boundFunctions(*this, *_currentScope);
-		m_members[_currentScope] = make_unique<MemberList>(move(members));
+		m_members[_currentScope] = make_unique<MemberList>(std::move(members));
 	}
 	return *m_members[_currentScope];
 }
@@ -520,6 +520,86 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		{"staticcall", TypeProvider::function(strings{"bytes memory"}, strings{"bool", "bytes memory"}, FunctionType::Kind::BareStaticCall, StateMutability::View)},
 		{"tokenBalance", TypeProvider::function(strings{"trcToken"}, strings{"uint"}, FunctionType::Kind::TokenBalance, StateMutability::View)},
         {"freezeExpireTime", TypeProvider::function(strings{"uint"}, strings{"uint"}, FunctionType::Kind::FreezeExpireTime, StateMutability::View)},
+        {"availableUnfreezeV2Size", TypeProvider::function(
+            TypePointers{TypeProvider::address()},
+            TypePointers{TypeProvider::uint256()},
+            strings{""},
+            strings{""},
+            FunctionType::Kind::AvailableUnfreezeV2Size,
+            StateMutability::View
+        )->asBoundFunction()},
+        {"unfreezableBalanceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::UnfreezableBalanceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"expireUnfreezeBalanceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::ExpireUnfreezeBalanceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"delegatableResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::DelegatableResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"resourceV2", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", "", ""},
+                strings{""},
+                FunctionType::Kind::ResourceV2,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"checkUnDelegateResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256(), TypeProvider::uint256(), TypeProvider::uint256()},
+                strings{"", "", ""},
+                strings{"", "", ""},
+                FunctionType::Kind::CheckUnDelegateResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"resourceUsage", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256(), TypeProvider::uint256()},
+                strings{"", ""},
+                strings{"", ""},
+                FunctionType::Kind::ResourceUsage,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalDelegatedResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalDelegatedResource,
+                StateMutability::View
+        )->asBoundFunction()},
+        {"totalAcquiredResource", TypeProvider::function(
+                TypePointers{TypeProvider::address(), TypeProvider::uint256()},
+                TypePointers{TypeProvider::uint256()},
+                strings{"", ""},
+                strings{""},
+                FunctionType::Kind::TotalAcquiredResource,
+                StateMutability::View
+        )->asBoundFunction()},
     };
 	if (m_stateMutability == StateMutability::Payable)
 	{
@@ -528,6 +608,8 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
 		members.emplace_back(MemberList::Member{"transferToken", TypeProvider::function(strings{"uint", "trcToken"}, strings(), FunctionType::Kind::TransferToken)});
         members.emplace_back(MemberList::Member{"freeze", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::Freeze, StateMutability::NonPayable)});
         members.emplace_back(MemberList::Member{"unfreeze", TypeProvider::function(strings{"uint"}, strings(), FunctionType::Kind::Unfreeze, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"delegateResource", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::DelegateResource, StateMutability::NonPayable)});
+        members.emplace_back(MemberList::Member{"unDelegateResource", TypeProvider::function(strings{"uint", "uint"}, strings(), FunctionType::Kind::UnDelegateResource, StateMutability::NonPayable)});
     }
 	return members;
 }
@@ -1816,7 +1898,7 @@ vector<tuple<string, Type const*>> ArrayType::makeStackItems() const
 	solAssert(false, "");
 }
 
-string ArrayType::toString(bool _short) const
+string ArrayType::toString(bool _withoutDataLocation) const
 {
 	string ret;
 	if (isString())
@@ -1825,13 +1907,31 @@ string ArrayType::toString(bool _short) const
 		ret = "bytes";
 	else
 	{
-		ret = baseType()->toString(_short) + "[";
+		ret = baseType()->toString(_withoutDataLocation) + "[";
 		if (!isDynamicallySized())
 			ret += length().str();
 		ret += "]";
 	}
-	if (!_short)
+	if (!_withoutDataLocation)
 		ret += " " + stringForReferencePart();
+	return ret;
+}
+
+string ArrayType::humanReadableName() const
+{
+	string ret;
+	if (isString())
+		ret = "string";
+	else if (isByteArrayOrString())
+		ret = "bytes";
+	else
+	{
+		ret = baseType()->toString(true) + "[";
+		if (!isDynamicallySized())
+			ret += length().str();
+		ret += "]";
+	}
+	ret += " " + stringForReferencePart();
 	return ret;
 }
 
@@ -2017,9 +2117,14 @@ bool ArraySliceType::operator==(Type const& _other) const
 	return false;
 }
 
-string ArraySliceType::toString(bool _short) const
+string ArraySliceType::toString(bool _withoutDataLocation) const
 {
-	return m_arrayType.toString(_short) + " slice";
+	return m_arrayType.toString(_withoutDataLocation) + " slice";
+}
+
+string ArraySliceType::humanReadableName() const
+{
+	return m_arrayType.humanReadableName() + " slice";
 }
 
 Type const* ArraySliceType::mobileType() const
@@ -2283,10 +2388,10 @@ bool StructType::containsNestedMapping() const
 	return m_struct.annotation().containsNestedMapping.value();
 }
 
-string StructType::toString(bool _short) const
+string StructType::toString(bool _withoutDataLocation) const
 {
 	string ret = "struct " + *m_struct.annotation().canonicalName;
-	if (!_short)
+	if (!_withoutDataLocation)
 		ret += " " + stringForReferencePart();
 	return ret;
 }
@@ -2638,7 +2743,7 @@ bool UserDefinedValueType::operator==(Type const& _other) const
 	return other.definition() == definition();
 }
 
-string UserDefinedValueType::toString(bool /* _short */) const
+string UserDefinedValueType::toString(bool /* _withoutDataLocation */) const
 {
 	return *definition().annotation().canonicalName;
 }
@@ -2686,13 +2791,24 @@ bool TupleType::operator==(Type const& _other) const
 		return false;
 }
 
-string TupleType::toString(bool _short) const
+string TupleType::toString(bool _withoutDataLocation) const
 {
 	if (components().empty())
 		return "tuple()";
 	string str = "tuple(";
 	for (auto const& t: components())
-		str += (t ? t->toString(_short) : "") + ",";
+		str += (t ? t->toString(_withoutDataLocation) : "") + ",";
+	str.pop_back();
+	return str + ")";
+}
+
+string TupleType::humanReadableName() const
+{
+	if (components().empty())
+		return "tuple()";
+	string str = "tuple(";
+	for (auto const& t: components())
+		str += (t ? t->humanReadableName() : "") + ",";
 	str.pop_back();
 	return str + ")";
 }
@@ -2730,7 +2846,7 @@ Type const* TupleType::mobileType() const
 		else
 			mobiles.push_back(nullptr);
 	}
-	return TypeProvider::tuple(move(mobiles));
+	return TypeProvider::tuple(std::move(mobiles));
 }
 
 FunctionType::FunctionType(FunctionDefinition const& _function, Kind _kind):
@@ -3002,10 +3118,10 @@ string FunctionType::richIdentifier() const
 	case Kind::ECRecover: id += "ecrecover"; break;
 	case Kind::ValidateMultiSign: id += "validatemultisign"; break;
 	case Kind::BatchValidateSign: id += "batchvalidatesign"; break;
-	case Kind::verifyBurnProof: id += "verifyBurnProof";break;
-	case Kind::verifyTransferProof: id += "verifyTransferProof";break;
-	case Kind::verifyMintProof: id += "verifyMintProof";break;
-	case Kind::pedersenHash: id += "pedersenHash";break;
+	case Kind::VerifyBurnProof: id += "verifyBurnProof";break;
+	case Kind::VerifyTransferProof: id += "verifyTransferProof";break;
+	case Kind::VerifyMintProof: id += "verifyMintProof";break;
+	case Kind::PedersenHash: id += "pedersenHash";break;
 	case Kind::SHA256: id += "sha256"; break;
 	case Kind::RIPEMD160: id += "ripemd160"; break;
 	case Kind::GasLeft: id += "gasleft"; break;
@@ -3035,14 +3151,31 @@ string FunctionType::richIdentifier() const
 	case Kind::Freeze: id += "freeze"; break;
 	case Kind::Unfreeze: id += "unfreeze"; break;
 	case Kind::FreezeExpireTime: id += "freezeExpireTime"; break;
-	case Kind::vote: id += "vote"; break;
+	case Kind::Vote: id += "vote"; break;
 	case Kind::WithdrawReward: id += "withdrawreward"; break;
-	case Kind::rewardBalance: id += "rewardBalance"; break;
-	case Kind::isSrCandidate: id += "isSrCandidate"; break;
-	case Kind::voteCount: id += "voteCount"; break;
-	case Kind::totalVoteCount: id += "totalVoteCount"; break;
-	case Kind::receivedVoteCount: id += "receivedVoteCount"; break;
-	case Kind::usedVoteCount: id += "usedVoteCount"; break;
+	case Kind::RewardBalance: id += "rewardBalance"; break;
+	case Kind::IsSrCandidate: id += "isSrCandidate"; break;
+	case Kind::VoteCount: id += "voteCount"; break;
+	case Kind::TotalVoteCount: id += "totalVoteCount"; break;
+	case Kind::ReceivedVoteCount: id += "receivedVoteCount"; break;
+	case Kind::UsedVoteCount: id += "usedVoteCount"; break;
+	case Kind::FreezeBalanceV2: id += "freezeBalanceV2"; break;
+	case Kind::UnfreezeBalanceV2: id += "unfreezeBalanceV2"; break;
+	case Kind::CancelAllUnfreezeBalanceV2: id += "cancelAllUnfreezeBalanceV2"; break;
+	case Kind::WithdrawExpireUnfreeze: id += "withdrawExpireUnfreeze"; break;
+	case Kind::DelegateResource: id += "delegateResource"; break;
+	case Kind::UnDelegateResource: id += "unDelegateResource"; break;
+    case Kind::GetChainParameter: id += "getChainParameter"; break;
+    case Kind::AvailableUnfreezeV2Size: id += "availableUnfreezeV2Size"; break;
+    case Kind::UnfreezableBalanceV2: id += "unfreezableBalanceV2"; break;
+    case Kind::ExpireUnfreezeBalanceV2: id += "expireUnfreezeBalanceV2"; break;
+    case Kind::DelegatableResource: id += "delegatableResource"; break;
+    case Kind::ResourceV2: id += "resourceV2"; break;
+    case Kind::CheckUnDelegateResource: id += "checkUnDelegateResource"; break;
+    case Kind::ResourceUsage: id += "resourceUsage"; break;
+    case Kind::TotalResource: id += "totalResource"; break;
+    case Kind::TotalDelegatedResource: id += "totalDelegatedResource"; break;
+    case Kind::TotalAcquiredResource: id += "totalAcquiredResource"; break;
 	}
 	id += "_" + stateMutabilityToString(m_stateMutability);
 	id += identifierList(m_parameterTypes) + "returns" + identifierList(m_returnParameterTypes);
@@ -3149,15 +3282,15 @@ string FunctionType::humanReadableName() const
 	switch (m_kind)
 	{
 	case Kind::Error:
-		return "error " + m_declaration->name() + toStringInParentheses(m_parameterTypes, /* _short */ true);
+		return "error " + m_declaration->name() + toStringInParentheses(m_parameterTypes, /* _withoutDataLocation */ true);
 	case Kind::Event:
-		return "event " + m_declaration->name() + toStringInParentheses(m_parameterTypes, /* _short */ true);
+		return "event " + m_declaration->name() + toStringInParentheses(m_parameterTypes, /* _withoutDataLocation */ true);
 	default:
-		return toString(/* _short */ false);
+		return toString(/* _withoutDataLocation */ false);
 	}
 }
 
-string FunctionType::toString(bool _short) const
+string FunctionType::toString(bool _withoutDataLocation) const
 {
 	string name = "function ";
 	if (m_kind == Kind::Declaration)
@@ -3168,7 +3301,7 @@ string FunctionType::toString(bool _short) const
 			name += *contract->annotation().canonicalName + ".";
 		name += functionDefinition->name();
 	}
-	name += toStringInParentheses(m_parameterTypes, _short);
+	name += toStringInParentheses(m_parameterTypes, _withoutDataLocation);
 	if (m_stateMutability != StateMutability::NonPayable)
 		name += " " + stateMutabilityToString(m_stateMutability);
 	if (m_kind == Kind::External)
@@ -3176,7 +3309,7 @@ string FunctionType::toString(bool _short) const
 	if (!m_returnParameterTypes.empty())
 	{
 		name += " returns ";
-		name += toStringInParentheses(m_returnParameterTypes, _short);
+		name += toStringInParentheses(m_returnParameterTypes, _withoutDataLocation);
 	}
 	return name;
 }
@@ -3549,16 +3682,27 @@ bool FunctionType::isBareCall() const
 	case Kind::ECRecover:
 	case Kind::ValidateMultiSign:
 	case Kind::BatchValidateSign:
-	case Kind::verifyBurnProof:
-	case Kind::verifyTransferProof:
-	case Kind::verifyMintProof:
-	case Kind::pedersenHash:
-	case Kind::rewardBalance:
-	case Kind::isSrCandidate:
-	case Kind::voteCount:
-	case Kind::totalVoteCount:
-	case Kind::receivedVoteCount:
-	case Kind::usedVoteCount:
+	case Kind::VerifyBurnProof:
+	case Kind::VerifyTransferProof:
+	case Kind::VerifyMintProof:
+	case Kind::PedersenHash:
+	case Kind::RewardBalance:
+	case Kind::IsSrCandidate:
+	case Kind::VoteCount:
+	case Kind::TotalVoteCount:
+	case Kind::ReceivedVoteCount:
+	case Kind::UsedVoteCount:
+	case Kind::GetChainParameter:
+    case Kind::AvailableUnfreezeV2Size:
+    case Kind::UnfreezableBalanceV2:
+    case Kind::ExpireUnfreezeBalanceV2:
+    case Kind::DelegatableResource:
+    case Kind::ResourceV2:
+    case Kind::CheckUnDelegateResource:
+    case Kind::ResourceUsage:
+	case Kind::TotalResource:
+	case Kind::TotalDelegatedResource:
+	case Kind::TotalAcquiredResource:
 	case Kind::SHA256:
 	case Kind::RIPEMD160:
 		return true;
@@ -3624,10 +3768,10 @@ bool FunctionType::isPure() const
 		m_kind == Kind::ECRecover ||
 		m_kind == Kind::ValidateMultiSign ||
 		m_kind == Kind::BatchValidateSign ||
-		m_kind == Kind::verifyBurnProof ||
-		m_kind == Kind::verifyTransferProof ||
-		m_kind == Kind::verifyMintProof ||
-		m_kind == Kind::pedersenHash ||
+		m_kind == Kind::VerifyBurnProof ||
+		m_kind == Kind::VerifyTransferProof ||
+		m_kind == Kind::VerifyMintProof ||
+		m_kind == Kind::PedersenHash ||
 		m_kind == Kind::SHA256 ||
 		m_kind == Kind::RIPEMD160 ||
 		m_kind == Kind::AddMod ||
@@ -3787,9 +3931,9 @@ bool MappingType::operator==(Type const& _other) const
 	return *other.m_keyType == *m_keyType && *other.m_valueType == *m_valueType;
 }
 
-string MappingType::toString(bool _short) const
+string MappingType::toString(bool _withoutDataLocation) const
 {
-	return "mapping(" + keyType()->toString(_short) + " => " + valueType()->toString(_short) + ")";
+	return "mapping(" + keyType()->toString(_withoutDataLocation) + " => " + valueType()->toString(_withoutDataLocation) + ")";
 }
 
 string MappingType::canonicalName() const
@@ -3818,6 +3962,11 @@ TypeResult MappingType::interfaceType(bool _inLibrary) const
 		);
 
 	return this;
+}
+
+std::vector<std::tuple<std::string, Type const*>> MappingType::makeStackItems() const
+{
+	return {std::make_tuple("slot", TypeProvider::uint256())};
 }
 
 string TypeType::richIdentifier() const
@@ -4014,11 +4163,11 @@ bool ModifierType::operator==(Type const& _other) const
 	return true;
 }
 
-string ModifierType::toString(bool _short) const
+string ModifierType::toString(bool _withoutDataLocation) const
 {
 	string name = "modifier (";
 	for (auto it = m_parameterTypes.begin(); it != m_parameterTypes.end(); ++it)
-		name += (*it)->toString(_short) + (it + 1 == m_parameterTypes.end() ? "" : ",");
+		name += (*it)->toString(_withoutDataLocation) + (it + 1 == m_parameterTypes.end() ? "" : ",");
 	return name + ")";
 }
 
@@ -4052,6 +4201,8 @@ string MagicType::richIdentifier() const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return "t_magic_chain";
 	case Kind::Block:
 		return "t_magic_block";
 	case Kind::Message:
@@ -4079,6 +4230,12 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return MemberList::MemberMap({
+			{"totalEnergyCurrentLimit", TypeProvider::uint(64)},
+			{"totalEnergyWeight", TypeProvider::uint(64)},
+			{"unfreezeDelayDays", TypeProvider::uint(64)},
+		});
 	case Kind::Block:
 		return MemberList::MemberMap({
 			{"coinbase", TypeProvider::payableAddress()},
@@ -4216,10 +4373,12 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 	return {};
 }
 
-string MagicType::toString(bool _short) const
+string MagicType::toString(bool _withoutDataLocation) const
 {
 	switch (m_kind)
 	{
+	case Kind::Chain:
+		return "chain";
 	case Kind::Block:
 		return "block";
 	case Kind::Message:
@@ -4230,7 +4389,7 @@ string MagicType::toString(bool _short) const
 		return "abi";
 	case Kind::MetaType:
 		solAssert(m_typeArgument, "");
-		return "type(" + m_typeArgument->toString(_short) + ")";
+		return "type(" + m_typeArgument->toString(_withoutDataLocation) + ")";
 	}
 	solAssert(false, "Unknown kind of magic.");
 	return {};
