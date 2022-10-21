@@ -4232,6 +4232,8 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 	{
 	case Kind::Chain:
 		return MemberList::MemberMap({
+            {"totalNetLimit", TypeProvider::uint(64)},
+            {"totalNetWeight", TypeProvider::uint(64)},
 			{"totalEnergyCurrentLimit", TypeProvider::uint(64)},
 			{"totalEnergyWeight", TypeProvider::uint(64)},
 			{"unfreezeDelayDays", TypeProvider::uint(64)},

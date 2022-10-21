@@ -1917,7 +1917,7 @@ void IRGeneratorForStatements::endVisit(MemberAccess const& _memberAccess)
 			define(_memberAccess) << requestedValue << "\n";
 		}
 		else if (set<string>{"encode", "encodePacked", "encodeWithSelector", "encodeCall", "encodeWithSignature", "decode",
-							 "totalEnergyCurrentLimit", "totalEnergyWeight", "unfreezeDelayDays"}.count(member))
+                             "totalNetLimit", "totalNetWeight", "totalEnergyCurrentLimit", "totalEnergyWeight","unfreezeDelayDays"}.count(member))
 		{
 			// no-op
 		}

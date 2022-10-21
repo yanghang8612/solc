@@ -2117,21 +2117,33 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			// do check the value is a valid uint64
 			if iszero(eq(value, and(value, 0xffffffffffffffff))) { revert(0, 0) }
 		})";
-		if (member == "totalEnergyCurrentLimit")
+        if (member == "totalNetLimit")
+        {
+            m_context << u256(0) << u256(1);
+            m_context.appendInlineAssembly(routine, {"value", "index"});
+            m_context << Instruction::POP;
+        }
+        else if (member == "totalNetWeight")
+        {
+            m_context << u256(0) << u256(2);
+            m_context.appendInlineAssembly(routine, {"value", "index"});
+            m_context << Instruction::POP;
+        }
+		else if (member == "totalEnergyCurrentLimit")
 		{
-			m_context << u256(0) << u256(1);
+			m_context << u256(0) << u256(3);
 			m_context.appendInlineAssembly(routine, {"value", "index"});
 			m_context << Instruction::POP;
 		}
 		else if (member == "totalEnergyWeight")
 		{
-			m_context << u256(0) << u256(2);
+			m_context << u256(0) << u256(4);
 			m_context.appendInlineAssembly(routine, {"value", "index"});
 			m_context << Instruction::POP;
 		}
 		else if (member == "unfreezeDelayDays")
 		{
-			m_context << u256(0) << u256(3);
+			m_context << u256(0) << u256(5);
 			m_context.appendInlineAssembly(routine, {"value", "index"});
 			m_context << Instruction::POP;
 		}
