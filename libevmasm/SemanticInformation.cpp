@@ -316,7 +316,7 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::NATIVEFREEZEBALANCEV2:
 	case Instruction::NATIVEUNFREEZEBALANCEV2:
-	case Instruction::NATIVECANCELALLUNFREEZEBALANCEV2:
+	case Instruction::NATIVECANCELALLUNFREEZEV2:
 	case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
 	case Instruction::NATIVEDELEGATERESOURCE:
 	case Instruction::NATIVEUNDELEGATERESOURCE:
@@ -536,7 +536,7 @@ bool SemanticInformation::invalidInViewFunctions(Instruction _instruction)
 	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::NATIVEFREEZEBALANCEV2:
 	case Instruction::NATIVEUNFREEZEBALANCEV2:
-	case Instruction::NATIVECANCELALLUNFREEZEBALANCEV2:
+	case Instruction::NATIVECANCELALLUNFREEZEV2:
 	case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
 	case Instruction::NATIVEDELEGATERESOURCE:
 	case Instruction::NATIVEUNDELEGATERESOURCE:

@@ -1614,10 +1614,10 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			m_context.appendConditionalRevert(true);
 			break;
 		}
-        case FunctionType::Kind::CancelAllUnfreezeBalanceV2:
+        case FunctionType::Kind::CancelAllUnfreezeV2:
         {
             _functionCall.expression().accept(*this);
-            m_context << Instruction::NATIVECANCELALLUNFREEZEBALANCEV2;
+            m_context << Instruction::NATIVECANCELALLUNFREEZEV2;
             break;
         }
 		case FunctionType::Kind::WithdrawExpireUnfreeze:

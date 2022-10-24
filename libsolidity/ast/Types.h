@@ -1254,7 +1254,7 @@ public:
 		UsedVoteCount, ///< get total used vote count
 		FreezeBalanceV2, ///< similar to FreezeBalanceV2 system contract
 		UnfreezeBalanceV2, ///< similar to UnFreezeBalanceV2 system contract
-		CancelAllUnfreezeBalanceV2, ///< cancel all pending unfreeze
+		CancelAllUnfreezeV2, ///< cancel all pending unfreeze
 		WithdrawExpireUnfreeze, ///< similar to WithdrawExpireUnfreeze system contract
 		DelegateResource, ///< similar to DelegateResource system contract
 		UnDelegateResource, ///< similar to UndelegateResource system contract

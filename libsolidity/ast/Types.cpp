@@ -3161,7 +3161,7 @@ string FunctionType::richIdentifier() const
 	case Kind::UsedVoteCount: id += "usedVoteCount"; break;
 	case Kind::FreezeBalanceV2: id += "freezeBalanceV2"; break;
 	case Kind::UnfreezeBalanceV2: id += "unfreezeBalanceV2"; break;
-	case Kind::CancelAllUnfreezeBalanceV2: id += "cancelAllUnfreezeBalanceV2"; break;
+	case Kind::CancelAllUnfreezeV2: id += "cancelAllUnfreezeV2"; break;
 	case Kind::WithdrawExpireUnfreeze: id += "withdrawExpireUnfreeze"; break;
 	case Kind::DelegateResource: id += "delegateResource"; break;
 	case Kind::UnDelegateResource: id += "unDelegateResource"; break;
