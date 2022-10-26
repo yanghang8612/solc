@@ -2112,6 +2112,8 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			}
 			// finalize the mem allocation
 			mstore(64, add(memPtr, 32))
+            // return data size must be exactly 32 bytes
+            if iszero(eq(returndatasize(), 32)) { revert(0, 0) }
 			// load the return value
 			value := mload(memPtr)
 			// do check the value is a valid uint64
