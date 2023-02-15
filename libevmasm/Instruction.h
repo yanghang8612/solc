@@ -175,9 +175,9 @@ enum class Instruction: uint8_t
 	LOG3,				///< Makes a log entry; 3 topics.
 	LOG4,				///< Makes a log entry; 4 topics.
 
-	CALLTOKEN = 0xd0,
-	TOKENBALANCE,
-	CALLTOKENVALUE,
+	CALLTOKEN = 0xd0,	///< like CALL but send trc10 (tokenID & tokenValue) instead of trx
+	TOKENBALANCE,		///< query trc10 token balance of the given tokenID
+	CALLTOKENVALUE,		///<
 	CALLTOKENID,
 	ISCONTRACT,
     NATIVEFREEZE,
@@ -185,6 +185,12 @@ enum class Instruction: uint8_t
     NATIVEFREEZEEXPIRETIME,
 	NATIVEVOTE,
 	NATIVEWITHDRAWREWARD,
+	NATIVEFREEZEBALANCEV2,
+	NATIVEUNFREEZEBALANCEV2,
+    NATIVECANCELALLUNFREEZEV2,
+	NATIVEWITHDRAWEXPIREUNFREEZE,
+	NATIVEDELEGATERESOURCE,
+	NATIVEUNDELEGATERESOURCE,
 
 	CREATE = 0xf0,		///< create a new account with associated code
 	CALL,				///< message-call into an account

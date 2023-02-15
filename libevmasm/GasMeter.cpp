@@ -212,6 +212,24 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 		case Instruction::NATIVEWITHDRAWREWARD:
 			gas = runGas(Instruction::NATIVEWITHDRAWREWARD);
 			break;
+		case Instruction::NATIVEFREEZEBALANCEV2:
+			gas = runGas(Instruction::NATIVEFREEZEBALANCEV2);
+			break;
+		case Instruction::NATIVEUNFREEZEBALANCEV2:
+			gas = runGas(Instruction::NATIVEUNFREEZEBALANCEV2);
+			break;
+        case Instruction::NATIVECANCELALLUNFREEZEV2:
+            gas = runGas(Instruction::NATIVECANCELALLUNFREEZEV2);
+            break;
+		case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
+			gas = runGas(Instruction::NATIVEWITHDRAWEXPIREUNFREEZE);
+			break;
+		case Instruction::NATIVEDELEGATERESOURCE:
+			gas = runGas(Instruction::NATIVEDELEGATERESOURCE);
+			break;
+		case Instruction::NATIVEUNDELEGATERESOURCE:
+			gas = runGas(Instruction::NATIVEUNDELEGATERESOURCE);
+			break;
 		case Instruction::CHAINID:
 			gas = runGas(Instruction::CHAINID);
 			break;

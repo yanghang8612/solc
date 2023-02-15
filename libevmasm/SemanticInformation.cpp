@@ -292,7 +292,6 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 
 	switch (_item.instruction())
 	{
-	case Instruction::CALLTOKEN:
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
@@ -303,18 +302,24 @@ bool SemanticInformation::isDeterministic(AssemblyItem const& _item)
 	case Instruction::PC:
 	case Instruction::MSIZE: // depends on previous writes and reads, not only on content
 	case Instruction::BALANCE: // depends on previous calls
-	case Instruction::TOKENBALANCE:
-	case Instruction::ISCONTRACT:
-    case Instruction::NATIVEFREEZE:
-    case Instruction::NATIVEUNFREEZE:
-    case Instruction::NATIVEFREEZEEXPIRETIME:
-	case Instruction::NATIVEVOTE:
-	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::SELFBALANCE: // depends on previous calls
 	case Instruction::EXTCODESIZE:
 	case Instruction::EXTCODEHASH:
 	case Instruction::RETURNDATACOPY: // depends on previous calls
 	case Instruction::RETURNDATASIZE:
+	case Instruction::CALLTOKEN:
+	case Instruction::TOKENBALANCE:
+	case Instruction::NATIVEFREEZE:
+	case Instruction::NATIVEUNFREEZE:
+	case Instruction::NATIVEFREEZEEXPIRETIME:
+	case Instruction::NATIVEVOTE:
+	case Instruction::NATIVEWITHDRAWREWARD:
+	case Instruction::NATIVEFREEZEBALANCEV2:
+	case Instruction::NATIVEUNFREEZEBALANCEV2:
+	case Instruction::NATIVECANCELALLUNFREEZEV2:
+	case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
+	case Instruction::NATIVEDELEGATERESOURCE:
+	case Instruction::NATIVEUNDELEGATERESOURCE:
 		return false;
 	default:
 		return true;
@@ -481,20 +486,11 @@ bool SemanticInformation::invalidInPureFunctions(Instruction _instruction)
 	case Instruction::ADDRESS:
 	case Instruction::SELFBALANCE:
 	case Instruction::BALANCE:
-	case Instruction::TOKENBALANCE:
-	case Instruction::ISCONTRACT:
-    case Instruction::NATIVEFREEZE:
-    case Instruction::NATIVEUNFREEZE:
-    case Instruction::NATIVEFREEZEEXPIRETIME:
-	case Instruction::NATIVEVOTE:
-	case Instruction::NATIVEWITHDRAWREWARD:
 	case Instruction::ORIGIN:
 	case Instruction::CALLER:
 	case Instruction::CALLVALUE:
 	case Instruction::CHAINID:
 	case Instruction::BASEFEE:
-	case Instruction::CALLTOKENVALUE:
-	case Instruction::CALLTOKENID:
 	case Instruction::GAS:
 	case Instruction::GASPRICE:
 	case Instruction::EXTCODESIZE:
@@ -508,6 +504,11 @@ bool SemanticInformation::invalidInPureFunctions(Instruction _instruction)
 	case Instruction::GASLIMIT:
 	case Instruction::STATICCALL:
 	case Instruction::SLOAD:
+	case Instruction::TOKENBALANCE:
+	case Instruction::CALLTOKENVALUE:
+	case Instruction::CALLTOKENID:
+	case Instruction::ISCONTRACT:
+	case Instruction::NATIVEFREEZEEXPIRETIME:
 		return true;
 	default:
 		break;
@@ -528,17 +529,22 @@ bool SemanticInformation::invalidInViewFunctions(Instruction _instruction)
 	case Instruction::LOG3:
 	case Instruction::LOG4:
 	case Instruction::CALLTOKEN:
+	case Instruction::SELFDESTRUCT:
+	case Instruction::NATIVEFREEZE:
+	case Instruction::NATIVEUNFREEZE:
+	case Instruction::NATIVEVOTE:
+	case Instruction::NATIVEWITHDRAWREWARD:
+	case Instruction::NATIVEFREEZEBALANCEV2:
+	case Instruction::NATIVEUNFREEZEBALANCEV2:
+	case Instruction::NATIVECANCELALLUNFREEZEV2:
+	case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
+	case Instruction::NATIVEDELEGATERESOURCE:
+	case Instruction::NATIVEUNDELEGATERESOURCE:
 	case Instruction::CREATE:
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
 	case Instruction::DELEGATECALL:
 	case Instruction::CREATE2:
-	case Instruction::SELFDESTRUCT:
-    case Instruction::NATIVEFREEZE:
-    case Instruction::NATIVEUNFREEZE:
-    case Instruction::NATIVEFREEZEEXPIRETIME:
-	case Instruction::NATIVEVOTE:
-	case Instruction::NATIVEWITHDRAWREWARD:
 		return true;
 	default:
 		break;

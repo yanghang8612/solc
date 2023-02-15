@@ -28,7 +28,7 @@ REPO_ROOT=$(realpath "$(dirname "$0")/../..")
 
 verify_input "$@"
 BINARY_TYPE="$1"
-BINARY_PATH="$2"
+BINARY_PATH="$(realpath "$2")"
 SELECTED_PRESETS="$3"
 
 function compile_fn { npm run build; }
@@ -68,6 +68,10 @@ function gp2_test
     force_hardhat_compiler_settings "$config_file" "$(first_word "$SELECTED_PRESETS")" "$config_var"
     force_hardhat_unlimited_contract_size "$config_file" "$config_var"
     npm install
+
+    # New hardhat release breaks GP2 tests, and since GP2 repository has been archived, we are pinning hardhat
+    # to the previous stable version. See https://github.com/ethereum/solidity/pull/13485
+    npm install hardhat@2.10.2
 
     # Some dependencies come with pre-built artifacts. We want to build from scratch.
     rm -r node_modules/@gnosis.pm/safe-contracts/build/
