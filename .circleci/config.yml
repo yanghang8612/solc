@@ -1676,15 +1676,15 @@ workflows:
             - b_win_release
             - b_ems
 
-  nightly:
+  # nightly:
 
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
-          filters:
-            branches:
-              only:
-                - develop
+  #   triggers:
+  #     - schedule:
+  #         cron: "0 0 * * *"
+  #         filters:
+  #           branches:
+  #             only:
+  #               - develop
 
     jobs:
       # OSSFUZZ builds and (regression) tests
