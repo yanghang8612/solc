@@ -533,7 +533,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
             strings{""},
             FunctionType::Kind::AvailableUnfreezeV2Size,
             StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"unfreezableBalanceV2", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -541,7 +541,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::UnfreezableBalanceV2,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"expireUnfreezeBalanceV2", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -549,7 +549,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::ExpireUnfreezeBalanceV2,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"delegatableResource", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -557,7 +557,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::DelegatableResource,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"resourceV2", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -565,7 +565,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::ResourceV2,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"checkUnDelegateResource", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256(), TypeProvider::uint256(), TypeProvider::uint256()},
@@ -573,7 +573,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{"", "", ""},
                 FunctionType::Kind::CheckUnDelegateResource,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"resourceUsage", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256(), TypeProvider::uint256()},
@@ -581,7 +581,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{"", ""},
                 FunctionType::Kind::ResourceUsage,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"totalResource", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -589,7 +589,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::TotalResource,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"totalDelegatedResource", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -597,7 +597,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::TotalDelegatedResource,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
         {"totalAcquiredResource", TypeProvider::function(
                 TypePointers{TypeProvider::address(), TypeProvider::uint256()},
                 TypePointers{TypeProvider::uint256()},
@@ -605,7 +605,7 @@ MemberList::MemberMap AddressType::nativeMembers(ASTNode const*) const
                 strings{""},
                 FunctionType::Kind::TotalAcquiredResource,
                 StateMutability::View
-        )->asBoundFunction()},
+        )->withBoundFirstArgument()},
     };
 	if (m_stateMutability == StateMutability::Payable)
 	{
