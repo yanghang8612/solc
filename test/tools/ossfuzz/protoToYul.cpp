@@ -112,6 +112,10 @@ EVMVersion ProtoConverter::evmVersionMapping(Program_Version const& _ver)
 		return EVMVersion::istanbul();
 	case Program::BERLIN:
 		return EVMVersion::berlin();
+	case Program::LONDON:
+		return EVMVersion::london();
+	case Program::PARIS:
+		return EVMVersion::paris();
 	}
 }
 
@@ -711,7 +715,10 @@ void ProtoConverter::visit(NullaryOp const& _x)
 		m_output << "number()";
 		break;
 	case NullaryOp::DIFFICULTY:
-		m_output << "difficulty()";
+		if (m_evmVersion >= EVMVersion::paris())
+			m_output << "prevrandao()";
+		else
+			m_output << "difficulty()";
 		break;
 	case NullaryOp::GASLIMIT:
 		m_output << "gaslimit()";

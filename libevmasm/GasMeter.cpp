@@ -52,10 +52,10 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 	case PushProgramSize:
 	case PushLibraryAddress:
 	case PushDeployTimeAddress:
-		gas = runGas(Instruction::PUSH1);
+		gas = runGas(Instruction::PUSH1, m_evmVersion);
 		break;
 	case Tag:
-		gas = runGas(Instruction::JUMPDEST);
+		gas = runGas(Instruction::JUMPDEST, m_evmVersion);
 		break;
 	case Operation:
 	{
@@ -80,19 +80,19 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 			break;
 		case Instruction::RETURN:
 		case Instruction::REVERT:
-			gas = runGas(_item.instruction());
+			gas = runGas(_item.instruction(), m_evmVersion);
 			gas += memoryGas(0, -1);
 			break;
 		case Instruction::MLOAD:
 		case Instruction::MSTORE:
-			gas = runGas(_item.instruction());
+			gas = runGas(_item.instruction(), m_evmVersion);
 			gas += memoryGas(classes.find(Instruction::ADD, {
 				m_state->relativeStackElement(0),
 				classes.find(AssemblyItem(32))
 			}));
 			break;
 		case Instruction::MSTORE8:
-			gas = runGas(_item.instruction());
+			gas = runGas(_item.instruction(), m_evmVersion);
 			gas += memoryGas(classes.find(Instruction::ADD, {
 				m_state->relativeStackElement(0),
 				classes.find(AssemblyItem(1))
@@ -106,7 +106,7 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 		case Instruction::CALLDATACOPY:
 		case Instruction::CODECOPY:
 		case Instruction::RETURNDATACOPY:
-			gas = runGas(_item.instruction());
+			gas = runGas(_item.instruction(), m_evmVersion);
 			gas += memoryGas(0, -2);
 			gas += wordGas(GasCosts::copyGas, m_state->relativeStackElement(-2));
 			break;
@@ -198,46 +198,46 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 			gas = GasCosts::balanceGas(m_evmVersion);
 			break;
         case Instruction::NATIVEFREEZE:
-            gas = runGas(Instruction::NATIVEFREEZE);
+            gas = runGas(Instruction::NATIVEFREEZE, m_evmVersion);
             break;
         case Instruction::NATIVEUNFREEZE:
-            gas = runGas(Instruction::NATIVEUNFREEZE);
+            gas = runGas(Instruction::NATIVEUNFREEZE, m_evmVersion);
             break;
         case Instruction::NATIVEFREEZEEXPIRETIME:
-            gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME);
+            gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME, m_evmVersion);
             break;
 		case Instruction::NATIVEVOTE:
-			gas = runGas(Instruction::NATIVEVOTE);
+			gas = runGas(Instruction::NATIVEVOTE, m_evmVersion);
 			break;
 		case Instruction::NATIVEWITHDRAWREWARD:
-			gas = runGas(Instruction::NATIVEWITHDRAWREWARD);
+			gas = runGas(Instruction::NATIVEWITHDRAWREWARD, m_evmVersion);
 			break;
 		case Instruction::NATIVEFREEZEBALANCEV2:
-			gas = runGas(Instruction::NATIVEFREEZEBALANCEV2);
+			gas = runGas(Instruction::NATIVEFREEZEBALANCEV2, m_evmVersion);
 			break;
 		case Instruction::NATIVEUNFREEZEBALANCEV2:
-			gas = runGas(Instruction::NATIVEUNFREEZEBALANCEV2);
+			gas = runGas(Instruction::NATIVEUNFREEZEBALANCEV2, m_evmVersion);
 			break;
         case Instruction::NATIVECANCELALLUNFREEZEV2:
-            gas = runGas(Instruction::NATIVECANCELALLUNFREEZEV2);
+            gas = runGas(Instruction::NATIVECANCELALLUNFREEZEV2, m_evmVersion);
             break;
 		case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
-			gas = runGas(Instruction::NATIVEWITHDRAWEXPIREUNFREEZE);
+			gas = runGas(Instruction::NATIVEWITHDRAWEXPIREUNFREEZE, m_evmVersion);
 			break;
 		case Instruction::NATIVEDELEGATERESOURCE:
-			gas = runGas(Instruction::NATIVEDELEGATERESOURCE);
+			gas = runGas(Instruction::NATIVEDELEGATERESOURCE, m_evmVersion);
 			break;
 		case Instruction::NATIVEUNDELEGATERESOURCE:
-			gas = runGas(Instruction::NATIVEUNDELEGATERESOURCE);
+			gas = runGas(Instruction::NATIVEUNDELEGATERESOURCE, m_evmVersion);
 			break;
 		case Instruction::CHAINID:
-			gas = runGas(Instruction::CHAINID);
+			gas = runGas(Instruction::CHAINID, m_evmVersion);
 			break;
 		case Instruction::SELFBALANCE:
-			gas = runGas(Instruction::SELFBALANCE);
+			gas = runGas(Instruction::SELFBALANCE, m_evmVersion);
 			break;
 		default:
-			gas = runGas(_item.instruction());
+			gas = runGas(_item.instruction(), m_evmVersion);
 			break;
 		}
 		break;
@@ -288,12 +288,12 @@ GasMeter::GasConsumption GasMeter::memoryGas(int _stackPosOffset, int _stackPosS
 		}));
 }
 
-unsigned GasMeter::runGas(Instruction _instruction)
+unsigned GasMeter::runGas(Instruction _instruction, langutil::EVMVersion _evmVersion)
 {
 	if (_instruction == Instruction::JUMPDEST)
 		return 1;
 
-	switch (instructionInfo(_instruction).gasPriceTier)
+	switch (instructionInfo(_instruction, _evmVersion).gasPriceTier)
 	{
 	case Tier::Zero:    return GasCosts::tier0Gas;
 	case Tier::Base:    return GasCosts::tier1Gas;
@@ -304,7 +304,7 @@ unsigned GasMeter::runGas(Instruction _instruction)
 	case Tier::Ext:     return GasCosts::tier6Gas;
 	default: break;
 	}
-	assertThrow(false, OptimizerException, "Invalid gas tier for instruction " + instructionInfo(_instruction).name);
+	assertThrow(false, OptimizerException, "Invalid gas tier for instruction " + instructionInfo(_instruction, _evmVersion).name);
 	return 0;
 }
 

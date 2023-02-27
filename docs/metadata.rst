@@ -100,6 +100,8 @@ explanatory purposes.
           }
         },
         "metadata": {
+          // Reflects the setting used in the input json, defaults to "true"
+          "appendCBOR": true,
           // Reflects the setting used in the input json, defaults to "false"
           "useLiteralContent": true,
           // Reflects the setting used in the input json, defaults to "ipfs"
@@ -219,6 +221,10 @@ to match that pattern and the IPFS hash can be used to retrieve the file (if pin
 Whereas release builds of solc use a 3 byte encoding of the version as shown
 above (one byte each for major, minor and patch version number), prerelease builds
 will instead use a complete version string including commit hash and build date.
+
+The commandline flag ``--no-cbor-metadata`` can be used to skip metadata
+from getting appended at the end of the deployed bytecode. Equivalently, the
+boolean field ``settings.metadata.appendCBOR`` in Standard JSON input can be set to false.
 
 .. note::
   The CBOR mapping can also contain other keys, so it is better to fully

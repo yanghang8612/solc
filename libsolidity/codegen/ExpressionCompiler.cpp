@@ -612,7 +612,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 	else
 	{
 		FunctionType const& function = *functionType;
-		if (function.bound())
+		if (function.hasBoundFirstArgument())
 			solAssert(
 				function.kind() == FunctionType::Kind::DelegateCall ||
 				function.kind() == FunctionType::Kind::Internal ||
@@ -647,7 +647,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 				bool shortcutTaken = false;
 				if (auto identifier = dynamic_cast<Identifier const*>(&_functionCall.expression()))
 				{
-					solAssert(!function.bound(), "");
+					solAssert(!function.hasBoundFirstArgument(), "");
 					if (auto functionDef = dynamic_cast<FunctionDefinition const*>(identifier->annotation().referencedDeclaration))
 					{
 						// Do not directly visit the identifier, because this way, we can avoid
@@ -667,7 +667,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 			}
 
 			unsigned parameterSize = CompilerUtils::sizeOnStack(function.parameterTypes());
-			if (function.bound())
+			if (function.hasBoundFirstArgument())
 			{
 				// stack: arg2, ..., argn, label, arg1
 				unsigned depth = parameterSize + 1;
@@ -812,9 +812,11 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 					FunctionType::Kind::BareCall,
 					StateMutability::NonPayable,
 					nullptr,
-					callOptions),
+					callOptions
+				),
 				{},
-				false);
+				false
+			);
 			if (function.kind() == FunctionType::Kind::Transfer)
 			{
 				// Check if zero (out of stack or not enough balance).
@@ -981,7 +983,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 								argumentType &&
 								functionType->kind() == FunctionType::Kind::External &&
 								argumentType->kind() == FunctionType::Kind::External &&
-								!argumentType->bound(),
+								!argumentType->hasBoundFirstArgument(),
 								""
 							);
 
@@ -1150,7 +1152,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		}
 		case FunctionType::Kind::ArrayPush:
 		{
-			solAssert(function.bound(), "");
+			solAssert(function.hasBoundFirstArgument(), "");
 			_functionCall.expression().accept(*this);
 
 			if (function.parameterTypes().size() == 0)
@@ -1216,7 +1218,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 		case FunctionType::Kind::ArrayPop:
 		{
 			_functionCall.expression().accept(*this);
-			solAssert(function.bound(), "");
+			solAssert(function.hasBoundFirstArgument(), "");
 			solAssert(function.parameterTypes().empty(), "");
 			ArrayType const* arrayType = dynamic_cast<ArrayType const*>(function.selfType());
 			solAssert(arrayType && arrayType->dataStoredIn(DataLocation::Storage), "");
@@ -1450,7 +1452,7 @@ bool ExpressionCompiler::visit(FunctionCall const& _functionCall)
 					// hash the signature
 					if (auto const* stringType = dynamic_cast<StringLiteralType const*>(selectorType))
 					{
-						m_context << util::selectorFromSignature(stringType->value());
+						m_context << util::selectorFromSignatureU256(stringType->value());
 						dataOnStack = TypeProvider::fixedBytes(4);
 					}
 					else
@@ -1707,10 +1709,10 @@ bool ExpressionCompiler::visit(NewExpression const&)
 bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 {
 	CompilerContext::LocationSetter locationSetter(m_context, _memberAccess);
-	// Check whether the member is a bound function.
+	// Check whether the member is an attached function.
 	ASTString const& member = _memberAccess.memberName();
 	if (auto funType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type))
-		if (funType->bound())
+		if (funType->hasBoundFirstArgument())
 		{
 			acceptAndConvert(_memberAccess.expression(), *funType->selfType(), true);
 			if (funType->kind() == FunctionType::Kind::Internal)
@@ -2103,7 +2105,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			// load free mem ptr
 			let memPtr := mload(64)
 			// save index param to mem
-			mstore8(add(memPtr, 31), index)
+			mstore(memPtr, index)
 			// do static call to get chain parameter, if return zero, revert
 			if iszero(staticcall(gas(), 0x100000b, memPtr, 32, memPtr, 32)) {
 				let pos := mload(64)
@@ -2153,8 +2155,8 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			m_context << Instruction::COINBASE;
 		else if (member == "timestamp")
 			m_context << Instruction::TIMESTAMP;
-		else if (member == "difficulty")
-			m_context << Instruction::DIFFICULTY;
+		else if (member == "difficulty" || member == "prevrandao")
+			m_context << Instruction::PREVRANDAO;
 		else if (member == "number")
 			m_context << Instruction::NUMBER;
 		else if (member == "gaslimit")
@@ -2921,7 +2923,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// function identifier [unless bare]
 	// contract address
 
-	unsigned selfSize = _functionType.bound() ? _functionType.selfType()->sizeOnStack() : 0;
+	unsigned selfSize = _functionType.hasBoundFirstArgument() ? _functionType.selfType()->sizeOnStack() : 0;
 	unsigned tokenSize = _functionType.tokenSet() ? 1 : 0;
 	unsigned gasValueSize = (_functionType.gasSet() ? 1u : 0u) + (_functionType.valueSet() ? 1u : 0u) + tokenSize;
 
@@ -2931,7 +2933,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	unsigned tokenStackPos = m_context.currentToBaseStackOffset(1);
 
 	// move self object to top
-	if (_functionType.bound())
+	if (_functionType.hasBoundFirstArgument())
 		utils().moveToStackTop(gasValueSize, _functionType.selfType()->sizeOnStack());
 
 	auto funKind = _functionType.kind();
@@ -2960,7 +2962,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// Evaluate arguments.
 	TypePointers argumentTypes;
 	TypePointers parameterTypes = _functionType.parameterTypes();
-	if (_functionType.bound())
+	if (_functionType.hasBoundFirstArgument())
 	{
 		argumentTypes.push_back(_functionType.selfType());
 		parameterTypes.insert(parameterTypes.begin(), _functionType.selfType());
@@ -3064,7 +3066,6 @@ void ExpressionCompiler::appendExternalFunctionCall(
 	// put on stack: <size of output> <memory pos of output> <size of input> <memory pos of input>
 	m_context << u256(retSize);
 	utils().fetchFreeMemoryPointer(); // This is the start of input
-
 	if (funKind == FunctionType::Kind::ECRecover
 		|| funKind == FunctionType::Kind::ValidateMultiSign
 		|| funKind == FunctionType::Kind::BatchValidateSign)
@@ -3087,7 +3088,7 @@ void ExpressionCompiler::appendExternalFunctionCall(
 		solAssert(!_functionType.valueSet(), "Value set for delegatecall");
 	else if (useStaticCall)
 		solAssert(!_functionType.valueSet(), "Value set for staticcall");
-	else if (_functionType.valueSet()){
+	else if (_functionType.valueSet()) {
 		if (_functionType.tokenSet())
 			m_context << dupInstruction(m_context.baseToCurrentStackOffset(tokenStackPos));
 		m_context << dupInstruction(m_context.baseToCurrentStackOffset(valueStackPos));

@@ -644,10 +644,9 @@ private:
 /**
  * Using for directive:
  *
- * 1. `using LibraryName for T` attaches all functions from the library `LibraryName` to the type `T`
+ * 1. `using LibraryName for T` attaches all functions from the library `LibraryName` to the type `T`.
  * 2. `using LibraryName for *` attaches to all types.
- * 3. `using {f1, f2, ..., fn} for T` attaches the functions `f1`, `f2`, ...,
- *     `fn`, respectively to `T`.
+ * 3. `using {f1, f2, ..., fn} for T` attaches the functions `f1`, `f2`, ..., `fn`, respectively to `T`.
  *
  * For version 3, T has to be implicitly convertible to the first parameter type of
  * all functions, and this is checked at the point of the using statement. For versions 1 and
@@ -663,13 +662,13 @@ public:
 	UsingForDirective(
 		int64_t _id,
 		SourceLocation const& _location,
-		std::vector<ASTPointer<IdentifierPath>> _functions,
+		std::vector<ASTPointer<IdentifierPath>> _functionsOrLibrary,
 		bool _usesBraces,
 		ASTPointer<TypeName> _typeName,
 		bool _global
 	):
 		ASTNode(_id, _location),
-		m_functions(_functions),
+		m_functionsOrLibrary(std::move(_functionsOrLibrary)),
 		m_usesBraces(_usesBraces),
 		m_typeName(std::move(_typeName)),
 		m_global{_global}
@@ -683,13 +682,13 @@ public:
 	TypeName const* typeName() const { return m_typeName.get(); }
 
 	/// @returns a list of functions or the single library.
-	std::vector<ASTPointer<IdentifierPath>> const& functionsOrLibrary() const { return m_functions; }
+	std::vector<ASTPointer<IdentifierPath>> const& functionsOrLibrary() const { return m_functionsOrLibrary; }
 	bool usesBraces() const { return m_usesBraces; }
 	bool global() const { return m_global; }
 
 private:
 	/// Either the single library or a list of functions.
-	std::vector<ASTPointer<IdentifierPath>> m_functions;
+	std::vector<ASTPointer<IdentifierPath>> m_functionsOrLibrary;
 	bool m_usesBraces;
 	ASTPointer<TypeName> m_typeName;
 	bool m_global = false;
@@ -1428,18 +1427,37 @@ public:
 		int64_t _id,
 		SourceLocation const& _location,
 		ASTPointer<TypeName> _keyType,
-		ASTPointer<TypeName> _valueType
+		ASTPointer<ASTString> _keyName,
+		SourceLocation _keyNameLocation,
+		ASTPointer<TypeName> _valueType,
+		ASTPointer<ASTString> _valueName,
+		SourceLocation _valueNameLocation
 	):
-		TypeName(_id, _location), m_keyType(std::move(_keyType)), m_valueType(std::move(_valueType)) {}
+		TypeName(_id, _location),
+		m_keyType(std::move(_keyType)),
+		m_keyName(std::move(_keyName)),
+		m_keyNameLocation(std::move(_keyNameLocation)),
+		m_valueType(std::move(_valueType)),
+		m_valueName(std::move(_valueName)),
+		m_valueNameLocation(std::move(_valueNameLocation))
+	{}
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
 
 	TypeName const& keyType() const { return *m_keyType; }
+	ASTString keyName() const { return *m_keyName; }
+	SourceLocation keyNameLocation() const { return m_keyNameLocation; }
 	TypeName const& valueType() const { return *m_valueType; }
+	ASTString valueName() const { return *m_valueName; }
+	SourceLocation valueNameLocation() const { return m_valueNameLocation; }
 
 private:
 	ASTPointer<TypeName> m_keyType;
+	ASTPointer<ASTString> m_keyName;
+	SourceLocation m_keyNameLocation;
 	ASTPointer<TypeName> m_valueType;
+	ASTPointer<ASTString> m_valueName;
+	SourceLocation m_valueNameLocation;
 };
 
 /**

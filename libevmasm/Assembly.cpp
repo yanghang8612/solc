@@ -237,7 +237,7 @@ Json::Value Assembly::assemblyJSON(map<string, unsigned> const& _sourceIndices, 
 				sourceIndex = static_cast<int>(iter->second);
 		}
 
-		auto [name, data] = item.nameAndData();
+		auto [name, data] = item.nameAndData(m_evmVersion);
 		Json::Value jsonItem;
 		jsonItem["name"] = name;
 		jsonItem["begin"] = item.location().start;
@@ -791,4 +791,19 @@ Assembly const* Assembly::subAssemblyById(size_t _subId) const
 
 	assertThrow(currentAssembly != this, AssemblyException, "");
 	return currentAssembly;
+}
+
+Assembly::OptimiserSettings Assembly::OptimiserSettings::translateSettings(frontend::OptimiserSettings const& _settings, langutil::EVMVersion const& _evmVersion)
+{
+	// Constructing it this way so that we notice changes in the fields.
+	evmasm::Assembly::OptimiserSettings asmSettings{false,  false, false, false, false, false, _evmVersion, 0};
+	asmSettings.runInliner = _settings.runInliner;
+	asmSettings.runJumpdestRemover = _settings.runJumpdestRemover;
+	asmSettings.runPeephole = _settings.runPeephole;
+	asmSettings.runDeduplicate = _settings.runDeduplicate;
+	asmSettings.runCSE = _settings.runCSE;
+	asmSettings.runConstantOptimiser = _settings.runConstantOptimiser;
+	asmSettings.expectedExecutionsPerDeployment = _settings.expectedExecutionsPerDeployment;
+	asmSettings.evmVersion = _evmVersion;
+	return asmSettings;
 }

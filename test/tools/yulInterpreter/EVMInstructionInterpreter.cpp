@@ -70,6 +70,10 @@ u256 readZeroExtended(bytes const& _data, u256 const& _offset)
 	}
 }
 
+}
+
+namespace solidity::yul::test
+{
 /// Copy @a _size bytes of @a _source at offset @a _sourceOffset to
 /// @a _target at offset @a _targetOffset. Behaves as if @a _source would
 /// continue with an infinite sequence of zero bytes beyond its end.
@@ -94,7 +98,7 @@ u256 EVMInstructionInterpreter::eval(
 	using namespace solidity::evmasm;
 	using evmasm::Instruction;
 
-	auto info = instructionInfo(_instruction);
+	auto info = instructionInfo(_instruction, m_evmVersion);
 	yulAssert(static_cast<size_t>(info.args) == _arguments.size(), "");
 
 	auto const& arg = _arguments;
@@ -185,7 +189,7 @@ u256 EVMInstructionInterpreter::eval(
 			return u256("0x1234cafe1234cafe1234cafe") + arg[0];
 		uint64_t offset = uint64_t(arg[0] & uint64_t(-1));
 		uint64_t size = uint64_t(arg[1] & uint64_t(-1));
-		return u256(keccak256(readMemory(offset, size)));
+		return u256(keccak256(m_state.readMemory(offset, size)));
 	}
 	case Instruction::ADDRESS:
 		return h256(m_state.address, h256::AlignRight);
@@ -264,8 +268,8 @@ u256 EVMInstructionInterpreter::eval(
 		return m_state.timestamp;
 	case Instruction::NUMBER:
 		return m_state.blockNumber;
-	case Instruction::DIFFICULTY:
-		return m_state.difficulty;
+	case Instruction::PREVRANDAO:
+		return (m_evmVersion < langutil::EVMVersion::paris()) ? m_state.difficulty : m_state.prevrandao;
 	case Instruction::GASLIMIT:
 		return m_state.gaslimit;
 	// --------------- memory / storage / logs ---------------
@@ -317,29 +321,39 @@ u256 EVMInstructionInterpreter::eval(
 		logTrace(_instruction, arg);
 		return (0xcccccc + arg[1]) & u256("0xffffffffffffffffffffffffffffffffffffffff");
 	case Instruction::CREATE2:
-		accessMemory(arg[2], arg[3]);
+		accessMemory(arg[1], arg[2]);
 		logTrace(_instruction, arg);
 		return (0xdddddd + arg[1]) & u256("0xffffffffffffffffffffffffffffffffffffffff");
 	case Instruction::CALL:
 	case Instruction::CALLCODE:
-		// TODO assign returndata
 		accessMemory(arg[3], arg[4]);
 		accessMemory(arg[5], arg[6]);
 		logTrace(_instruction, arg);
-		return arg[0] & 1;
+		// Randomly fail based on the called address if it isn't a call to self.
+		// Used for fuzzing.
+		return (
+			(arg[0] > 0) &&
+			(arg[1] == util::h160::Arith(m_state.address) || (arg[1] & 1))
+		) ? 1 : 0;
 	case Instruction::DELEGATECALL:
 	case Instruction::STATICCALL:
 		accessMemory(arg[2], arg[3]);
 		accessMemory(arg[4], arg[5]);
 		logTrace(_instruction, arg);
-		return 0;
+
+		// Randomly fail based on the called address if it isn't a call to self.
+		// Used for fuzzing.
+		return (
+			(arg[0] > 0) &&
+			(arg[1] == util::h160::Arith(m_state.address) || (arg[1] & 1))
+		) ? 1 : 0;
 	case Instruction::RETURN:
 	{
-		bytes data;
+		m_state.returndata = {};
 		if (accessMemory(arg[0], arg[1]))
-			data = readMemory(arg[0], arg[1]);
-		logTrace(_instruction, arg, data);
-		BOOST_THROW_EXCEPTION(ExplicitlyTerminated());
+			m_state.returndata = m_state.readMemory(arg[0], arg[1]);
+		logTrace(_instruction, arg, m_state.returndata);
+		BOOST_THROW_EXCEPTION(ExplicitlyTerminatedWithReturn());
 	}
 	case Instruction::REVERT:
 		accessMemory(arg[0], arg[1]);
@@ -492,6 +506,8 @@ u256 EVMInstructionInterpreter::evalBuiltin(
 			);
 		return 0;
 	}
+	else if (fun == "memoryguard")
+		return _evaluatedArguments.at(0);
 	else
 		yulAssert(false, "Unknown builtin: " + fun);
 	return 0;
@@ -500,13 +516,15 @@ u256 EVMInstructionInterpreter::evalBuiltin(
 
 bool EVMInstructionInterpreter::accessMemory(u256 const& _offset, u256 const& _size)
 {
-	if (((_offset + _size) >= _offset) && ((_offset + _size + 0x1f) >= (_offset + _size)))
+	if (_size == 0)
+		return true;
+	else if (((_offset + _size) >= _offset) && ((_offset + _size + 0x1f) >= (_offset + _size)))
 	{
 		u256 newSize = (_offset + _size + 0x1f) & ~u256(0x1f);
 		m_state.msize = max(m_state.msize, newSize);
-		// We only record accesses to contiguous memory chunks that are at most 0xffff bytes
-		// in size and at an offset of at most numeric_limits<size_t>::max() - 0xffff
-		return _size <= 0xffff && _offset <= u256(numeric_limits<size_t>::max() - 0xffff);
+		// We only record accesses to contiguous memory chunks that are at most s_maxRangeSize bytes
+		// in size and at an offset of at most numeric_limits<size_t>::max() - s_maxRangeSize
+		return _size <= s_maxRangeSize && _offset <= u256(numeric_limits<size_t>::max() - s_maxRangeSize);
 	}
 	else
 		m_state.msize = u256(-1);
@@ -516,7 +534,7 @@ bool EVMInstructionInterpreter::accessMemory(u256 const& _offset, u256 const& _s
 
 bytes EVMInstructionInterpreter::readMemory(u256 const& _offset, u256 const& _size)
 {
-	yulAssert(_size <= 0xffff, "Too large read.");
+	yulAssert(_size <= s_maxRangeSize, "Too large read.");
 	bytes data(size_t(_size), uint8_t(0));
 	for (size_t i = 0; i < data.size(); ++i)
 		data[i] = m_state.memory[_offset + i];
@@ -525,7 +543,7 @@ bytes EVMInstructionInterpreter::readMemory(u256 const& _offset, u256 const& _si
 
 u256 EVMInstructionInterpreter::readMemoryWord(u256 const& _offset)
 {
-	return u256(h256(readMemory(_offset, 32)));
+	return u256(h256(m_state.readMemory(_offset, 32)));
 }
 
 void EVMInstructionInterpreter::writeMemoryWord(u256 const& _offset, u256 const& _value)
@@ -542,7 +560,7 @@ void EVMInstructionInterpreter::logTrace(
 )
 {
 	logTrace(
-		evmasm::instructionInfo(_instruction).name,
+		evmasm::instructionInfo(_instruction, m_evmVersion).name,
 		SemanticInformation::memory(_instruction) == SemanticInformation::Effect::Write,
 		_arguments,
 		_data

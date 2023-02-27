@@ -40,6 +40,8 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
+#include <fmt/format.h>
+
 #include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/view/drop_exactly.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -1731,7 +1733,13 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	TypeResult result = type(_operation.subExpression())->unaryOperatorResult(op);
 	if (!result)
 	{
-		string description = "Unary operator " + string(TokenTraits::toString(op)) + " cannot be applied to type " + subExprType->humanReadableName() + "." + (!result.message().empty() ? " " + result.message() : "");
+		string description = fmt::format(
+			"Built-in unary operator {} cannot be applied to type {}.{}",
+			TokenTraits::toString(op),
+			subExprType->humanReadableName(),
+			!result.message().empty() ? " " + result.message() : ""
+		);
+
 		if (modifying)
 			// Cannot just report the error, ignore the unary operator, and continue,
 			// because the sub-expression was already processed with requireLValue()
@@ -1743,7 +1751,9 @@ bool TypeChecker::visit(UnaryOperation const& _operation)
 	else
 		_operation.annotation().type = result.get();
 	_operation.annotation().isConstant = false;
-	_operation.annotation().isPure = !modifying && *_operation.subExpression().annotation().isPure;
+	_operation.annotation().isPure =
+		!modifying &&
+		*_operation.subExpression().annotation().isPure;
 	_operation.annotation().isLValue = false;
 
 	return false;
@@ -1760,9 +1770,9 @@ void TypeChecker::endVisit(BinaryOperation const& _operation)
 		m_errorReporter.typeError(
 			2271_error,
 			_operation.location(),
-			"Operator " +
+			"Built-in binary operator " +
 			string(TokenTraits::toString(_operation.getOperator())) +
-			" not compatible with types " +
+			" cannot be applied to types " +
 			leftType->humanReadableName() +
 			" and " +
 			rightType->humanReadableName() + "." +
@@ -3158,7 +3168,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 	if (auto funType = dynamic_cast<FunctionType const*>(annotation.type))
 	{
 		solAssert(
-			!funType->bound() || exprType->isImplicitlyConvertibleTo(*funType->selfType()),
+			!funType->hasBoundFirstArgument() || exprType->isImplicitlyConvertibleTo(*funType->selfType()),
 			"Function \"" + memberName + "\" cannot be called on an object of type " +
 			exprType->humanReadableName() + " (expected " + funType->selfType()->humanReadableName() + ")."
 		);
@@ -3185,7 +3195,7 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 				"Storage arrays with nested mappings do not support .push(<arg>)."
 			);
 
-		if (!funType->bound())
+		if (!funType->hasBoundFirstArgument())
 			if (auto typeType = dynamic_cast<TypeType const*>(exprType))
 			{
 				auto contractType = dynamic_cast<ContractType const*>(typeType->actualType());
@@ -3287,18 +3297,33 @@ bool TypeChecker::visit(MemberAccess const& _memberAccess)
 			(memberName == "min" ||	memberName == "max")
 		)
 			annotation.isPure = true;
-		else if (magicType->kind() == MagicType::Kind::Block && memberName == "chainid" && !m_evmVersion.hasChainID())
-			m_errorReporter.typeError(
-				3081_error,
-				_memberAccess.location(),
-				"\"chainid\" is not supported by the VM version."
-			);
-		else if (magicType->kind() == MagicType::Kind::Block && memberName == "basefee" && !m_evmVersion.hasBaseFee())
-			m_errorReporter.typeError(
-				5921_error,
-				_memberAccess.location(),
-				"\"basefee\" is not supported by the VM version."
-			);
+		else if (magicType->kind() == MagicType::Kind::Block)
+		{
+			if (memberName == "chainid" && !m_evmVersion.hasChainID())
+				m_errorReporter.typeError(
+					3081_error,
+					_memberAccess.location(),
+					"\"chainid\" is not supported by the VM version."
+				);
+			else if (memberName == "basefee" && !m_evmVersion.hasBaseFee())
+				m_errorReporter.typeError(
+					5921_error,
+					_memberAccess.location(),
+					"\"basefee\" is not supported by the VM version."
+				);
+			else if (memberName == "prevrandao" && !m_evmVersion.hasPrevRandao())
+				m_errorReporter.warning(
+					9432_error,
+					_memberAccess.location(),
+					"\"prevrandao\" is not supported by the VM version and will be treated as \"difficulty\"."
+				);
+			else if (memberName == "difficulty" && m_evmVersion.hasPrevRandao())
+				m_errorReporter.warning(
+					8417_error,
+					_memberAccess.location(),
+					"Since the VM version paris, \"difficulty\" was replaced by \"prevrandao\", which now returns a random number based on the beacon chain."
+				);
+		}
 	}
 
 	if (
@@ -3633,6 +3658,14 @@ bool TypeChecker::visit(Identifier const& _identifier)
 				_identifier.location(),
 				"\"suicide\" has been deprecated in favour of \"selfdestruct\"."
 			);
+		else if (_identifier.name() == "selfdestruct" && fType->kind() == FunctionType::Kind::Selfdestruct)
+			m_errorReporter.warning(
+				5159_error,
+				_identifier.location(),
+				"\"selfdestruct\" has been deprecated. "
+				"The underlying opcode will eventually undergo breaking changes, "
+				"and its use is not recommended."
+			);
 	}
 
 	if (
@@ -3743,8 +3776,9 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			solAssert(m_errorReporter.hasErrors());
 			return;
 		}
-		solAssert(_usingFor.typeName()->annotation().type);
-		if (Declaration const* typeDefinition = _usingFor.typeName()->annotation().type->typeDefinition())
+		Type const* usingForType = _usingFor.typeName()->annotation().type;
+		solAssert(usingForType);
+		if (Declaration const* typeDefinition = usingForType->typeDefinition())
 		{
 			if (typeDefinition->scope() != m_currentSourceUnit)
 				m_errorReporter.typeError(
@@ -3778,10 +3812,12 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 		return;
 	}
 
-	solAssert(_usingFor.typeName()->annotation().type);
+	Type const* usingForType = _usingFor.typeName()->annotation().type;
+	solAssert(usingForType);
+
 	Type const* normalizedType = TypeProvider::withLocationIfReference(
 		DataLocation::Storage,
-		_usingFor.typeName()->annotation().type
+		usingForType
 	);
 	solAssert(normalizedType);
 
@@ -3797,12 +3833,39 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			m_errorReporter.fatalTypeError(
 				4731_error,
 				path->location(),
-				"The function \"" + joinHumanReadable(path->path(), ".") + "\" " +
-				"does not have any parameters, and therefore cannot be bound to the type \"" +
-				(normalizedType ? normalizedType->humanReadableName() : "*") + "\"."
+				SecondarySourceLocation().append(
+						"Function defined here:",
+						functionDefinition.location()
+				),
+				fmt::format(
+					"The function \"{}\" does not have any parameters, and therefore cannot be attached to the type \"{}\".",
+					joinHumanReadable(path->path(), "."),
+					normalizedType ? normalizedType->toString(true /* withoutDataLocation */) : "*"
+				)
 			);
 
-		FunctionType const* functionType = dynamic_cast<FunctionType const&>(*functionDefinition.type()).asBoundFunction();
+		if (
+			functionDefinition.visibility() == Visibility::Private &&
+			functionDefinition.scope() != m_currentContract
+		)
+		{
+			solAssert(functionDefinition.libraryFunction());
+			m_errorReporter.typeError(
+				6772_error,
+				path->location(),
+				SecondarySourceLocation().append(
+						"Function defined here:",
+						functionDefinition.location()
+				),
+				fmt::format(
+					"Function \"{}\" is private and therefore cannot be attached"
+					" to a type outside of the library where it is defined.",
+					joinHumanReadable(path->path(), ".")
+				)
+			);
+		}
+
+		FunctionType const* functionType = dynamic_cast<FunctionType const&>(*functionDefinition.type()).withBoundFirstArgument();
 		solAssert(functionType && functionType->selfType(), "");
 		BoolResult result = normalizedType->isImplicitlyConvertibleTo(
 			*TypeProvider::withLocationIfReference(DataLocation::Storage, functionType->selfType())
@@ -3811,14 +3874,13 @@ void TypeChecker::endVisit(UsingForDirective const& _usingFor)
 			m_errorReporter.typeError(
 				3100_error,
 				path->location(),
-				"The function \"" + joinHumanReadable(path->path(), ".") + "\" "+
-				"cannot be bound to the type \"" + _usingFor.typeName()->annotation().type->humanReadableName() +
-				"\" because the type cannot be implicitly converted to the first argument" +
-				" of the function (\"" + functionType->selfType()->humanReadableName() + "\")" +
-				(
-					result.message().empty() ?
-					"." :
-					": " +  result.message()
+				fmt::format(
+					"The function \"{}\" cannot be attached to the type \"{}\" because the type cannot "
+					"be implicitly converted to the first argument of the function (\"{}\"){}",
+					joinHumanReadable(path->path(), "."),
+					usingForType->toString(true /* withoutDataLocation */),
+					functionType->selfType()->humanReadableName(),
+					result.message().empty() ? "." : ": " +  result.message()
 				)
 			);
 	}
