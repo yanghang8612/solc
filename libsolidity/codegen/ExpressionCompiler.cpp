@@ -2103,7 +2103,7 @@ bool ExpressionCompiler::visit(MemberAccess const& _memberAccess)
 			// load free mem ptr
 			let memPtr := mload(64)
 			// save index param to mem
-			mstore8(add(memPtr, 31), index)
+			mstore(memPtr, index)
 			// do static call to get chain parameter, if return zero, revert
 			if iszero(staticcall(gas(), 0x100000b, memPtr, 32, memPtr, 32)) {
 				let pos := mload(64)
