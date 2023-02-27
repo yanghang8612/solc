@@ -259,7 +259,7 @@ size_t ContractCompiler::deployLibrary(ContractDefinition const& _contract)
 			return(codepos, subSize)
 		}
 		)")
-		("panicSelector", util::selectorFromSignature("Panic(uint256)").str())
+		("panicSelector", util::selectorFromSignatureU256("Panic(uint256)").str())
 		("panicCode", "0")
 		.render(),
 		{"subSize", "subOffset"}
@@ -1052,7 +1052,7 @@ void ContractCompiler::handleCatch(vector<ASTPointer<TryCatchClause>> const& _ca
 		solAssert(m_context.evmVersion().supportsReturndata(), "");
 
 		// stack: <selector>
-		m_context << Instruction::DUP1 << util::selectorFromSignature32("Error(string)") << Instruction::EQ;
+		m_context << Instruction::DUP1 << util::selectorFromSignatureU32("Error(string)") << Instruction::EQ;
 		m_context << Instruction::ISZERO;
 		m_context.appendConditionalJumpTo(panicTag);
 		m_context << Instruction::POP; // remove selector
@@ -1084,7 +1084,7 @@ void ContractCompiler::handleCatch(vector<ASTPointer<TryCatchClause>> const& _ca
 		solAssert(m_context.evmVersion().supportsReturndata(), "");
 
 		// stack: <selector>
-		m_context << util::selectorFromSignature32("Panic(uint256)") << Instruction::EQ;
+		m_context << util::selectorFromSignatureU32("Panic(uint256)") << Instruction::EQ;
 		m_context << Instruction::ISZERO;
 		m_context.appendConditionalJumpTo(fallbackTag);
 

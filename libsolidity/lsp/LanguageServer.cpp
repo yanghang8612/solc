@@ -25,6 +25,7 @@
 #include <libsolidity/lsp/Utils.h>
 
 // LSP feature implementations
+#include <libsolidity/lsp/DocumentHoverHandler.h>
 #include <libsolidity/lsp/GotoDefinition.h>
 #include <libsolidity/lsp/RenameSymbol.h>
 #include <libsolidity/lsp/SemanticTokensBuilder.h>
@@ -144,6 +145,7 @@ LanguageServer::LanguageServer(Transport& _transport):
 		{"textDocument/didOpen", bind(&LanguageServer::handleTextDocumentDidOpen, this, _2)},
 		{"textDocument/didChange", bind(&LanguageServer::handleTextDocumentDidChange, this, _2)},
 		{"textDocument/didClose", bind(&LanguageServer::handleTextDocumentDidClose, this, _2)},
+		{"textDocument/hover", DocumentHoverHandler(*this) },
 		{"textDocument/rename", RenameSymbol(*this) },
 		{"textDocument/implementation", GotoDefinition(*this) },
 		{"textDocument/semanticTokens/full", bind(&LanguageServer::semanticTokensFull, this, _1, _2)},
@@ -183,7 +185,7 @@ void LanguageServer::changeConfiguration(Json::Value const& _settings)
 		else if (text == "directly-opened-and-on-import")
 			m_fileLoadStrategy = FileLoadStrategy::DirectlyOpenedAndOnImported;
 		else
-			lspAssert(false, ErrorCode::InvalidParams, "Invalid file load strategy: " + text);
+			lspRequire(false, ErrorCode::InvalidParams, "Invalid file load strategy: " + text);
 	}
 
 	m_settingsObject = _settings;
@@ -290,7 +292,7 @@ void LanguageServer::compileAndUpdateDiagnostics()
 		jsonDiag["source"] = "solc";
 		jsonDiag["severity"] = toDiagnosticSeverity(error->type());
 		jsonDiag["code"] = Json::UInt64{error->errorId().error};
-		string message = error->typeName() + ":";
+		string message = Error::formatErrorType(error->type()) + ":";
 		if (string const* comment = error->comment())
 			message += " " + *comment;
 		jsonDiag["message"] = std::move(message);
@@ -370,7 +372,7 @@ bool LanguageServer::run()
 
 void LanguageServer::requireServerInitialized()
 {
-	lspAssert(
+	lspRequire(
 		m_state == State::Initialized,
 		ErrorCode::ServerNotInitialized,
 		"Server is not properly initialized."
@@ -379,7 +381,7 @@ void LanguageServer::requireServerInitialized()
 
 void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 {
-	lspAssert(
+	lspRequire(
 		m_state == State::Started,
 		ErrorCode::RequestFailed,
 		"Initialize called at the wrong time."
@@ -393,7 +395,7 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 	if (Json::Value uri = _args["rootUri"])
 	{
 		rootPath = uri.asString();
-		lspAssert(
+		lspRequire(
 			boost::starts_with(rootPath, "file://"),
 			ErrorCode::InvalidParams,
 			"rootUri only supports file URI scheme."
@@ -421,6 +423,7 @@ void LanguageServer::handleInitialize(MessageID _id, Json::Value const& _args)
 	replyArgs["capabilities"]["semanticTokensProvider"]["range"] = false;
 	replyArgs["capabilities"]["semanticTokensProvider"]["full"] = true; // XOR requests.full.delta = true
 	replyArgs["capabilities"]["renameProvider"] = true;
+	replyArgs["capabilities"]["hoverProvider"] = true;
 
 	m_client.reply(_id, std::move(replyArgs));
 }
@@ -475,7 +478,7 @@ void LanguageServer::handleTextDocumentDidOpen(Json::Value const& _args)
 {
 	requireServerInitialized();
 
-	lspAssert(
+	lspRequire(
 		_args["textDocument"],
 		ErrorCode::RequestFailed,
 		"Text document parameter missing."
@@ -496,14 +499,14 @@ void LanguageServer::handleTextDocumentDidChange(Json::Value const& _args)
 
 	for (Json::Value jsonContentChange: _args["contentChanges"])
 	{
-		lspAssert(
+		lspRequire(
 			jsonContentChange.isObject(),
 			ErrorCode::RequestFailed,
 			"Invalid content reference."
 		);
 
 		string const sourceUnitName = m_fileRepository.uriToSourceUnitName(uri);
-		lspAssert(
+		lspRequire(
 			m_fileRepository.sourceUnits().count(sourceUnitName),
 			ErrorCode::RequestFailed,
 			"Unknown file: " + uri
@@ -513,7 +516,7 @@ void LanguageServer::handleTextDocumentDidChange(Json::Value const& _args)
 		if (jsonContentChange["range"].isObject()) // otherwise full content update
 		{
 			optional<SourceLocation> change = parseRange(m_fileRepository, sourceUnitName, jsonContentChange["range"]);
-			lspAssert(
+			lspRequire(
 				change && change->hasText(),
 				ErrorCode::RequestFailed,
 				"Invalid source range: " + util::jsonCompactPrint(jsonContentChange["range"])
@@ -533,7 +536,7 @@ void LanguageServer::handleTextDocumentDidClose(Json::Value const& _args)
 {
 	requireServerInitialized();
 
-	lspAssert(
+	lspRequire(
 		_args["textDocument"],
 		ErrorCode::RequestFailed,
 		"Text document parameter missing."
@@ -545,19 +548,21 @@ void LanguageServer::handleTextDocumentDidClose(Json::Value const& _args)
 	compileAndUpdateDiagnostics();
 }
 
-
 ASTNode const* LanguageServer::astNodeAtSourceLocation(std::string const& _sourceUnitName, LineColumn const& _filePos)
 {
-	if (m_compilerStack.state() < CompilerStack::AnalysisPerformed)
-		return nullptr;
-
-	if (!m_fileRepository.sourceUnits().count(_sourceUnitName))
-		return nullptr;
-
-	if (optional<int> sourcePos =
-		m_compilerStack.charStream(_sourceUnitName).translateLineColumnToPosition(_filePos))
-		return locateInnermostASTNode(*sourcePos, m_compilerStack.ast(_sourceUnitName));
-	else
-		return nullptr;
+	return get<ASTNode const*>(astNodeAndOffsetAtSourceLocation(_sourceUnitName, _filePos));
 }
 
+tuple<ASTNode const*, int> LanguageServer::astNodeAndOffsetAtSourceLocation(std::string const& _sourceUnitName, LineColumn const& _filePos)
+{
+	if (m_compilerStack.state() < CompilerStack::AnalysisPerformed)
+		return {nullptr, -1};
+	if (!m_fileRepository.sourceUnits().count(_sourceUnitName))
+		return {nullptr, -1};
+
+	optional<int> sourcePos = m_compilerStack.charStream(_sourceUnitName).translateLineColumnToPosition(_filePos);
+	if (!sourcePos)
+		return {nullptr, -1};
+
+	return {locateInnermostASTNode(*sourcePos, m_compilerStack.ast(_sourceUnitName)), *sourcePos};
+}

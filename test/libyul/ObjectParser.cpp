@@ -43,7 +43,6 @@
 #include <string>
 #include <sstream>
 
-using namespace ranges;
 using namespace std;
 using namespace solidity::frontend;
 using namespace solidity::langutil;
@@ -60,6 +59,7 @@ pair<bool, ErrorList> parse(string const& _source)
 	{
 		YulStack asmStack(
 			solidity::test::CommonOptions::get().evmVersion(),
+			solidity::test::CommonOptions::get().eofVersion(),
 			YulStack::Language::StrictAssembly,
 			solidity::frontend::OptimiserSettings::none(),
 			DebugInfoSelection::All()
@@ -182,6 +182,7 @@ BOOST_AUTO_TEST_CASE(to_string)
 	expectation = boost::replace_all_copy(expectation, "\t", "    ");
 	YulStack asmStack(
 		solidity::test::CommonOptions::get().evmVersion(),
+		solidity::test::CommonOptions::get().eofVersion(),
 		YulStack::Language::StrictAssembly,
 		solidity::frontend::OptimiserSettings::none(),
 		DebugInfoSelection::All()

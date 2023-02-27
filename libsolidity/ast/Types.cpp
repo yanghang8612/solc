@@ -48,6 +48,7 @@
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/tail.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/filter.hpp>
 
 #include <limits>
 #include <unordered_set>
@@ -304,7 +305,7 @@ MemberList const& Type::members(ASTNode const* _currentScope) const
 		"");
 		MemberList::MemberMap members = nativeMembers(_currentScope);
 		if (_currentScope)
-			members += boundFunctions(*this, *_currentScope);
+			members += attachedFunctions(*this, *_currentScope);
 		m_members[_currentScope] = make_unique<MemberList>(std::move(members));
 	}
 	return *m_members[_currentScope];
@@ -337,7 +338,10 @@ Type const* Type::fullEncodingType(bool _inLibraryCall, bool _encoderV2, bool) c
 	return encodingType;
 }
 
-MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _scope)
+namespace
+{
+
+vector<UsingForDirective const*> usingForDirectivesForType(Type const& _type, ASTNode const& _scope)
 {
 	vector<UsingForDirective const*> usingForDirectives;
 	SourceUnit const* sourceUnit = dynamic_cast<SourceUnit const*>(&_scope);
@@ -362,6 +366,25 @@ MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _sc
 	if (auto refType = dynamic_cast<ReferenceType const*>(&_type))
 		typeLocation = refType->location();
 
+	return usingForDirectives | ranges::views::filter([&](UsingForDirective const* _directive) -> bool {
+		// Convert both types to pointers for comparison to see if the `using for` directive applies.
+		// Note that at this point we don't yet know if the functions are actually usable with the type.
+		// `_type` may not be convertible to the function parameter type.
+		return
+			!_directive->typeName() ||
+			*TypeProvider::withLocationIfReference(typeLocation, &_type, true) ==
+			*TypeProvider::withLocationIfReference(
+				typeLocation,
+				_directive->typeName()->annotation().type,
+				true
+			);
+	}) | ranges::to<vector<UsingForDirective const*>>;
+}
+
+}
+
+MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& _scope)
+{
 	MemberList::MemberMap members;
 
 	set<pair<string, Declaration const*>> seenFunctions;
@@ -372,36 +395,20 @@ MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _sc
 		Type const* functionType =
 			_function.libraryFunction() ? _function.typeViaContractName() : _function.type();
 		solAssert(functionType, "");
-		FunctionType const* asBoundFunction =
-			dynamic_cast<FunctionType const&>(*functionType).asBoundFunction();
-		solAssert(asBoundFunction, "");
+		FunctionType const* withBoundFirstArgument =
+			dynamic_cast<FunctionType const&>(*functionType).withBoundFirstArgument();
+		solAssert(withBoundFirstArgument, "");
 
-		if (_type.isImplicitlyConvertibleTo(*asBoundFunction->selfType()))
+		if (_type.isImplicitlyConvertibleTo(*withBoundFirstArgument->selfType()))
 			if (seenFunctions.insert(make_pair(*_name, &_function)).second)
-				members.emplace_back(&_function, asBoundFunction, *_name);
+				members.emplace_back(&_function, withBoundFirstArgument, *_name);
 	};
 
-	for (UsingForDirective const* ufd: usingForDirectives)
-	{
-		// Convert both types to pointers for comparison to see if the `using for`
-		// directive applies.
-		// Further down, we check more detailed for each function if `_type` is
-		// convertible to the function parameter type.
-		if (
-			ufd->typeName() &&
-			*TypeProvider::withLocationIfReference(typeLocation, &_type, true) !=
-			*TypeProvider::withLocationIfReference(
-				typeLocation,
-				ufd->typeName()->annotation().type,
-				true
-			)
-		)
-			continue;
-
-		for (auto const& pathPointer: ufd->functionsOrLibrary())
+	for (UsingForDirective const* ufd: usingForDirectivesForType(_type, _scope))
+		for (auto const& identifierPath: ufd->functionsOrLibrary())
 		{
-			solAssert(pathPointer);
-			Declaration const* declaration = pathPointer->annotation().referencedDeclaration;
+			solAssert(identifierPath);
+			Declaration const* declaration = identifierPath->annotation().referencedDeclaration;
 			solAssert(declaration);
 
 			if (ContractDefinition const* library = dynamic_cast<ContractDefinition const*>(declaration))
@@ -417,10 +424,9 @@ MemberList::MemberMap Type::boundFunctions(Type const& _type, ASTNode const& _sc
 			else
 				addFunction(
 					dynamic_cast<FunctionDefinition const&>(*declaration),
-					pathPointer->path().back()
+					identifierPath->path().back()
 				);
 		}
-	}
 
 	return members;
 }
@@ -1982,21 +1988,21 @@ MemberList::MemberMap ArrayType::nativeMembers(ASTNode const*) const
 				strings{string()},
 				strings{string()},
 				FunctionType::Kind::ArrayPush
-			)->asBoundFunction());
+			)->withBoundFirstArgument());
 			members.emplace_back("push", TypeProvider::function(
 				TypePointers{thisAsPointer, baseType()},
 				TypePointers{},
 				strings{string(),string()},
 				strings{},
 				FunctionType::Kind::ArrayPush
-			)->asBoundFunction());
+			)->withBoundFirstArgument());
 			members.emplace_back("pop", TypeProvider::function(
 				TypePointers{thisAsPointer},
 				TypePointers{},
 				strings{string()},
 				strings{},
 				FunctionType::Kind::ArrayPop
-			)->asBoundFunction());
+			)->withBoundFirstArgument());
 		}
 	}
 	return members;
@@ -2891,14 +2897,16 @@ FunctionType::FunctionType(VariableDeclaration const& _varDecl):
 	m_declaration(&_varDecl)
 {
 	auto returnType = _varDecl.annotation().type;
+	ASTString returnName;
 
 	while (true)
 	{
 		if (auto mappingType = dynamic_cast<MappingType const*>(returnType))
 		{
 			m_parameterTypes.push_back(mappingType->keyType());
-			m_parameterNames.emplace_back("");
+			m_parameterNames.push_back(mappingType->keyName());
 			returnType = mappingType->valueType();
+			returnName = mappingType->valueName();
 		}
 		else if (auto arrayType = dynamic_cast<ArrayType const*>(returnType))
 		{
@@ -2937,7 +2945,7 @@ FunctionType::FunctionType(VariableDeclaration const& _varDecl):
 			DataLocation::Memory,
 			returnType
 		));
-		m_returnParameterNames.emplace_back("");
+		m_returnParameterNames.emplace_back(returnName);
 	}
 
 	solAssert(
@@ -3055,7 +3063,7 @@ FunctionTypePointer FunctionType::newExpressionType(ContractDefinition const& _c
 
 vector<string> FunctionType::parameterNames() const
 {
-	if (!bound())
+	if (!hasBoundFirstArgument())
 		return m_parameterNames;
 	return vector<string>(m_parameterNames.cbegin() + 1, m_parameterNames.cend());
 }
@@ -3084,7 +3092,7 @@ TypePointers FunctionType::returnParameterTypesWithoutDynamicTypes() const
 
 TypePointers FunctionType::parameterTypes() const
 {
-	if (!bound())
+	if (!hasBoundFirstArgument())
 		return m_parameterTypes;
 	return TypePointers(m_parameterTypes.cbegin() + 1, m_parameterTypes.cend());
 }
@@ -3185,8 +3193,8 @@ string FunctionType::richIdentifier() const
 		id += "value";
 	if (saltSet())
 		id += "salt";
-	if (bound())
-		id += "bound_to" + identifierList(selfType());
+	if (hasBoundFirstArgument())
+		id += "attached_to" + identifierList(selfType());
 	return id;
 }
 
@@ -3220,11 +3228,11 @@ BoolResult FunctionType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 	FunctionType const& convertTo = dynamic_cast<FunctionType const&>(_convertTo);
 
 	// These two checks are duplicated in equalExcludingStateMutability, but are added here for error reporting.
-	if (convertTo.bound() != bound())
-		return BoolResult::err("Bound functions can not be converted to non-bound functions.");
+	if (convertTo.hasBoundFirstArgument() != hasBoundFirstArgument())
+		return BoolResult::err("Attached functions cannot be converted into unattached functions.");
 
 	if (convertTo.kind() != kind())
-		return BoolResult::err("Special functions can not be converted to function types.");
+		return BoolResult::err("Special functions cannot be converted to function types.");
 
 	if (!equalExcludingStateMutability(convertTo))
 		return false;
@@ -3261,10 +3269,10 @@ TypeResult FunctionType::binaryOperatorResult(Token _operator, Type const* _othe
 	else if (
 		kind() == Kind::External &&
 		sizeOnStack() == 2 &&
-		!bound() &&
+		!hasBoundFirstArgument() &&
 		other.kind() == Kind::External &&
 		other.sizeOnStack() == 2 &&
-		!other.bound()
+		!other.hasBoundFirstArgument()
 	)
 		return commonType(this, _other);
 
@@ -3349,7 +3357,7 @@ bool FunctionType::nameable() const
 {
 	return
 		(m_kind == Kind::Internal || m_kind == Kind::External) &&
-		!bound() &&
+		!hasBoundFirstArgument() &&
 		!takesArbitraryParameters() &&
 		!gasSet() &&
 		!valueSet() &&
@@ -3388,7 +3396,7 @@ vector<tuple<string, Type const*>> FunctionType::makeStackItems() const
 		break;
 	case Kind::ArrayPush:
 	case Kind::ArrayPop:
-		solAssert(bound(), "");
+		solAssert(hasBoundFirstArgument(), "");
 		slots = {};
 		break;
 	default:
@@ -3401,7 +3409,7 @@ vector<tuple<string, Type const*>> FunctionType::makeStackItems() const
 		slots.emplace_back("value", TypeProvider::uint256());
 	if (saltSet())
 		slots.emplace_back("salt", TypeProvider::fixedBytes(32));
-	if (bound())
+	if (hasBoundFirstArgument())
 		slots.emplace_back("self", m_parameterTypes.front());
 	return slots;
 }
@@ -3562,7 +3570,7 @@ TypeResult FunctionType::interfaceType(bool /*_inLibrary*/) const
 
 Type const* FunctionType::mobileType() const
 {
-	if (valueSet() || gasSet() || saltSet() || bound())
+	if (valueSet() || gasSet() || saltSet() || hasBoundFirstArgument())
 		return nullptr;
 
 	// return function without parameter names
@@ -3583,8 +3591,8 @@ bool FunctionType::canTakeArguments(
 	Type const* _selfType
 ) const
 {
-	solAssert(!bound() || _selfType, "");
-	if (bound() && !_selfType->isImplicitlyConvertibleTo(*selfType()))
+	solAssert(!hasBoundFirstArgument() || _selfType, "");
+	if (hasBoundFirstArgument() && !_selfType->isImplicitlyConvertibleTo(*selfType()))
 		return false;
 	TypePointers paramTypes = parameterTypes();
 	std::vector<std::string> const paramNames = parameterNames();
@@ -3663,10 +3671,10 @@ bool FunctionType::equalExcludingStateMutability(FunctionType const& _other) con
 	if (gasSet() != _other.gasSet() || valueSet() != _other.valueSet() || saltSet() != _other.saltSet())
 		return false;
 
-	if (bound() != _other.bound())
+	if (hasBoundFirstArgument() != _other.hasBoundFirstArgument())
 		return false;
 
-	solAssert(!bound() || *selfType() == *_other.selfType(), "");
+	solAssert(!hasBoundFirstArgument() || *selfType() == *_other.selfType(), "");
 
 	return true;
 }
@@ -3751,12 +3759,12 @@ string FunctionType::externalSignature() const
 
 u256 FunctionType::externalIdentifier() const
 {
-	return util::selectorFromSignature32(externalSignature());
+	return util::selectorFromSignatureU32(externalSignature());
 }
 
 string FunctionType::externalIdentifierHex() const
 {
-	return util::FixedHash<4>(util::keccak256(externalSignature())).hex();
+	return util::selectorFromSignatureH32(externalSignature()).hex();
 }
 
 bool FunctionType::isPure() const
@@ -3817,14 +3825,14 @@ Type const* FunctionType::copyAndSetCallOptions(bool _setGas, bool _setValue, bo
 	);
 }
 
-FunctionTypePointer FunctionType::asBoundFunction() const
+FunctionTypePointer FunctionType::withBoundFirstArgument() const
 {
 	solAssert(!m_parameterTypes.empty(), "");
 	solAssert(!gasSet(), "");
 	solAssert(!valueSet(), "");
 	solAssert(!saltSet(), "");
 	Options options = Options::fromFunctionType(*this);
-	options.bound = true;
+	options.hasBoundFirstArgument = true;
 	return TypeProvider::function(
 		m_parameterTypes,
 		m_returnParameterTypes,
@@ -3879,7 +3887,7 @@ FunctionTypePointer FunctionType::asExternallyCallableFunction(bool _inLibrary) 
 
 Type const* FunctionType::selfType() const
 {
-	solAssert(bound(), "Function is not bound.");
+	solAssert(hasBoundFirstArgument(), "Function is not attached to a type.");
 	solAssert(m_parameterTypes.size() > 0, "Function has no self type.");
 	return m_parameterTypes.at(0);
 }
@@ -4244,6 +4252,7 @@ MemberList::MemberMap MagicType::nativeMembers(ASTNode const*) const
 			{"timestamp", TypeProvider::uint256()},
 			{"blockhash", TypeProvider::function(strings{"uint"}, strings{"bytes32"}, FunctionType::Kind::BlockHash, StateMutability::View)},
 			{"difficulty", TypeProvider::uint256()},
+			{"prevrandao", TypeProvider::uint256()},
 			{"number", TypeProvider::uint256()},
 			{"gaslimit", TypeProvider::uint256()},
 			{"chainid", TypeProvider::uint256()},

@@ -1,7 +1,7 @@
 ## Checklist for making a release:
 
 ### Requirements
- - [ ] Github account with access to [solidity](https://github.com/ethereum/solidity), [solc-js](https://github.com/ethereum/solc-js),
+ - [ ] GitHub account with access to [solidity](https://github.com/ethereum/solidity), [solc-js](https://github.com/ethereum/solc-js),
        [solc-bin](https://github.com/ethereum/solc-bin), [homebrew-ethereum](https://github.com/ethereum/homebrew-ethereum),
        [solidity-blog](https://github.com/ethereum/solidity-blog) and [solidity-portal](https://github.com/ethereum/solidity-portal) repositories.
  - [ ] DockerHub account with push rights to the [``solc`` image](https://hub.docker.com/r/ethereum/solc).
@@ -19,6 +19,7 @@
  - [ ] Run ``make linkcheck`` from within ``docs/`` and fix any broken links it finds. Ignore false positives caused by ``href`` anchors and dummy links not meant to work.
 
 ### Changelog
+ - [ ] Make sure that all merged PRs that should have changelog entries do have them.
  - [ ] Sort the changelog entries alphabetically and correct any errors you notice. Commit it.
  - [ ] Update the changelog to include a release date.
  - [ ] Run ``scripts/update_bugs_by_version.py`` to regenerate ``bugs_by_version.json`` from the changelog and ``bugs.json``.
@@ -27,11 +28,11 @@
  - [ ] Copy the changelog into the release blog post.
 
 ### Create the Release
- - [ ] Create a [release on github](https://github.com/ethereum/solidity/releases/new).
+ - [ ] Create a [release on GitHub](https://github.com/ethereum/solidity/releases/new).
        Set the target to the ``develop`` branch and the tag to the new version, e.g. ``v0.8.5``.
        Include the following warning: ``**The release is still in progress and the binaries may not yet be available from all sources.**``.
        Don't publish it yet - click the ``Save draft`` button instead.
- - [ ] Thank voluntary contributors in the Github release notes (use ``git shortlog --summary --email v0.5.3..origin/develop``).
+ - [ ] Thank voluntary contributors in the GitHub release notes (use ``git shortlog --summary --email v0.5.3..origin/develop``).
  - [ ] Check that all tests on the latest commit in ``develop`` are green.
  - [ ] Click the ``Publish release`` button on the release page, creating the tag.
  - [ ] Wait for the CI runs on the tag itself.
@@ -44,7 +45,7 @@
  - [ ] Take the ``github-binaries.tar`` tarball from ``c_release_binaries`` run of the tagged commit in circle-ci and add all binaries from it to the release page.
        Make sure it contains four binaries: ``solc-windows.exe``, ``solc-macos``, ``solc-static-linux`` and ``soljson.js``.
  - [ ] Take the ``solc-bin-binaries.tar`` tarball from ``c_release_binaries`` run of the tagged commit in circle-ci and add all binaries from it to solc-bin.
- - [ ] Run ``./update --reuse-hashes`` in ``solc-bin`` and verify that the script has updated ``list.js``, ``list.txt`` and ``list.json`` files correctly and that symlinks to the new release have been added in ``solc-bin/wasm/`` and ``solc-bin/emscripten-wasm32/``.
+ - [ ] Run ``npm run update -- --reuse-hashes`` in ``solc-bin`` and verify that the script has updated ``list.js``, ``list.txt`` and ``list.json`` files correctly and that symlinks to the new release have been added in ``solc-bin/wasm/`` and ``solc-bin/emscripten-wasm32/``.
  - [ ] Create a pull request in solc-bin and merge.
 
 ### Homebrew and MacOS
@@ -58,7 +59,7 @@
  - [ ] Create ``.release_ppa_auth`` at the root of your local Solidity checkout and set ``LAUNCHPAD_EMAIL`` and ``LAUNCHPAD_KEYID`` to your key's email and key id.
  - [ ] Double-check that the ``DISTRIBUTIONS`` list in ``scripts/release_ppa.sh`` and ``scripts/deps-ppa/static-z3.sh`` contains the most recent versions of Ubuntu.
  - [ ] Make sure the [``~ethereum/cpp-build-deps`` PPA repository](https://launchpad.net/~ethereum/+archive/ubuntu/cpp-build-deps) contains ``libz3-static-dev builds`` for all current versions of Ubuntu.
-       If not, run ``scripts/deps-ppa/static-z3.sh`` (after changing email address and key id) and wait for the builds to succeed before continuing.
+       If not, run ``scripts/deps-ppa/static-z3.sh`` and wait for the builds to succeed before continuing.
  - [ ] Run ``scripts/release_ppa.sh v$VERSION`` to create the PPA release.
  - [ ] Wait for the [``~ethereum/ethereum-static`` PPA](https://launchpad.net/~ethereum/+archive/ubuntu/ethereum-static) build to be finished and published for *all platforms*.
        **SERIOUSLY: DO NOT PROCEED EARLIER!!!**
@@ -83,4 +84,4 @@
  - [ ] Share the announcement on Reddit in [``/r/ethdev``](https://reddit.com/r/ethdev/), cross-posted to [``/r/ethereum``](https://reddit.com/r/ethereum/).
  - [ ] Share the announcement the [Solidity forum](https://forum.soliditylang.org) in the ``Announcements`` category.
  - [ ] Update the release information section on [soliditylang.org](https://github.com/ethereum/solidity-portal).
- - [ ] Lean back, wait for bug reports and repeat from step 1 :)
+ - [ ] Lean back, wait for bug reports and repeat from step 1 :).

@@ -160,27 +160,31 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 void Parser::parsePragmaVersion(SourceLocation const& _location, vector<Token> const& _tokens, vector<string> const& _literals)
 {
 	SemVerMatchExpressionParser parser(_tokens, _literals);
-	auto matchExpression = parser.parse();
-	if (!matchExpression.has_value())
+	try
+	{
+		SemVerMatchExpression matchExpression = parser.parse();
+		static SemVerVersion const currentVersion{string(VersionString)};
+		// FIXME: only match for major version incompatibility
+		if (!matchExpression.matches(currentVersion))
+			// If m_parserErrorRecovery is true, the same message will appear from SyntaxChecker::visit(),
+			// so we don't need to report anything here.
+			if (!m_parserErrorRecovery)
+				m_errorReporter.fatalParserError(
+					5333_error,
+					_location,
+					"Source file requires different compiler version (current compiler is " +
+					string(VersionString) + ") - note that nightly builds are considered to be "
+					"strictly less than the released version"
+				);
+	}
+	catch (SemVerError const& matchError)
+	{
 		m_errorReporter.fatalParserError(
 			1684_error,
 			_location,
-			"Found version pragma, but failed to parse it. "
-			"Please ensure there is a trailing semicolon."
+			"Invalid version pragma. "s + matchError.what()
 		);
-	static SemVerVersion const currentVersion{string(VersionString)};
-	// FIXME: only match for major version incompatibility
-	if (!matchExpression->matches(currentVersion))
-		// If m_parserErrorRecovery is true, the same message will appear from SyntaxChecker::visit(),
-		// so we don't need to report anything here.
-		if (!m_parserErrorRecovery)
-			m_errorReporter.fatalParserError(
-				5333_error,
-				_location,
-				"Source file requires different compiler version (current compiler is " +
-				string(VersionString) + ") - note that nightly builds are considered to be "
-				"strictly less than the released version"
-			);
+	}
 }
 
 ASTPointer<StructuredDocumentation> Parser::parseStructuredDocumentation()
@@ -781,7 +785,12 @@ ASTPointer<VariableDeclaration> Parser::parseVariableDeclaration(
 		else
 		{
 			if (_options.allowIndexed && token == Token::Indexed)
+			{
+				if (isIndexed)
+					parserError(5399_error, "Indexed already specified.");
+
 				isIndexed = true;
+			}
 			else if (token == Token::Constant || token == Token::Immutable)
 			{
 				if (mutability != VariableDeclaration::Mutability::Mutable)
@@ -870,7 +879,6 @@ ASTPointer<ModifierDefinition> Parser::parseModifierDefinition()
 	if (m_scanner->currentToken() == Token::LParen)
 	{
 		VarDeclParserOptions options;
-		options.allowIndexed = true;
 		options.allowLocationSpecifier = true;
 		parameters = parseParameterList(options);
 	}
@@ -1183,11 +1191,19 @@ ASTPointer<Mapping> Parser::parseMapping()
 	}
 	else
 		fatalParserError(1005_error, "Expected elementary type name or identifier for mapping key type");
+	ASTPointer<ASTString> keyName = make_shared<ASTString>("");
+	SourceLocation keyNameLocation{};
+	if (m_scanner->currentToken() == Token::Identifier)
+		tie(keyName, keyNameLocation) = expectIdentifierWithLocation();
 	expectToken(Token::DoubleArrow);
 	ASTPointer<TypeName> valueType = parseTypeName();
+	ASTPointer<ASTString> valueName = make_shared<ASTString>("");
+	SourceLocation valueNameLocation{};
+	if (m_scanner->currentToken() == Token::Identifier)
+		tie(valueName, valueNameLocation) = expectIdentifierWithLocation();
 	nodeFactory.markEndPosition();
 	expectToken(Token::RParen);
-	return nodeFactory.createNode<Mapping>(keyType, valueType);
+	return nodeFactory.createNode<Mapping>(keyType, keyName, keyNameLocation, valueType, valueName, valueNameLocation);
 }
 
 ASTPointer<ParameterList> Parser::parseParameterList(
