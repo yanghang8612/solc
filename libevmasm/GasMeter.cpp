@@ -198,37 +198,37 @@ GasMeter::GasConsumption GasMeter::estimateMax(AssemblyItem const& _item, bool _
 			gas = GasCosts::balanceGas(m_evmVersion);
 			break;
         case Instruction::NATIVEFREEZE:
-            gas = runGas(Instruction::NATIVEFREEZE);
+            gas = runGas(Instruction::NATIVEFREEZE, m_evmVersion);
             break;
         case Instruction::NATIVEUNFREEZE:
-            gas = runGas(Instruction::NATIVEUNFREEZE);
+            gas = runGas(Instruction::NATIVEUNFREEZE, m_evmVersion);
             break;
         case Instruction::NATIVEFREEZEEXPIRETIME:
-            gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME);
+            gas = runGas(Instruction::NATIVEFREEZEEXPIRETIME, m_evmVersion);
             break;
 		case Instruction::NATIVEVOTE:
-			gas = runGas(Instruction::NATIVEVOTE);
+			gas = runGas(Instruction::NATIVEVOTE, m_evmVersion);
 			break;
 		case Instruction::NATIVEWITHDRAWREWARD:
-			gas = runGas(Instruction::NATIVEWITHDRAWREWARD);
+			gas = runGas(Instruction::NATIVEWITHDRAWREWARD, m_evmVersion);
 			break;
 		case Instruction::NATIVEFREEZEBALANCEV2:
-			gas = runGas(Instruction::NATIVEFREEZEBALANCEV2);
+			gas = runGas(Instruction::NATIVEFREEZEBALANCEV2, m_evmVersion);
 			break;
 		case Instruction::NATIVEUNFREEZEBALANCEV2:
-			gas = runGas(Instruction::NATIVEUNFREEZEBALANCEV2);
+			gas = runGas(Instruction::NATIVEUNFREEZEBALANCEV2, m_evmVersion);
 			break;
         case Instruction::NATIVECANCELALLUNFREEZEV2:
-            gas = runGas(Instruction::NATIVECANCELALLUNFREEZEV2);
+            gas = runGas(Instruction::NATIVECANCELALLUNFREEZEV2, m_evmVersion);
             break;
 		case Instruction::NATIVEWITHDRAWEXPIREUNFREEZE:
-			gas = runGas(Instruction::NATIVEWITHDRAWEXPIREUNFREEZE);
+			gas = runGas(Instruction::NATIVEWITHDRAWEXPIREUNFREEZE, m_evmVersion);
 			break;
 		case Instruction::NATIVEDELEGATERESOURCE:
-			gas = runGas(Instruction::NATIVEDELEGATERESOURCE);
+			gas = runGas(Instruction::NATIVEDELEGATERESOURCE, m_evmVersion);
 			break;
 		case Instruction::NATIVEUNDELEGATERESOURCE:
-			gas = runGas(Instruction::NATIVEUNDELEGATERESOURCE);
+			gas = runGas(Instruction::NATIVEUNDELEGATERESOURCE, m_evmVersion);
 			break;
 		case Instruction::CHAINID:
 			gas = runGas(Instruction::CHAINID, m_evmVersion);
