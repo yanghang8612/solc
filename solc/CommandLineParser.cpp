@@ -69,8 +69,11 @@ static string const g_strMetadataLiteral = "metadata-literal";
 static string const g_strModelCheckerContracts = "model-checker-contracts";
 static string const g_strModelCheckerDivModNoSlacks = "model-checker-div-mod-no-slacks";
 static string const g_strModelCheckerEngine = "model-checker-engine";
+static string const g_strModelCheckerExtCalls = "model-checker-ext-calls";
 static string const g_strModelCheckerInvariants = "model-checker-invariants";
+static string const g_strModelCheckerShowProvedSafe = "model-checker-show-proved-safe";
 static string const g_strModelCheckerShowUnproved = "model-checker-show-unproved";
+static string const g_strModelCheckerShowUnsupported = "model-checker-show-unsupported";
 static string const g_strModelCheckerSolvers = "model-checker-solvers";
 static string const g_strModelCheckerTargets = "model-checker-targets";
 static string const g_strModelCheckerTimeout = "model-checker-timeout";
@@ -590,7 +593,7 @@ General Information)").c_str(),
 			g_strEVMVersion.c_str(),
 			po::value<string>()->value_name("version")->default_value(EVMVersion{}.name()),
 			"Select desired EVM version. Either homestead, tangerineWhistle, spuriousDragon, "
-			"byzantium, constantinople, petersburg, istanbul, berlin, london or paris."
+			"byzantium, constantinople, petersburg, istanbul, berlin, london, paris or shanghai."
 		)
 	;
 	if (!_forHelp) // Note: We intentionally keep this undocumented for now.
@@ -832,6 +835,12 @@ General Information)").c_str(),
 			"Select model checker engine."
 		)
 		(
+			g_strModelCheckerExtCalls.c_str(),
+			po::value<string>()->value_name("untrusted,trusted")->default_value("untrusted"),
+			"Select whether to assume (trusted) that external calls always invoke"
+			" the code given by the type of the contract, if that code is available."
+		)
+		(
 			g_strModelCheckerInvariants.c_str(),
 			po::value<string>()->value_name("default,all,contract,reentrancy")->default_value("default"),
 			"Select whether to report inferred contract inductive invariants."
@@ -839,8 +848,16 @@ General Information)").c_str(),
 			" By default no invariants are reported."
 		)
 		(
+			g_strModelCheckerShowProvedSafe.c_str(),
+			"Show all targets that were proved safe separately."
+		)
+		(
 			g_strModelCheckerShowUnproved.c_str(),
 			"Show all unproved targets separately."
+		)
+		(
+			g_strModelCheckerShowUnsupported.c_str(),
+			"Show all unsupported language features separately."
 		)
 		(
 			g_strModelCheckerSolvers.c_str(),
@@ -909,7 +926,7 @@ void CommandLineParser::processArgs()
 		g_strStrictAssembly,
 		g_strYul,
 		g_strImportAst,
-		g_strLSP
+		g_strLSP,
 	});
 
 	if (m_args.count(g_strHelp) > 0)
@@ -946,7 +963,9 @@ void CommandLineParser::processArgs()
 		{g_strMetadataLiteral, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strNoCBORMetadata, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strMetadataHash, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
+		{g_strModelCheckerShowProvedSafe, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerShowUnproved, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
+		{g_strModelCheckerShowUnsupported, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerDivModNoSlacks, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerEngine, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
 		{g_strModelCheckerInvariants, {InputMode::Compiler, InputMode::CompilerWithASTImport}},
@@ -1029,7 +1048,7 @@ void CommandLineParser::processArgs()
 	if (m_args.count(g_strRevertStrings))
 	{
 		string revertStringsString = m_args[g_strRevertStrings].as<string>();
-		std::optional<RevertStrings> revertStrings = revertStringsFromString(revertStringsString);
+		optional<RevertStrings> revertStrings = revertStringsFromString(revertStringsString);
 		if (!revertStrings)
 			solThrow(
 				CommandLineValidationError,
@@ -1123,7 +1142,7 @@ void CommandLineParser::processArgs()
 	if (m_args.count(g_strEVMVersion))
 	{
 		string versionOptionStr = m_args[g_strEVMVersion].as<string>();
-		std::optional<langutil::EVMVersion> versionOption = langutil::EVMVersion::fromString(versionOptionStr);
+		optional<langutil::EVMVersion> versionOption = langutil::EVMVersion::fromString(versionOptionStr);
 		if (!versionOption)
 			solThrow(CommandLineValidationError, "Invalid option for --" + g_strEVMVersion + ": " + versionOptionStr);
 		m_options.output.evmVersion = *versionOption;
@@ -1289,6 +1308,15 @@ void CommandLineParser::processArgs()
 		m_options.modelChecker.settings.engine = *engine;
 	}
 
+	if (m_args.count(g_strModelCheckerExtCalls))
+	{
+		string mode = m_args[g_strModelCheckerExtCalls].as<string>();
+		optional<ModelCheckerExtCalls> extCallsMode = ModelCheckerExtCalls::fromString(mode);
+		if (!extCallsMode)
+			solThrow(CommandLineValidationError, "Invalid option for --" + g_strModelCheckerExtCalls + ": " + mode);
+		m_options.modelChecker.settings.externalCalls = *extCallsMode;
+	}
+
 	if (m_args.count(g_strModelCheckerInvariants))
 	{
 		string invsStr = m_args[g_strModelCheckerInvariants].as<string>();
@@ -1298,8 +1326,14 @@ void CommandLineParser::processArgs()
 		m_options.modelChecker.settings.invariants = *invs;
 	}
 
+	if (m_args.count(g_strModelCheckerShowProvedSafe))
+		m_options.modelChecker.settings.showProvedSafe = true;
+
 	if (m_args.count(g_strModelCheckerShowUnproved))
 		m_options.modelChecker.settings.showUnproved = true;
+
+	if (m_args.count(g_strModelCheckerShowUnsupported))
+		m_options.modelChecker.settings.showUnsupported = true;
 
 	if (m_args.count(g_strModelCheckerSolvers))
 	{
@@ -1327,8 +1361,11 @@ void CommandLineParser::processArgs()
 		m_args.count(g_strModelCheckerContracts) ||
 		m_args.count(g_strModelCheckerDivModNoSlacks) ||
 		m_args.count(g_strModelCheckerEngine) ||
+		m_args.count(g_strModelCheckerExtCalls) ||
 		m_args.count(g_strModelCheckerInvariants) ||
+		m_args.count(g_strModelCheckerShowProvedSafe) ||
 		m_args.count(g_strModelCheckerShowUnproved) ||
+		m_args.count(g_strModelCheckerShowUnsupported) ||
 		m_args.count(g_strModelCheckerSolvers) ||
 		m_args.count(g_strModelCheckerTargets) ||
 		m_args.count(g_strModelCheckerTimeout);

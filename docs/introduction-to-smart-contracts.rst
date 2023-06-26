@@ -91,7 +91,7 @@ registering with a username and password, all you need is an Ethereum keypair.
         // The keyword "public" makes variables
         // accessible from other contracts
         address public minter;
-        mapping (address => uint) public balances;
+        mapping(address => uint) public balances;
 
         // Events allow clients to react to specific
         // contract changes you declare
@@ -151,7 +151,7 @@ You do not need to do this, the compiler figures it out for you.
 
 .. index:: mapping
 
-The next line, ``mapping (address => uint) public balances;`` also
+The next line, ``mapping(address => uint) public balances;`` also
 creates a public state variable, but it is a more complex datatype.
 The :ref:`mapping <mapping-types>` type maps addresses to :ref:`unsigned integers <integers>`.
 
@@ -300,9 +300,9 @@ and then they will be executed and distributed among all participating nodes.
 If two transactions contradict each other, the one that ends up being second will
 be rejected and not become part of the block.
 
-These blocks form a linear sequence in time and that is where the word "blockchain"
-derives from. Blocks are added to the chain in rather regular intervals - for
-Ethereum this is roughly every 17 seconds.
+These blocks form a linear sequence in time, and that is where the word "blockchain" derives from.
+Blocks are added to the chain at regular intervals, although these intervals may be subject to change in the future.
+For the most up-to-date information, it is recommended to monitor the network, for example, on `Etherscan <https://etherscan.io/chart/blocktime>`_.
 
 As part of the "order selection mechanism" (which is called "mining") it may happen that
 blocks are reverted from time to time, but only at the "tip" of the chain. The more

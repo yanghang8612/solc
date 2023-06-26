@@ -174,9 +174,26 @@ public:
 
 	enum class Category
 	{
-		Address, Integer, RationalNumber, StringLiteral, Bool, FixedPoint, Array, ArraySlice,
-		FixedBytes, Contract, Struct, Function, Enum, UserDefinedValueType, Tuple,
-		Mapping, TypeType, Modifier, Magic, Module,
+		Address,
+		Integer,
+		RationalNumber,
+		StringLiteral,
+		Bool,
+		FixedPoint,
+		Array,
+		ArraySlice,
+		FixedBytes,
+		Contract,
+		Struct,
+		Function,
+		Enum,
+		UserDefinedValueType,
+		Tuple,
+		Mapping,
+		TypeType,
+		Modifier,
+		Magic,
+		Module,
 		InaccessibleDynamic
 	};
 
@@ -376,6 +393,21 @@ public:
 
 	/// Clears all internally cached values (if any).
 	virtual void clearCache() const;
+
+	/// Scans all "using for" directives in the @a _scope for functions implementing
+	/// the operator represented by @a _token. Returns the set of all definitions where the type
+	/// of the first argument matches this type object.
+	///
+	/// @note: If the AST has passed analysis without errors,
+	/// the function will find at most one definition for an operator.
+	///
+	/// @param _unary If true, only definitions that accept exactly one argument are included.
+	/// Otherwise only definitions that accept exactly two arguments.
+	std::set<FunctionDefinition const*, ASTCompareByID<ASTNode>> operatorDefinitions(
+		Token _token,
+		ASTNode const& _scope,
+		bool _unary
+	) const;
 
 private:
 	/// @returns a member list containing all members added to this type by `using for` directives.
@@ -773,7 +805,7 @@ public:
 	/// if the type has an interfaceType.
 	virtual BoolResult validForLocation(DataLocation _loc) const = 0;
 
-	bool operator==(ReferenceType const& _other) const
+	bool equals(ReferenceType const& _other) const
 	{
 		return location() == _other.location() && isPointer() == _other.isPointer();
 	}

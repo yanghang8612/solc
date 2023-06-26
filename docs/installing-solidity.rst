@@ -429,7 +429,7 @@ in Visual Studio 2019 Build Tools or Visual Studio 2019:
 * C++/CLI support
 
 .. _Visual Studio 2019: https://www.visualstudio.com/vs/
-.. _Visual Studio 2019 Build Tools: https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019
+.. _Visual Studio 2019 Build Tools: https://visualstudio.microsoft.com/vs/older-downloads/#visual-studio-2019-and-other-products
 
 We have a helper script which you can use to install all required external dependencies:
 
@@ -527,7 +527,7 @@ If you are interested what CMake options are available run ``cmake .. -LH``.
 SMT Solvers
 -----------
 Solidity can be built against SMT solvers and will do so by default if
-they are found in the system. Each solver can be disabled by a `cmake` option.
+they are found in the system. Each solver can be disabled by a ``cmake`` option.
 
 *Note: In some cases, this can also be a potential workaround for build failures.*
 

@@ -522,6 +522,10 @@ public:
 	std::vector<EventDefinition const*> events() const { return filteredNodes<EventDefinition>(m_subNodes); }
 	std::vector<EventDefinition const*> const& definedInterfaceEvents() const;
 	std::vector<EventDefinition const*> const usedInterfaceEvents() const;
+	/// @return all events defined in this contract and its base contracts and all events
+	/// that are emitted during the execution of the contract.
+	/// @param _requireCallGraph if false, do not fail if the call graph has not been computed yet.
+	std::vector<EventDefinition const*> interfaceEvents(bool _requireCallGraph = true) const;
 	/// @returns all errors defined in this contract or any base contract
 	/// and all errors referenced during execution.
 	/// @param _requireCallGraph if false, do not fail if the call graph has not been computed yet.
@@ -647,10 +651,16 @@ private:
  * 1. `using LibraryName for T` attaches all functions from the library `LibraryName` to the type `T`.
  * 2. `using LibraryName for *` attaches to all types.
  * 3. `using {f1, f2, ..., fn} for T` attaches the functions `f1`, `f2`, ..., `fn`, respectively to `T`.
+ * 4. `using {f1 as op1, f2 as op2, ..., fn as opn} for T` implements operator `opn` for type `T` with function `fn`.
  *
  * For version 3, T has to be implicitly convertible to the first parameter type of
  * all functions, and this is checked at the point of the using statement. For versions 1 and
  * 2, this check is only done when a function is called.
+ *
+ * For version 4, T has to be user-defined value type and the function must be pure.
+ * All parameters and return value of all the functions have to be of type T.
+ * This version can be combined with version 3 - a single directive may attach functions to the
+ * type and define operators on it at the same time.
  *
  * Finally, `using {f1, f2, ..., fn} for T global` is also valid at file level, as long as T is
  * a user-defined type defined in the same file at file level. In this case, the methods are
@@ -663,16 +673,19 @@ public:
 		int64_t _id,
 		SourceLocation const& _location,
 		std::vector<ASTPointer<IdentifierPath>> _functionsOrLibrary,
+		std::vector<std::optional<Token>> _operators,
 		bool _usesBraces,
 		ASTPointer<TypeName> _typeName,
 		bool _global
 	):
 		ASTNode(_id, _location),
 		m_functionsOrLibrary(std::move(_functionsOrLibrary)),
+		m_operators(std::move(_operators)),
 		m_usesBraces(_usesBraces),
 		m_typeName(std::move(_typeName)),
 		m_global{_global}
 	{
+		solAssert(m_functionsOrLibrary.size() == m_operators.size());
 	}
 
 	void accept(ASTVisitor& _visitor) override;
@@ -683,18 +696,24 @@ public:
 
 	/// @returns a list of functions or the single library.
 	std::vector<ASTPointer<IdentifierPath>> const& functionsOrLibrary() const { return m_functionsOrLibrary; }
+	std::vector<std::pair<ASTPointer<IdentifierPath>, std::optional<Token>>> functionsAndOperators() const;
 	bool usesBraces() const { return m_usesBraces; }
 	bool global() const { return m_global; }
 
 private:
 	/// Either the single library or a list of functions.
 	std::vector<ASTPointer<IdentifierPath>> m_functionsOrLibrary;
+	/// Operators, the functions from @a m_functionsOrLibrary implement.
+	/// A token if the corresponding element in m_functionsOrLibrary
+	/// defines an operator, nullptr otherwise.
+	/// Note that this vector size must be equal to m_functionsOrLibrary size.
+	std::vector<std::optional<Token>> m_operators;
 	bool m_usesBraces;
 	ASTPointer<TypeName> m_typeName;
 	bool m_global = false;
 };
 
-class StructDefinition: public Declaration, public ScopeOpener
+class StructDefinition: public Declaration, public StructurallyDocumented, public ScopeOpener
 {
 public:
 	StructDefinition(
@@ -702,9 +721,13 @@ public:
 		SourceLocation const& _location,
 		ASTPointer<ASTString> const& _name,
 		SourceLocation _nameLocation,
-		std::vector<ASTPointer<VariableDeclaration>> _members
+		std::vector<ASTPointer<VariableDeclaration>> _members,
+		ASTPointer<StructuredDocumentation> _documentation
 	):
-		Declaration(_id, _location, _name, std::move(_nameLocation)), m_members(std::move(_members)) {}
+		Declaration(_id, _location, _name, std::move(_nameLocation)),
+		StructurallyDocumented(std::move(_documentation)),
+		m_members(std::move(_members))
+	{}
 
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
@@ -722,7 +745,7 @@ private:
 	std::vector<ASTPointer<VariableDeclaration>> m_members;
 };
 
-class EnumDefinition: public Declaration, public ScopeOpener
+class EnumDefinition: public Declaration, public StructurallyDocumented, public ScopeOpener
 {
 public:
 	EnumDefinition(
@@ -730,9 +753,14 @@ public:
 		SourceLocation const& _location,
 		ASTPointer<ASTString> const& _name,
 		SourceLocation _nameLocation,
-		std::vector<ASTPointer<EnumValue>> _members
+		std::vector<ASTPointer<EnumValue>> _members,
+		ASTPointer<StructuredDocumentation> _documentation
 	):
-		Declaration(_id, _location, _name, std::move(_nameLocation)), m_members(std::move(_members)) {}
+		Declaration(_id, _location, _name, std::move(_nameLocation)),
+		StructurallyDocumented(std::move(_documentation)),
+		m_members(std::move(_members))
+	{}
+
 	void accept(ASTVisitor& _visitor) override;
 	void accept(ASTConstVisitor& _visitor) const override;
 
@@ -923,7 +951,7 @@ public:
 		ASTPointer<ParameterList> const& _returnParameters,
 		ASTPointer<Block> const& _body
 	):
-		CallableDeclaration(_id, _location, _name, std::move(_nameLocation), _visibility, _parameters, _isVirtual, _overrides, _returnParameters),
+		CallableDeclaration(_id, _location, _name, _nameLocation, _visibility, _parameters, _isVirtual, _overrides, _returnParameters),
 		StructurallyDocumented(_documentation),
 		ImplementationOptional(_body != nullptr),
 		m_stateMutability(_stateMutability),
@@ -2073,6 +2101,10 @@ public:
 	bool isPrefixOperation() const { return m_isPrefix; }
 	Expression const& subExpression() const { return *m_subExpression; }
 
+	FunctionType const* userDefinedFunctionType() const;
+
+	OperationAnnotation& annotation() const override;
+
 private:
 	Token m_operator;
 	ASTPointer<Expression> m_subExpression;
@@ -2103,6 +2135,8 @@ public:
 	Expression const& leftExpression() const { return *m_left; }
 	Expression const& rightExpression() const { return *m_right; }
 	Token getOperator() const { return m_operator; }
+
+	FunctionType const* userDefinedFunctionType() const;
 
 	BinaryOperationAnnotation& annotation() const override;
 
