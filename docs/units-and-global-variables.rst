@@ -1,8 +1,10 @@
+.. index:: ! denomination
+
 **************************************
 Units and Globally Available Variables
 **************************************
 
-.. index:: sun, trx
+.. index:: ! sun, ! trx, ! denomination;trx
 
 Trx Units
 ===========
@@ -12,9 +14,6 @@ A literal number can take a suffix of ``sun`` or ``trx`` to convert between the 
 .. code-block:: solidity
     :force:
 
-    assert(1 wei == 1);
-    assert(1 gwei == 1e9);
-    assert(1 ether == 1e18);
     assert(1 sun == 1);
     assert(1 trx == 1e6);
 
@@ -23,7 +22,7 @@ The only effect of the subdenomination suffix is a multiplication by a power of 
 .. note::
     The denominations ``finney`` and ``szabo`` have been removed in version 0.7.0.
 
-.. index:: time, seconds, minutes, hours, days, weeks, years
+.. index:: ! seconds, ! minutes, ! hours, ! days, ! weeks, ! years, ! denomination;time
 
 Time Units
 ==========
@@ -54,7 +53,7 @@ interpret a function parameter in days, you can in the following way:
 
     function f(uint start, uint daysAfter) public {
         if (block.timestamp >= start + daysAfter * 1 days) {
-          // ...
+            // ...
         }
     }
 
@@ -249,7 +248,7 @@ Members of Address Types
 ------------------------
 
 ``<address>.balance`` (``uint256``)
-    balance of the :ref:`address` in sun
+    balance of the :ref:`address` in Sun
 
 ``<address>.code`` (``bytes memory``)
     code at the :ref:`address` (can be empty)
@@ -258,10 +257,10 @@ Members of Address Types
     the codehash of the :ref:`address`
 
 ``<address payable>.transfer(uint256 amount)``
-    send given amount of sun to :ref:`address`, reverts on failure, forwards 2300 gas stipend, not adjustable
+    send given amount of Sun to :ref:`address`, reverts on failure, forwards 2300 gas stipend, not adjustable
 
 ``<address payable>.send(uint256 amount) returns (bool)``
-    send given amount of sun to :ref:`address`, returns ``false`` on failure, forwards 2300 gas stipend, not adjustable
+    send given amount of Sun to :ref:`address`, returns ``false`` on failure, forwards 2300 gas stipend, not adjustable
 
 ``<address>.call(bytes memory) returns (bool, bytes memory)``
     issue low-level ``CALL`` with the given payload, returns success condition and return data, forwards all available gas, adjustable
@@ -313,13 +312,16 @@ For more information, see the section on :ref:`address`.
     semantics than ``delegatecall``.
 
 
-.. index:: this, selfdestruct
+.. index:: this, selfdestruct, super
 
-Contract Related
+Contract-related
 ----------------
 
 ``this`` (current contract's type)
-    the current contract, explicitly convertible to :ref:`address`
+    The current contract, explicitly convertible to :ref:`address`
+
+``super``
+    A contract one level higher in the inheritance hierarchy
 
 ``selfdestruct(address payable recipient)``
     Destroy the current contract, sending its funds to the given :ref:`address`

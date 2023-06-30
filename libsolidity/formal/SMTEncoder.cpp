@@ -49,9 +49,11 @@ SMTEncoder::SMTEncoder(
 	smt::EncodingContext& _context,
 	ModelCheckerSettings _settings,
 	UniqueErrorReporter& _errorReporter,
+	UniqueErrorReporter& _unsupportedErrorReporter,
 	langutil::CharStreamProvider const& _charStreamProvider
 ):
 	m_errorReporter(_errorReporter),
+	m_unsupportedErrors(_unsupportedErrorReporter),
 	m_context(_context),
 	m_settings(std::move(_settings)),
 	m_charStreamProvider(_charStreamProvider)
@@ -339,7 +341,7 @@ bool SMTEncoder::visit(InlineAssembly const& _inlineAsm)
 		m_context.resetVariable(*var);
 	}
 
-	m_errorReporter.warning(
+	m_unsupportedErrors.warning(
 		7737_error,
 		_inlineAsm.location(),
 		"Inline assembly may cause SMTChecker to produce spurious warnings (false positives)."
@@ -449,10 +451,24 @@ void SMTEncoder::endVisit(UnaryOperation const& _op)
 	if (_op.annotation().type->category() == Type::Category::RationalNumber)
 		return;
 
-	if (TokenTraits::isBitOp(_op.getOperator()))
+	if (TokenTraits::isBitOp(_op.getOperator()) && !*_op.annotation().userDefinedFunction)
 		return bitwiseNotOperation(_op);
 
 	createExpr(_op);
+
+	// User-defined operators are essentially function calls.
+	if (*_op.annotation().userDefinedFunction)
+	{
+		// TODO: Implement user-defined operators properly.
+		m_unsupportedErrors.warning(
+			6156_error,
+			_op.location(),
+			"User-defined operators are not yet supported by SMTChecker. "s +
+			"This invocation of operator " + TokenTraits::friendlyName(_op.getOperator()) +
+			" has been ignored, which may lead to incorrect results."
+		);
+		return;
+	}
 
 	auto const* subExpr = innermostTuple(_op.subExpression());
 	auto type = _op.annotation().type;
@@ -524,7 +540,7 @@ bool SMTEncoder::visit(BinaryOperation const& _op)
 {
 	if (shortcutRationalNumber(_op))
 		return false;
-	if (TokenTraits::isBooleanOp(_op.getOperator()))
+	if (TokenTraits::isBooleanOp(_op.getOperator()) && !*_op.annotation().userDefinedFunction)
 	{
 		booleanOperation(_op);
 		return false;
@@ -537,10 +553,24 @@ void SMTEncoder::endVisit(BinaryOperation const& _op)
 	/// If _op is const evaluated the RationalNumber shortcut was taken.
 	if (isConstant(_op))
 		return;
-	if (TokenTraits::isBooleanOp(_op.getOperator()))
+	if (TokenTraits::isBooleanOp(_op.getOperator()) && !*_op.annotation().userDefinedFunction)
 		return;
 
 	createExpr(_op);
+
+	// User-defined operators are essentially function calls.
+	if (*_op.annotation().userDefinedFunction)
+	{
+		// TODO: Implement user-defined operators properly.
+		m_unsupportedErrors.warning(
+			6756_error,
+			_op.location(),
+			"User-defined operators are not yet supported by SMTChecker. "s +
+			"This invocation of operator " + TokenTraits::friendlyName(_op.getOperator()) +
+			" has been ignored, which may lead to incorrect results."
+		);
+		return;
+	}
 
 	if (TokenTraits::isArithmeticOp(_op.getOperator()))
 		arithmeticOperation(_op);
@@ -637,7 +667,7 @@ void SMTEncoder::endVisit(FunctionCall const& _funCall)
 		visitGasLeft(_funCall);
 		break;
 	case FunctionType::Kind::External:
-		if (isPublicGetter(_funCall.expression()))
+		if (publicGetter(_funCall.expression()))
 			visitPublicGetter(_funCall);
 		break;
 	case FunctionType::Kind::ABIDecode:
@@ -702,12 +732,20 @@ void SMTEncoder::endVisit(FunctionCall const& _funCall)
 	case FunctionType::Kind::ObjectCreation:
 		visitObjectCreation(_funCall);
 		return;
+	case FunctionType::Kind::Creation:
+		if (!m_settings.engine.chc || !m_settings.externalCalls.isTrusted())
+			m_unsupportedErrors.warning(
+				8729_error,
+				_funCall.location(),
+				"Contract deployment is only supported in the trusted mode for external calls"
+				" with the CHC engine."
+			);
+		break;
 	case FunctionType::Kind::DelegateCall:
 	case FunctionType::Kind::BareCallCode:
 	case FunctionType::Kind::BareDelegateCall:
-	case FunctionType::Kind::Creation:
 	default:
-		m_errorReporter.warning(
+		m_unsupportedErrors.warning(
 			4588_error,
 			_funCall.location(),
 			"Assertion checker does not yet implement this type of function call."
@@ -984,9 +1022,8 @@ vector<string> structGetterReturnedMembers(StructType const& _structType)
 
 void SMTEncoder::visitPublicGetter(FunctionCall const& _funCall)
 {
-	MemberAccess const& access = dynamic_cast<MemberAccess const&>(_funCall.expression());
-	auto var = dynamic_cast<VariableDeclaration const*>(access.annotation().referencedDeclaration);
-	solAssert(var, "");
+	auto var = publicGetter(_funCall.expression());
+	solAssert(var && var->isStateVariable(), "");
 	solAssert(m_context.knownExpression(_funCall), "");
 	auto paramExpectedTypes = replaceUserTypes(FunctionType(*var).parameterTypes());
 	auto actualArguments = _funCall.arguments();
@@ -1060,7 +1097,7 @@ bool SMTEncoder::shouldAnalyze(ContractDefinition const& _contract) const
 		return false;
 
 	return m_settings.contracts.isDefault() ||
-		m_settings.contracts.has(_contract.sourceUnitName(), _contract.name());
+		m_settings.contracts.has(_contract.sourceUnitName());
 }
 
 void SMTEncoder::visitTypeConversion(FunctionCall const& _funCall)
@@ -1377,7 +1414,7 @@ bool SMTEncoder::visit(MemberAccess const& _memberAccess)
 				else
 					// NOTE: supporting name, creationCode, runtimeCode would be easy enough, but the bytes/string they return are not
 					//       at all usable in the SMT checker currently
-					m_errorReporter.warning(
+					m_unsupportedErrors.warning(
 						7507_error,
 						_memberAccess.location(),
 						"Assertion checker does not yet support this expression."
@@ -1468,7 +1505,7 @@ bool SMTEncoder::visit(MemberAccess const& _memberAccess)
 		}
 	}
 
-	m_errorReporter.warning(
+	m_unsupportedErrors.warning(
 		7650_error,
 		_memberAccess.location(),
 		"Assertion checker does not yet support this expression."
@@ -1599,7 +1636,7 @@ void SMTEncoder::indexOrMemberAssignment(Expression const& _expr, smtutil::Expre
 				structType && structType->recursive()
 			)
 			{
-				m_errorReporter.warning(
+				m_unsupportedErrors.warning(
 					4375_error,
 					memberAccess->location(),
 					"Assertion checker does not support recursive structs."
@@ -1713,7 +1750,7 @@ void SMTEncoder::defineGlobalVariable(string const& _name, Expression const& _ex
 	{
 		bool abstract = m_context.createGlobalSymbol(_name, _expr);
 		if (abstract)
-			m_errorReporter.warning(
+			m_unsupportedErrors.warning(
 				1695_error,
 				_expr.location(),
 				"Assertion checker does not yet support this global variable."
@@ -1764,7 +1801,7 @@ void SMTEncoder::arithmeticOperation(BinaryOperation const& _op)
 		break;
 	}
 	default:
-		m_errorReporter.warning(
+		m_unsupportedErrors.warning(
 			5188_error,
 			_op.location(),
 			"Assertion checker does not yet implement this operator."
@@ -1951,7 +1988,7 @@ void SMTEncoder::compareOperation(BinaryOperation const& _op)
 		defineExpr(_op, *value);
 	}
 	else
-		m_errorReporter.warning(
+		m_unsupportedErrors.warning(
 			7229_error,
 			_op.location(),
 			"Assertion checker does not yet implement the type " + _op.annotation().commonType->toString() + " for comparisons"
@@ -2478,7 +2515,7 @@ bool SMTEncoder::createVariable(VariableDeclaration const& _varDecl)
 	bool abstract = m_context.createVariable(_varDecl);
 	if (abstract)
 	{
-		m_errorReporter.warning(
+		m_unsupportedErrors.warning(
 			8115_error,
 			_varDecl.location(),
 			"Assertion checker does not yet support the type of this variable."
@@ -2492,7 +2529,7 @@ smtutil::Expression SMTEncoder::expr(Expression const& _e, Type const* _targetTy
 {
 	if (!m_context.knownExpression(_e))
 	{
-		m_errorReporter.warning(6031_error, _e.location(), "Internal error: Expression undefined for SMT solver." );
+		m_unsupportedErrors.warning(6031_error, _e.location(), "Internal error: Expression undefined for SMT solver." );
 		createExpr(_e);
 	}
 
@@ -2503,7 +2540,7 @@ void SMTEncoder::createExpr(Expression const& _e)
 {
 	bool abstract = m_context.createExpression(_e);
 	if (abstract)
-		m_errorReporter.warning(
+		m_unsupportedErrors.warning(
 			8364_error,
 			_e.location(),
 			"Assertion checker does not yet implement type " + _e.annotation().type->toString()
@@ -2795,16 +2832,24 @@ MemberAccess const* SMTEncoder::isEmptyPush(Expression const& _expr) const
 	return nullptr;
 }
 
-bool SMTEncoder::isPublicGetter(Expression const& _expr) {
-	if (!isTrustedExternalCall(&_expr))
-		return false;
-	auto varDecl = dynamic_cast<VariableDeclaration const*>(
-		dynamic_cast<MemberAccess const&>(_expr).annotation().referencedDeclaration
-	);
-	return varDecl != nullptr;
+smtutil::Expression SMTEncoder::contractAddressValue(FunctionCall const& _f)
+{
+	FunctionType const& funType = dynamic_cast<FunctionType const&>(*_f.expression().annotation().type);
+	if (funType.kind() == FunctionType::Kind::Internal)
+		return state().thisAddress();
+	auto [funExpr, funOptions] = functionCallExpression(_f);
+	if (MemberAccess const* callBase = dynamic_cast<MemberAccess const*>(funExpr))
+		return expr(callBase->expression());
+	solAssert(false, "Unreachable!");
 }
 
-bool SMTEncoder::isTrustedExternalCall(Expression const* _expr) {
+VariableDeclaration const* SMTEncoder::publicGetter(Expression const& _expr) const {
+	if (auto memberAccess = dynamic_cast<MemberAccess const*>(&_expr))
+		return dynamic_cast<VariableDeclaration const*>(memberAccess->annotation().referencedDeclaration);
+	return nullptr;
+}
+
+bool SMTEncoder::isExternalCallToThis(Expression const* _expr) {
 	auto memberAccess = dynamic_cast<MemberAccess const*>(_expr);
 	if (!memberAccess)
 		return false;
@@ -2888,7 +2933,9 @@ vector<VariableDeclaration const*> SMTEncoder::stateVariablesIncludingInheritedA
 
 vector<VariableDeclaration const*> SMTEncoder::stateVariablesIncludingInheritedAndPrivate(FunctionDefinition const& _function)
 {
-	return stateVariablesIncludingInheritedAndPrivate(dynamic_cast<ContractDefinition const&>(*_function.scope()));
+	if (auto contract = dynamic_cast<ContractDefinition const*>(_function.scope()))
+		return stateVariablesIncludingInheritedAndPrivate(*contract);
+	return {};
 }
 
 vector<VariableDeclaration const*> SMTEncoder::localVariablesIncludingModifiers(FunctionDefinition const& _function, ContractDefinition const* _contract)
@@ -3011,14 +3058,6 @@ set<FunctionDefinition const*, ASTNode::CompareByID> const& SMTEncoder::contract
 	return m_contractFunctionsWithoutVirtual.at(&_contract);
 }
 
-SourceUnit const* SMTEncoder::sourceUnitContaining(Scopable const& _scopable)
-{
-	for (auto const* s = &_scopable; s; s = dynamic_cast<Scopable const*>(s->scope()))
-		if (auto const* source = dynamic_cast<SourceUnit const*>(s->scope()))
-			return source;
-	solAssert(false, "");
-}
-
 map<ContractDefinition const*, vector<ASTPointer<frontend::Expression>>> SMTEncoder::baseArguments(ContractDefinition const& _contract)
 {
 	map<ContractDefinition const*, vector<ASTPointer<Expression>>> baseArgs;
@@ -3066,7 +3105,7 @@ RationalNumberType const* SMTEncoder::isConstant(Expression const& _expr)
 	return nullptr;
 }
 
-set<FunctionCall const*> SMTEncoder::collectABICalls(ASTNode const* _node)
+set<FunctionCall const*, ASTCompareByID<FunctionCall>> SMTEncoder::collectABICalls(ASTNode const* _node)
 {
 	struct ABIFunctions: public ASTConstVisitor
 	{
@@ -3088,7 +3127,7 @@ set<FunctionCall const*> SMTEncoder::collectABICalls(ASTNode const* _node)
 				}
 		}
 
-		set<FunctionCall const*> abiCalls;
+		set<FunctionCall const*, ASTCompareByID<FunctionCall>> abiCalls;
 	};
 
 	return ABIFunctions(_node).abiCalls;

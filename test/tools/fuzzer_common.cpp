@@ -108,8 +108,11 @@ void FuzzerUtil::testCompiler(
 			frontend::ModelCheckerContracts::Default(),
 			/*divModWithSlacks*/true,
 			frontend::ModelCheckerEngine::All(),
+			frontend::ModelCheckerExtCalls{},
 			frontend::ModelCheckerInvariants::All(),
+			/*showProvedSafe=*/false,
 			/*showUnproved=*/false,
+			/*showUnsupported=*/false,
 			smtutil::SMTSolverChoice::All(),
 			frontend::ModelCheckerTargets::Default(),
 			/*timeout=*/1
@@ -118,7 +121,7 @@ void FuzzerUtil::testCompiler(
 	compiler.setSources(_input);
 	compiler.setEVMVersion(evmVersion);
 	compiler.setOptimiserSettings(optimiserSettings);
-	compiler.enableIRGeneration(_compileViaYul);
+	compiler.setViaIR(_compileViaYul);
 	try
 	{
 		compiler.compile();
@@ -134,6 +137,8 @@ void FuzzerUtil::testCompiler(
 	}
 	catch (StackTooDeepError const&)
 	{
+		if (_optimize && _compileViaYul)
+			throw;
 	}
 }
 

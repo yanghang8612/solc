@@ -82,6 +82,9 @@
 #include <boost/algorithm/string/replace.hpp>
 
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/map.hpp>
+
+#include <fmt/format.h>
 
 #include <utility>
 #include <map>
@@ -94,7 +97,6 @@ using namespace solidity::langutil;
 using namespace solidity::frontend;
 
 using solidity::util::errinfo_comment;
-using solidity::util::toHex;
 
 static int g_compilerStackCounts = 0;
 
@@ -241,7 +243,7 @@ void CompilerStack::setModelCheckerSettings(ModelCheckerSettings _settings)
 	m_modelCheckerSettings = _settings;
 }
 
-void CompilerStack::setLibraries(std::map<std::string, util::h160> const& _libraries)
+void CompilerStack::setLibraries(map<string, util::h160> const& _libraries)
 {
 	if (m_stackState >= ParsedAndImported)
 		solThrow(CompilerError, "Must set libraries before parsing.");
@@ -405,15 +407,14 @@ void CompilerStack::importASTs(map<string, Json::Value> const& _sources)
 {
 	if (m_stackState != Empty)
 		solThrow(CompilerError, "Must call importASTs only before the SourcesSet state.");
-	m_sourceJsons = _sources;
-	map<string, ASTPointer<SourceUnit>> reconstructedSources = ASTJsonImporter(m_evmVersion).jsonToSourceUnit(m_sourceJsons);
+	map<string, ASTPointer<SourceUnit>> reconstructedSources = ASTJsonImporter(m_evmVersion).jsonToSourceUnit(_sources);
 	for (auto& src: reconstructedSources)
 	{
 		string const& path = src.first;
 		Source source;
 		source.ast = src.second;
 		source.charStream = make_shared<CharStream>(
-			util::jsonCompactPrint(m_sourceJsons[src.first]),
+			util::jsonCompactPrint(_sources.at(src.first)),
 			src.first,
 			true // imported from AST
 		);
@@ -526,6 +527,7 @@ bool CompilerStack::analyze()
 		if (noErrors)
 		{
 			createAndAssignCallGraphs();
+			annotateInternalFunctionIDs();
 			findAndReportCyclicContractDependencies();
 		}
 
@@ -710,10 +712,11 @@ bool CompilerStack::compile(State _stopAfter)
 								1834_error,
 								Error::Type::CodeGenerationError,
 								*sourceLocation,
-								"Unimplemented feature error" +
-								((comment && !comment->empty()) ? ": " + *comment : string{}) +
-								" in " +
-								_unimplementedError.lineInfo()
+								fmt::format(
+									"Unimplemented feature error {} in {}",
+									(comment && !comment->empty()) ? ": " + *comment : "",
+									_unimplementedError.lineInfo()
+								)
 							);
 							return false;
 						}
@@ -813,7 +816,6 @@ Json::Value CompilerStack::generatedSources(string const& _contractName, bool _r
 				sources[0]["id"] = sourceIndex;
 				sources[0]["language"] = "Yul";
 				sources[0]["contents"] = std::move(source);
-
 			}
 		}
 		return sources;
@@ -850,7 +852,7 @@ string const* CompilerStack::runtimeSourceMapping(string const& _contractName) c
 	return c.runtimeSourceMapping ? &*c.runtimeSourceMapping : nullptr;
 }
 
-std::string const CompilerStack::filesystemFriendlyName(string const& _contractName) const
+string const CompilerStack::filesystemFriendlyName(string const& _contractName) const
 {
 	if (m_stackState < AnalysisPerformed)
 		solThrow(CompilerError, "No compiled contracts found.");
@@ -864,7 +866,7 @@ std::string const CompilerStack::filesystemFriendlyName(string const& _contractN
 				contract.second.contract != matchContract.contract)
 		{
 			// If it does, then return its fully-qualified name, made fs-friendly
-			std::string friendlyName = boost::algorithm::replace_all_copy(_contractName, "/", "_");
+			string friendlyName = boost::algorithm::replace_all_copy(_contractName, "/", "_");
 			boost::algorithm::replace_all(friendlyName, ":", "_");
 			boost::algorithm::replace_all(friendlyName, ".", "_");
 			return friendlyName;
@@ -950,10 +952,7 @@ Json::Value CompilerStack::assemblyJSON(string const& _contractName) const
 
 vector<string> CompilerStack::sourceNames() const
 {
-	vector<string> names;
-	for (auto const& s: m_sources)
-		names.push_back(s.first);
-	return names;
+	return ranges::to<vector>(m_sources | ranges::views::keys);
 }
 
 map<string, unsigned> CompilerStack::sourceIndices() const
@@ -1116,7 +1115,7 @@ ContractDefinition const& CompilerStack::contractDefinition(string const& _contr
 }
 
 size_t CompilerStack::functionEntryPoint(
-	std::string const& _contractName,
+	string const& _contractName,
 	FunctionDefinition const& _function
 ) const
 {
@@ -1245,6 +1244,36 @@ void CompilerStack::storeContractDefinitions()
 			}
 }
 
+void CompilerStack::annotateInternalFunctionIDs()
+{
+	for (Source const* source: m_sourceOrder)
+	{
+		if (!source->ast)
+			continue;
+
+		for (ContractDefinition const* contract: ASTNode::filteredNodes<ContractDefinition>(source->ast->nodes()))
+		{
+			uint64_t internalFunctionID = 1;
+			ContractDefinitionAnnotation& annotation = contract->annotation();
+
+			if (auto const* deployTimeInternalDispatch = util::valueOrNullptr((*annotation.deployedCallGraph)->edges, CallGraph::SpecialNode::InternalDispatch))
+				for (auto const& node: *deployTimeInternalDispatch)
+					if (auto const* callable = get_if<CallableDeclaration const*>(&node))
+						if (auto const* function = dynamic_cast<FunctionDefinition const*>(*callable))
+						{
+							solAssert(contract->annotation().internalFunctionIDs.count(function) == 0);
+							contract->annotation().internalFunctionIDs[function] = internalFunctionID++;
+						}
+			if (auto const* creationTimeInternalDispatch = util::valueOrNullptr((*annotation.creationCallGraph)->edges, CallGraph::SpecialNode::InternalDispatch))
+				for (auto const& node: *creationTimeInternalDispatch)
+					if (auto const* callable = get_if<CallableDeclaration const*>(&node))
+						if (auto const* function = dynamic_cast<FunctionDefinition const*>(*callable))
+							// Make sure the function already got an ID since it also occurs in the deploy-time internal dispatch.
+							solAssert(contract->annotation().internalFunctionIDs.count(function) != 0);
+		}
+	}
+}
+
 namespace
 {
 bool onlySafeExperimentalFeaturesActivated(set<ExperimentalFeature> const& features)
@@ -1256,10 +1285,10 @@ bool onlySafeExperimentalFeaturesActivated(set<ExperimentalFeature> const& featu
 }
 }
 
-void CompilerStack::assemble(
+void CompilerStack::assembleYul(
 	ContractDefinition const& _contract,
-	std::shared_ptr<evmasm::Assembly> _assembly,
-	std::shared_ptr<evmasm::Assembly> _runtimeAssembly
+	shared_ptr<evmasm::Assembly> _assembly,
+	shared_ptr<evmasm::Assembly> _runtimeAssembly
 )
 {
 	solAssert(m_stackState >= AnalysisPerformed, "");
@@ -1293,7 +1322,7 @@ void CompilerStack::assemble(
 	}
 
 	// Throw a warning if EIP-170 limits are exceeded:
-	//   If contract creation returns data with length greater than 0x6000 (214 + 213) bytes,
+	//   If contract creation returns data with length greater than 0x6000 (2^14 + 2^13) bytes,
 	//   contract creation fails with an out of gas error.
 	if (
 		m_evmVersion >= langutil::EVMVersion::spuriousDragon() &&
@@ -1305,6 +1334,24 @@ void CompilerStack::assemble(
 			"Contract code size is "s +
 			to_string(compiledContract.runtimeObject.bytecode.size()) +
 			" bytes and exceeds 24576 bytes (a limit introduced in Spurious Dragon). "
+			"This contract may not be deployable on Mainnet. "
+			"Consider enabling the optimizer (with a low \"runs\" value!), "
+			"turning off revert strings, or using libraries."
+		);
+
+	// Throw a warning if EIP-3860 limits are exceeded:
+	//   If initcode is larger than 0xC000 bytes (twice the runtime code limit),
+	//   then contract creation fails with an out of gas error.
+	if (
+		m_evmVersion >= langutil::EVMVersion::shanghai() &&
+		compiledContract.object.bytecode.size() > 0xC000
+	)
+		m_errorReporter.warning(
+			3860_error,
+			_contract.location(),
+			"Contract initcode size is "s +
+			to_string(compiledContract.object.bytecode.size()) +
+			" bytes and exceeds 49152 bytes (a limit introduced in Shanghai). "
 			"This contract may not be deployable on Mainnet. "
 			"Consider enabling the optimizer (with a low \"runs\" value!), "
 			"turning off revert strings, or using libraries."
@@ -1351,7 +1398,7 @@ void CompilerStack::compileContract(
 
 	_otherCompilers[compiledContract.contract] = compiler;
 
-	assemble(_contract, compiler->assemblyPtr(), compiler->runtimeAssemblyPtr());
+	assembleYul(_contract, compiler->assemblyPtr(), compiler->runtimeAssemblyPtr());
 }
 
 void CompilerStack::generateIR(ContractDefinition const& _contract)
@@ -1429,7 +1476,7 @@ void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
 	string deployedName = IRNames::deployedObject(_contract);
 	solAssert(!deployedName.empty(), "");
 	tie(compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly) = stack.assembleEVMWithDeployed(deployedName);
-	assemble(_contract, compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly);
+	assembleYul(_contract, compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly);
 }
 
 void CompilerStack::generateEwasm(ContractDefinition const& _contract)
@@ -1552,7 +1599,7 @@ string CompilerStack::createMetadata(Contract const& _contract, bool _forIR) con
 	}
 
 	static_assert(sizeof(m_optimiserSettings.expectedExecutionsPerDeployment) <= sizeof(Json::LargestUInt), "Invalid word size.");
-	solAssert(static_cast<Json::LargestUInt>(m_optimiserSettings.expectedExecutionsPerDeployment) < std::numeric_limits<Json::LargestUInt>::max(), "");
+	solAssert(static_cast<Json::LargestUInt>(m_optimiserSettings.expectedExecutionsPerDeployment) < numeric_limits<Json::LargestUInt>::max(), "");
 	meta["settings"]["optimizer"]["runs"] = Json::Value(Json::LargestUInt(m_optimiserSettings.expectedExecutionsPerDeployment));
 
 	/// Backwards compatibility: If set to one of the default settings, do not provide details.

@@ -1,3 +1,54 @@
+### 0.8.20 (2023-05-10)
+
+Compiler Features:
+ * Assembler: Use ``push0`` for placing ``0`` on the stack for EVM versions starting from "Shanghai". This decreases the deployment and runtime costs.
+ * EVM: Set default EVM version to "Shanghai".
+ * EVM: Support for the EVM Version "Shanghai".
+ * NatSpec: Add support for NatSpec documentation in ``enum`` definitions.
+ * NatSpec: Add support for NatSpec documentation in ``struct`` definitions.
+ * NatSpec: Include NatSpec from events that are emitted by a contract but defined outside of it in userdoc and devdoc output.
+ * Optimizer: Re-implement simplified version of ``UnusedAssignEliminator`` and ``UnusedStoreEliminator``. It can correctly remove some unused assignments in deeply nested loops that were ignored by the old version.
+ * Parser: Unary plus is no longer recognized as a unary operator in the AST and triggers an error at the parsing stage (rather than later during the analysis).
+ * SMTChecker: Group all messages about unsupported language features in a single warning. The CLI option ``--model-checker-show-unsupported`` and the JSON option ``settings.modelChecker.showUnsupported`` can be enabled to show the full list.
+ * SMTChecker: Properties that are proved safe are now reported explicitly at the end of analysis. By default, only the number of safe properties is shown. The CLI option ``--model-checker-show-proved-safe`` and the JSON option ``settings.modelChecker.showProvedSafe`` can be enabled to show the full list of safe properties.
+ * Standard JSON Interface: Add experimental support for importing ASTs via Standard JSON.
+ * Yul EVM Code Transform: If available, use ``push0`` instead of ``codesize`` to produce an arbitrary value on stack in order to create equal stack heights between branches.
+
+
+Bugfixes:
+ * ABI: Include events in the ABI that are emitted by a contract but defined outside of it.
+ * Immutables: Disallow initialization of immutables in try/catch statements.
+ * SMTChecker: Fix false positives in ternary operators that contain verification targets in its branches, directly or indirectly.
+
+
+AST Changes:
+ * AST: Add the ``internalFunctionIDs`` field to the AST nodes of contracts containing IDs of functions that may be called via the internal dispatch. The field is a map from function AST IDs to internal dispatch function IDs. These IDs are always generated, but they are only used in via-IR code generation.
+ * AST: Add the ``usedEvents`` field to ``ContractDefinition`` which contains the AST IDs of all events emitted by the contract as well as all events defined and inherited by the contract.
+
+
+### 0.8.19 (2023-02-22)
+
+Language Features:
+ * Allow defining custom operators for user-defined value types via ``using {f as +} for T global`` syntax.
+
+
+Compiler Features:
+ * SMTChecker: New trusted mode that assumes that any compile-time available code is the actual used code even in external calls. This can be used via the CLI option ``--model-checker-ext-calls trusted`` or the JSON field ``settings.modelChecker.extCalls: "trusted"``.
+
+
+Bugfixes:
+ * Assembler: Avoid duplicating subassembly bytecode where possible.
+ * Code Generator: Avoid including references to the deployed label of referenced functions if they are called right away.
+ * ContractLevelChecker: Properly distinguish the case of missing base constructor arguments from having an unimplemented base function.
+ * SMTChecker: Fix internal error caused by unhandled ``z3`` expressions that come from the solver when bitwise operators are used.
+ * SMTChecker: Fix internal error when using the custom NatSpec annotation to abstract free functions.
+ * TypeChecker: Also allow external library functions in ``using for``.
+
+
+AST Changes:
+ * AST: Add ``function`` field to ``UnaryOperation`` and ``BinaryOperation`` AST nodes. ``functionList`` in ``UsingForDirective`` AST nodes will now contain ``operator`` and ``definition`` members instead of ``function`` when the list entry defines an operator.
+
+
 ### 0.8.18 (2023-02-01)
 
 Language Features:
