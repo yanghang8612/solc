@@ -26,6 +26,11 @@ class CompilerInterface(Enum):
     STANDARD_JSON = 'standard-json'
 
 
+class ExecutionArchitecture(Enum):
+    NATIVE = 'native'
+    OSX_INTEL = 'osx_intel'
+
+
 class SettingsPreset(Enum):
     LEGACY_OPTIMIZE = 'legacy-optimize'
     LEGACY_NO_OPTIMIZE = 'legacy-no-optimize'
@@ -211,6 +216,7 @@ def parse_cli_output(source_file_name: Path, cli_output: str) -> FileReport:
 
 def prepare_compiler_input(
     compiler_path: Path,
+    execution_arch: ExecutionArchitecture,
     source_file_name: Path,
     force_no_optimize_yul: bool,
     interface: CompilerInterface,
@@ -220,6 +226,12 @@ def prepare_compiler_input(
 ) -> Tuple[List[str], str]:
 
     settings = CompilerSettings.from_preset(preset)
+
+    command_line = []
+    if execution_arch == ExecutionArchitecture.OSX_INTEL:
+        command_line = ["/usr/bin/arch", "-64", "-x86_64"]
+    else:
+        assert execution_arch == ExecutionArchitecture.NATIVE
 
     if interface == CompilerInterface.STANDARD_JSON:
         json_input: dict = {
@@ -238,7 +250,7 @@ def prepare_compiler_input(
         if smt_use == SMTUse.DISABLE:
             json_input['settings']['modelChecker'] = {'engine': 'none'}
 
-        command_line = [str(compiler_path), '--standard-json']
+        command_line += [str(compiler_path), '--standard-json']
         compiler_input = json.dumps(json_input)
     else:
         assert interface == CompilerInterface.CLI
@@ -255,7 +267,7 @@ def prepare_compiler_input(
         if smt_use == SMTUse.DISABLE:
             compiler_options += ['--model-checker-engine', 'none']
 
-        command_line = [str(compiler_path)] + compiler_options
+        command_line += [str(compiler_path)] + compiler_options
         compiler_input = load_source(source_file_name, smt_use)
 
     return (command_line, compiler_input)
@@ -286,6 +298,7 @@ def detect_metadata_cli_option_support(compiler_path: Path):
 
 def run_compiler(
     compiler_path: Path,
+    execution_arch: ExecutionArchitecture,
     source_file_name: Path,
     force_no_optimize_yul: bool,
     interface: CompilerInterface,
@@ -295,10 +308,10 @@ def run_compiler(
     tmp_dir: Path,
     exit_on_error: bool,
 ) -> FileReport:
-
     if interface == CompilerInterface.STANDARD_JSON:
         (command_line, compiler_input) = prepare_compiler_input(
             compiler_path,
+            execution_arch,
             Path(source_file_name.name),
             force_no_optimize_yul,
             interface,
@@ -322,6 +335,7 @@ def run_compiler(
 
         (command_line, compiler_input) = prepare_compiler_input(
             compiler_path.absolute(),
+            execution_arch,
             Path(source_file_name.name),
             force_no_optimize_yul,
             interface,
@@ -351,6 +365,7 @@ def run_compiler(
 def generate_report(
     source_file_names: List[str],
     compiler_path: Path,
+    execution_arch: ExecutionArchitecture,
     interface: CompilerInterface,
     presets: List[SettingsPreset],
     smt_use: SMTUse,
@@ -370,6 +385,7 @@ def generate_report(
                         try:
                             report = run_compiler(
                                 compiler_path,
+                                execution_arch,
                                 Path(source_file_name),
                                 force_no_optimize_yul,
                                 interface,
@@ -420,6 +436,13 @@ def commandline_parser() -> ArgumentParser:
         help="Compiler interface to use.",
     )
     parser.add_argument(
+        '--execution-arch',
+        dest='execution_arch',
+        default=ExecutionArchitecture.NATIVE.value,
+        choices=[c.value for c in ExecutionArchitecture],
+        help="Select the architecture of the universal binary that should be executed. (Only relevant for macOS)",
+    )
+    parser.add_argument(
         '--preset',
         dest='presets',
         default=None,
@@ -467,6 +490,7 @@ if __name__ == "__main__":
     generate_report(
         glob("*.sol"),
         Path(options.compiler_path),
+        ExecutionArchitecture(options.execution_arch),
         CompilerInterface(options.interface),
         [SettingsPreset(p) for preset_group in presets for p in preset_group],
         SMTUse(options.smt_use),
