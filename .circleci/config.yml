@@ -616,7 +616,9 @@ defaults:
   - on_all_tags_and_branches: &on_all_tags_and_branches
       filters:
         tags:
-          only: /.*/
+          only: /^tv.*/
+        branches:
+          ignore: /.*/
 
   - on_version_tags: &on_version_tags
       filters:
