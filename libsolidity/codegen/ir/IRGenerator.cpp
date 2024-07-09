@@ -40,6 +40,8 @@
 
 #include <liblangutil/SourceReferenceFormatter.h>
 
+#include <json/json.h>
+
 #include <sstream>
 #include <variant>
 
@@ -87,34 +89,13 @@ set<CallableDeclaration const*, ASTNode::CompareByID> collectReachableCallables(
 
 }
 
-pair<string, string> IRGenerator::run(
+string IRGenerator::run(
 	ContractDefinition const& _contract,
 	bytes const& _cborMetadata,
 	map<ContractDefinition const*, string_view const> const& _otherYulSources
 )
 {
-	string ir = yul::reindent(generate(_contract, _cborMetadata, _otherYulSources));
-
-	yul::YulStack asmStack(
-		m_evmVersion,
-		m_eofVersion,
-		yul::YulStack::Language::StrictAssembly,
-		m_optimiserSettings,
-		m_context.debugInfoSelection()
-	);
-	if (!asmStack.parseAndAnalyze("", ir))
-	{
-		string errorMessage;
-		for (auto const& error: asmStack.errors())
-			errorMessage += langutil::SourceReferenceFormatter::formatErrorInformation(
-				*error,
-				asmStack.charStream("")
-			);
-		solAssert(false, ir + "\n\nInvalid IR generated:\n" + errorMessage + "\n");
-	}
-	asmStack.optimize();
-
-	return {std::move(ir), asmStack.print(m_context.soliditySourceProvider())};
+	return yul::reindent(generate(_contract, _cborMetadata, _otherYulSources));
 }
 
 string IRGenerator::generate(
@@ -1112,7 +1093,6 @@ void IRGenerator::resetContext(ContractDefinition const& _contract, ExecutionCon
 		m_evmVersion,
 		_context,
 		m_context.revertStrings(),
-		m_optimiserSettings,
 		m_context.sourceIndices(),
 		m_context.debugInfoSelection(),
 		m_context.soliditySourceProvider()

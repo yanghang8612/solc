@@ -33,6 +33,7 @@
 #include <liblangutil/CharStreamProvider.h>
 
 #include <libsolutil/Algorithms.h>
+#include <libsolutil/FunctionSelector.h>
 
 #include <range/v3/view.hpp>
 
@@ -1364,7 +1365,10 @@ bool SMTEncoder::visit(MemberAccess const& _memberAccess)
 	{
 		auto const* functionType = dynamic_cast<FunctionType const*>(_memberAccess.annotation().type);
 		if (functionType && functionType->hasDeclaration())
-			defineExpr(_memberAccess, functionType->externalIdentifier());
+			defineExpr(
+				_memberAccess,
+				util::selectorFromSignatureU32(functionType->richIdentifier())
+			);
 
 		return true;
 	}
@@ -2845,7 +2849,8 @@ smtutil::Expression SMTEncoder::contractAddressValue(FunctionCall const& _f)
 
 VariableDeclaration const* SMTEncoder::publicGetter(Expression const& _expr) const {
 	if (auto memberAccess = dynamic_cast<MemberAccess const*>(&_expr))
-		return dynamic_cast<VariableDeclaration const*>(memberAccess->annotation().referencedDeclaration);
+		if (auto variableDeclaration = dynamic_cast<VariableDeclaration const*>(memberAccess->annotation().referencedDeclaration))
+			return variableDeclaration->isStateVariable() ? variableDeclaration : nullptr;
 	return nullptr;
 }
 

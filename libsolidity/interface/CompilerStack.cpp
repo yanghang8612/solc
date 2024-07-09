@@ -59,6 +59,8 @@
 #include <libsolidity/codegen/ir/Common.h>
 #include <libsolidity/codegen/ir/IRGenerator.h>
 
+#include <libstdlib/stdlib.h>
+
 #include <libyul/YulString.h>
 #include <libyul/AsmPrinter.h>
 #include <libyul/AsmJsonConverter.h>
@@ -68,6 +70,7 @@
 
 #include <liblangutil/Scanner.h>
 #include <liblangutil/SemVerHandler.h>
+#include <liblangutil/SourceReferenceFormatter.h>
 
 #include <libevmasm/Exceptions.h>
 
@@ -95,6 +98,7 @@ using namespace std;
 using namespace solidity;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
+using namespace solidity::stdlib;
 
 using solidity::util::errinfo_comment;
 
@@ -315,7 +319,6 @@ void CompilerStack::reset(bool _keepSettings)
 		m_evmVersion = langutil::EVMVersion();
 		m_modelCheckerSettings = ModelCheckerSettings{};
 		m_generateIR = false;
-		m_generateEwasm = false;
 		m_revertStrings = RevertStrings::Default;
 		m_optimiserSettings = OptimiserSettings::minimal();
 		m_metadataLiteralSources = false;
@@ -370,6 +373,15 @@ bool CompilerStack::parse()
 			for (auto const& import: ASTNode::filteredNodes<ImportDirective>(source.ast->nodes()))
 			{
 				solAssert(!import->path().empty(), "Import path cannot be empty.");
+				// Check whether the import directive is for the standard library,
+				// and if yes, add specified file to source units to be parsed.
+				auto it = stdlib::sources.find(import->path());
+				if (it != stdlib::sources.end())
+				{
+					auto [name, content] = *it;
+					m_sources[name].charStream = make_unique<CharStream>(content, name);
+					sourcesToParse.push_back(name);
+				}
 
 				// The current value of `path` is the absolute path as seen from this source file.
 				// We first have to apply remappings before we can store the actual absolute path
@@ -430,7 +442,9 @@ bool CompilerStack::analyze()
 {
 	if (m_stackState != ParsedAndImported || m_stackState >= AnalysisPerformed)
 		solThrow(CompilerError, "Must call analyze only after parsing was performed.");
-	resolveImports();
+
+	if (!resolveImports())
+		return false;
 
 	for (Source const* source: m_sourceOrder)
 		if (source->ast)
@@ -681,7 +695,7 @@ bool CompilerStack::compile(State _stopAfter)
 				{
 					try
 					{
-						if (m_viaIR || m_generateIR || m_generateEwasm)
+						if (m_viaIR || m_generateIR)
 							generateIR(*contract);
 						if (m_generateEvmBytecode)
 						{
@@ -690,8 +704,6 @@ bool CompilerStack::compile(State _stopAfter)
 							else
 								compileContract(*contract, otherCompilers);
 						}
-						if (m_generateEwasm)
-							generateEwasm(*contract);
 					}
 					catch (Error const& _error)
 					{
@@ -884,6 +896,14 @@ string const& CompilerStack::yulIR(string const& _contractName) const
 	return contract(_contractName).yulIR;
 }
 
+Json::Value const& CompilerStack::yulIRAst(string const& _contractName) const
+{
+	if (m_stackState != CompilationSuccessful)
+		solThrow(CompilerError, "Compilation was not successful.");
+
+	return contract(_contractName).yulIRAst;
+}
+
 string const& CompilerStack::yulIROptimized(string const& _contractName) const
 {
 	if (m_stackState != CompilationSuccessful)
@@ -892,20 +912,12 @@ string const& CompilerStack::yulIROptimized(string const& _contractName) const
 	return contract(_contractName).yulIROptimized;
 }
 
-string const& CompilerStack::ewasm(string const& _contractName) const
+Json::Value const& CompilerStack::yulIROptimizedAst(string const& _contractName) const
 {
 	if (m_stackState != CompilationSuccessful)
 		solThrow(CompilerError, "Compilation was not successful.");
 
-	return contract(_contractName).ewasm;
-}
-
-evmasm::LinkerObject const& CompilerStack::ewasmObject(string const& _contractName) const
-{
-	if (m_stackState != CompilationSuccessful)
-		solThrow(CompilerError, "Compilation was not successful.");
-
-	return contract(_contractName).ewasmObject;
+	return contract(_contractName).yulIROptimizedAst;
 }
 
 evmasm::LinkerObject const& CompilerStack::object(string const& _contractName) const
@@ -1194,7 +1206,7 @@ string CompilerStack::applyRemapping(string const& _path, string const& _context
 	return m_importRemapper.apply(_path, _context);
 }
 
-void CompilerStack::resolveImports()
+bool CompilerStack::resolveImports()
 {
 	solAssert(m_stackState == ParsedAndImported, "");
 
@@ -1219,11 +1231,34 @@ void CompilerStack::resolveImports()
 		sourceOrder.push_back(_source);
 	};
 
+	vector<PragmaDirective const*> experimentalPragmaDirectives;
 	for (auto const& sourcePair: m_sources)
+	{
 		if (isRequestedSource(sourcePair.first))
 			toposort(&sourcePair.second);
+		if (sourcePair.second.ast && sourcePair.second.ast->experimentalSolidity())
+			for (ASTPointer<ASTNode> const& node: sourcePair.second.ast->nodes())
+				if (PragmaDirective const* pragma = dynamic_cast<PragmaDirective*>(node.get()))
+					if (pragma->literals().size() >=2 && pragma->literals()[0] == "experimental" && pragma->literals()[1] == "solidity")
+					{
+						experimentalPragmaDirectives.push_back(pragma);
+						break;
+					}
+	}
+
+	if (!experimentalPragmaDirectives.empty() && experimentalPragmaDirectives.size() != m_sources.size())
+	{
+		for (auto &&pragma: experimentalPragmaDirectives)
+			m_errorReporter.parserError(
+					2141_error,
+					pragma->location(),
+					"File declares \"pragma experimental solidity\". If you want to enable the experimental mode, all source units must include the pragma."
+			);
+		return false;
+	}
 
 	swap(m_sourceOrder, sourceOrder);
+	return true;
 }
 
 void CompilerStack::storeContractDefinitions()
@@ -1434,16 +1469,38 @@ void CompilerStack::generateIR(ContractDefinition const& _contract)
 		m_evmVersion,
 		m_eofVersion,
 		m_revertStrings,
-		m_optimiserSettings,
 		sourceIndices(),
 		m_debugInfoSelection,
 		this
 	);
-	tie(compiledContract.yulIR, compiledContract.yulIROptimized) = generator.run(
+	compiledContract.yulIR = generator.run(
 		_contract,
 		createCBORMetadata(compiledContract, /* _forIR */ true),
 		otherYulSources
 	);
+
+	yul::YulStack stack(
+		m_evmVersion,
+		m_eofVersion,
+		yul::YulStack::Language::StrictAssembly,
+		m_optimiserSettings,
+		m_debugInfoSelection
+	);
+	if (!stack.parseAndAnalyze("", compiledContract.yulIR))
+	{
+		string errorMessage;
+		for (auto const& error: stack.errors())
+			errorMessage += langutil::SourceReferenceFormatter::formatErrorInformation(
+				*error,
+				stack.charStream("")
+			);
+		solAssert(false, compiledContract.yulIR + "\n\nInvalid IR generated:\n" + errorMessage + "\n");
+	}
+
+	compiledContract.yulIRAst = stack.astJson();
+	stack.optimize();
+	compiledContract.yulIROptimized = stack.print(this);
+	compiledContract.yulIROptimizedAst = stack.astJson();
 }
 
 void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
@@ -1468,8 +1525,8 @@ void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
 		m_optimiserSettings,
 		m_debugInfoSelection
 	);
-	stack.parseAndAnalyze("", compiledContract.yulIROptimized);
-	stack.optimize();
+	bool analysisSuccessful = stack.parseAndAnalyze("", compiledContract.yulIROptimized);
+	solAssert(analysisSuccessful);
 
 	//cout << yul::AsmPrinter{}(*stack.parserResult()->code) << endl;
 
@@ -1477,42 +1534,6 @@ void CompilerStack::generateEVMFromIR(ContractDefinition const& _contract)
 	solAssert(!deployedName.empty(), "");
 	tie(compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly) = stack.assembleEVMWithDeployed(deployedName);
 	assembleYul(_contract, compiledContract.evmAssembly, compiledContract.evmRuntimeAssembly);
-}
-
-void CompilerStack::generateEwasm(ContractDefinition const& _contract)
-{
-	solAssert(m_stackState >= AnalysisPerformed, "");
-	if (m_hasError)
-		solThrow(CompilerError, "Called generateEwasm with errors.");
-
-	if (!_contract.canBeDeployed())
-		return;
-
-	Contract& compiledContract = m_contracts.at(_contract.fullyQualifiedName());
-	solAssert(!compiledContract.yulIROptimized.empty(), "");
-	if (!compiledContract.ewasm.empty())
-		return;
-
-	// Re-parse the Yul IR in EVM dialect
-	yul::YulStack stack(
-		m_evmVersion,
-		m_eofVersion,
-		yul::YulStack::Language::StrictAssembly,
-		m_optimiserSettings,
-		m_debugInfoSelection
-	);
-	stack.parseAndAnalyze("", compiledContract.yulIROptimized);
-
-	stack.optimize();
-	stack.translate(yul::YulStack::Language::Ewasm);
-	stack.optimize();
-
-	//cout << yul::AsmPrinter{}(*stack.parserResult()->code) << endl;
-
-	// Turn into Ewasm text representation.
-	auto result = stack.assemble(yul::YulStack::Machine::Ewasm);
-	compiledContract.ewasm = std::move(result.assembly);
-	compiledContract.ewasmObject = std::move(*result.bytecode);
 }
 
 CompilerStack::Contract const& CompilerStack::contract(string const& _contractName) const
