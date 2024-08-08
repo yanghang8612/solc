@@ -2011,7 +2011,7 @@ ASTPointer<Expression> Parser::parseLiteral()
 	))
 	{
 		if (TokenTraits::isEtherSubdenomination(m_scanner->currentToken())) {
-			fatalParserError(9999_error,string("Ether unit denomination is not supported by the compiler"));
+			fatalParserError(9999_error, std::string("Ether unit denomination is not supported by the compiler"));
 		}
 		nodeFactory.markEndPosition();
 		Literal::SubDenomination subDenomination = static_cast<Literal::SubDenomination>(m_scanner->currentToken());

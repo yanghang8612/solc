@@ -183,7 +183,7 @@ void GlobalContext::addVerifyMintProofMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("msg");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyMintProof"), "verifyMintProof", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("verifyMintProof"), "verifyMintProof", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -221,7 +221,7 @@ void GlobalContext::addVerifyBurnProofMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("msg");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyBurnProof"), "verifyBurnProof", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("verifyBurnProof"), "verifyBurnProof", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -273,7 +273,7 @@ void GlobalContext::addVerifyTransferProofMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("msg");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("verifyTransferProof"), "verifyTransferProof", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("verifyTransferProof"), "verifyTransferProof", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -305,7 +305,7 @@ void GlobalContext::addPedersenHashMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("msg");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("pedersenHash"), "pedersenHash", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("pedersenHash"), "pedersenHash", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -333,7 +333,7 @@ void GlobalContext::addBatchValidateSignMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("ok");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("batchvalidatesign"), "batchvalidatesign", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("batchvalidatesign"), "batchvalidatesign", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -363,7 +363,7 @@ void GlobalContext::addValidateMultiSignMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("ok");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("validatemultisign"), "validatemultisign", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("validatemultisign"), "validatemultisign", TypeProvider::function(
 			parameterTypes,
 			returnParameterTypes,
 			parameterNames,
@@ -387,7 +387,7 @@ void GlobalContext::addVoteMethod() {
 	parameterNames.push_back("tronpowerList");
 	strings returnParameterNames;
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("vote"), "vote", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("vote"), "vote", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -407,7 +407,7 @@ void GlobalContext::addRewardBalanceMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("result");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("rewardBalance"), "rewardBalance", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("rewardBalance"), "rewardBalance", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -430,7 +430,7 @@ void GlobalContext::addIsSRCandidateMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("ok");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("isSrCandidate"), "isSrCandidate", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("isSrCandidate"), "isSrCandidate", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -455,7 +455,7 @@ void GlobalContext::addVoteCountMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("result");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("voteCount"), "voteCount", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("voteCount"), "voteCount", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -478,7 +478,7 @@ void GlobalContext::addTotalVoteCountMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("result");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("totalVoteCount"), "totalVoteCount", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("totalVoteCount"), "totalVoteCount", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -501,7 +501,7 @@ void GlobalContext::addReceivedVoteCountMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("result");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("receivedVoteCount"), "receivedVoteCount", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("receivedVoteCount"), "receivedVoteCount", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
@@ -524,7 +524,7 @@ void GlobalContext::addUsedVoteCountMethod() {
 	strings returnParameterNames;
 	returnParameterNames.push_back("result");
 
-	m_magicVariables.push_back(make_shared<MagicVariableDeclaration>(magicVariableToID("usedVoteCount"), "usedVoteCount", TypeProvider::function(
+	m_magicVariables.push_back(std::make_shared<MagicVariableDeclaration>(magicVariableToID("usedVoteCount"), "usedVoteCount", TypeProvider::function(
 		parameterTypes,
 		returnParameterTypes,
 		parameterNames,
