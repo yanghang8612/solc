@@ -179,7 +179,7 @@ bool hashMatchesContent(string const& _hash, string const& _content)
 
 bool isArtifactRequested(Json::Value const& _outputSelection, string const& _artifact, bool _wildcardMatchesExperimental)
 {
-	static set<string> experimental{"ir", "irOptimized", "wast", "ewasm", "ewasm.wast"};
+	static set<string> experimental{"ir", "irAst", "irOptimized", "irOptimizedAst"};
 	for (auto const& selectedArtifactJson: _outputSelection)
 	{
 		string const& selectedArtifact = selectedArtifactJson.asString();
@@ -190,7 +190,7 @@ bool isArtifactRequested(Json::Value const& _outputSelection, string const& _art
 			return true;
 		else if (selectedArtifact == "*")
 		{
-			// "ir", "irOptimized", "wast" and "ewasm.wast" can only be matched by "*" if activated.
+			// "ir", "irOptimized" can only be matched by "*" if activated.
 			if (experimental.count(_artifact) == 0 || _wildcardMatchesExperimental)
 				return true;
 		}
@@ -263,8 +263,7 @@ bool isBinaryRequested(Json::Value const& _outputSelection)
 	// This does not include "evm.methodIdentifiers" on purpose!
 	static vector<string> const outputsThatRequireBinaries = vector<string>{
 		"*",
-		"ir", "irOptimized",
-		"wast", "wasm", "ewasm.wast", "ewasm.wasm",
+		"ir", "irAst", "irOptimized", "irOptimizedAst",
 		"evm.gasEstimates", "evm.legacyAssembly", "evm.assembly"
 	} + evmObjectComponents("bytecode") + evmObjectComponents("deployedBytecode");
 
@@ -295,36 +294,22 @@ bool isEvmBytecodeRequested(Json::Value const& _outputSelection)
 	return false;
 }
 
-/// @returns true if any Ewasm code was requested. Note that as an exception, '*' does not
-/// yet match "ewasm.wast" or "ewasm"
-bool isEwasmRequested(Json::Value const& _outputSelection)
-{
-	if (!_outputSelection.isObject())
-		return false;
-
-	for (auto const& fileRequests: _outputSelection)
-		for (auto const& requests: fileRequests)
-			for (auto const& request: requests)
-				if (request == "ewasm" || request == "ewasm.wast")
-					return true;
-
-	return false;
-}
-
 /// @returns true if any Yul IR was requested. Note that as an exception, '*' does not
-/// yet match "ir" or "irOptimized"
+/// yet match "ir", "irAst", "irOptimized" or "irOptimizedAst"
 bool isIRRequested(Json::Value const& _outputSelection)
 {
-	if (isEwasmRequested(_outputSelection))
-		return true;
-
 	if (!_outputSelection.isObject())
 		return false;
 
 	for (auto const& fileRequests: _outputSelection)
 		for (auto const& requests: fileRequests)
 			for (auto const& request: requests)
-				if (request == "ir" || request == "irOptimized")
+				if (
+					request == "ir" ||
+					request == "irAst" ||
+					request == "irOptimized" ||
+					request == "irOptimizedAst"
+				)
 					return true;
 
 	return false;
@@ -445,7 +430,7 @@ std::optional<Json::Value> checkSettingsKeys(Json::Value const& _input)
 
 std::optional<Json::Value> checkModelCheckerSettingsKeys(Json::Value const& _input)
 {
-	static set<string> keys{"contracts", "divModNoSlacks", "engine", "extCalls", "invariants", "showProvedSafe", "showUnproved", "showUnsupported", "solvers", "targets", "timeout"};
+	static set<string> keys{"bmcLoopIterations", "contracts", "divModNoSlacks", "engine", "extCalls", "invariants", "printQuery", "showProvedSafe", "showUnproved", "showUnsupported", "solvers", "targets", "timeout"};
 	return checkKeys(_input, keys, "modelChecker");
 }
 
@@ -1028,6 +1013,16 @@ std::variant<StandardCompiler::InputsAndSettings, Json::Value> StandardCompiler:
 		ret.modelCheckerSettings.engine = *engine;
 	}
 
+	if (modelCheckerSettings.isMember("bmcLoopIterations"))
+	{
+		if (!ret.modelCheckerSettings.engine.bmc)
+			return formatFatalError(Error::Type::JSONError, "settings.modelChecker.bmcLoopIterations requires the BMC engine to be enabled.");
+		if (modelCheckerSettings["bmcLoopIterations"].isUInt())
+			ret.modelCheckerSettings.bmcLoopIterations = modelCheckerSettings["bmcLoopIterations"].asUInt();
+		else
+			return formatFatalError(Error::Type::JSONError, "settings.modelChecker.bmcLoopIterations must be an unsigned integer.");
+	}
+
 	if (modelCheckerSettings.isMember("extCalls"))
 	{
 		if (!modelCheckerSettings["extCalls"].isString())
@@ -1099,6 +1094,18 @@ std::variant<StandardCompiler::InputsAndSettings, Json::Value> StandardCompiler:
 		}
 
 		ret.modelCheckerSettings.solvers = solvers;
+	}
+
+	if (modelCheckerSettings.isMember("printQuery"))
+	{
+		auto const& printQuery = modelCheckerSettings["printQuery"];
+		if (!printQuery.isBool())
+			return formatFatalError(Error::Type::JSONError, "settings.modelChecker.printQuery must be a Boolean value.");
+
+		if (!(ret.modelCheckerSettings.solvers == smtutil::SMTSolverChoice::SMTLIB2()))
+			return formatFatalError(Error::Type::JSONError, "Only SMTLib2 solver can be enabled to print queries");
+
+		ret.modelCheckerSettings.printQuery = printQuery.asBool();
 	}
 
 	if (modelCheckerSettings.isMember("targets"))
@@ -1175,7 +1182,6 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 
 	compilerStack.enableEvmBytecodeGeneration(isEvmBytecodeRequested(_inputsAndSettings.outputSelection));
 	compilerStack.enableIRGeneration(isIRRequested(_inputsAndSettings.outputSelection));
-	compilerStack.enableEwasmGeneration(isEwasmRequested(_inputsAndSettings.outputSelection));
 
 	Json::Value errors = std::move(_inputsAndSettings.errors);
 
@@ -1311,15 +1317,21 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 		));
 	}
 
+	bool parsingSuccess = compilerStack.state() >= CompilerStack::State::Parsed;
 	bool analysisPerformed = compilerStack.state() >= CompilerStack::State::AnalysisPerformed;
-	bool const compilationSuccess = compilerStack.state() == CompilerStack::State::CompilationSuccessful;
+	bool compilationSuccess = compilerStack.state() == CompilerStack::State::CompilationSuccessful;
 
 	if (compilerStack.hasError() && !_inputsAndSettings.parserErrorRecovery)
 		analysisPerformed = false;
 
+	// If analysis fails, the artifacts inside CompilerStack are potentially incomplete and must not be returned.
+	// Note that not completing analysis due to stopAfter does not count as a failure. It's neither failure nor success.
+	bool analysisFailed = !analysisPerformed && _inputsAndSettings.stopAfter >= CompilerStack::State::AnalysisPerformed;
+	bool compilationFailed = !compilationSuccess && binariesRequested;
+
 	/// Inconsistent state - stop here to receive error reports from users
 	if (
-		((binariesRequested && !compilationSuccess) || !analysisPerformed) &&
+		(compilationFailed || !analysisPerformed) &&
 		(errors.empty() && _inputsAndSettings.stopAfter >= CompilerStack::State::AnalysisPerformed)
 	)
 		return formatFatalError(Error::Type::InternalCompilerError, "No error reported, but compilation failed.");
@@ -1337,7 +1349,7 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 
 	output["sources"] = Json::objectValue;
 	unsigned sourceIndex = 0;
-	if (compilerStack.state() >= CompilerStack::State::Parsed && (!compilerStack.hasError() || _inputsAndSettings.parserErrorRecovery))
+	if (parsingSuccess && !analysisFailed && (!compilerStack.hasError() || _inputsAndSettings.parserErrorRecovery))
 		for (string const& sourceName: compilerStack.sourceNames())
 		{
 			Json::Value sourceResult = Json::objectValue;
@@ -1371,14 +1383,12 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 		// IR
 		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "ir", wildcardMatchesExperimental))
 			contractData["ir"] = compilerStack.yulIR(contractName);
+		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "irAst", wildcardMatchesExperimental))
+			contractData["irAst"] = compilerStack.yulIRAst(contractName);
 		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "irOptimized", wildcardMatchesExperimental))
 			contractData["irOptimized"] = compilerStack.yulIROptimized(contractName);
-
-		// Ewasm
-		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "ewasm.wast", wildcardMatchesExperimental))
-			contractData["ewasm"]["wast"] = compilerStack.ewasm(contractName);
-		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "ewasm.wasm", wildcardMatchesExperimental))
-			contractData["ewasm"]["wasm"] = compilerStack.ewasmObject(contractName).toHex();
+		if (compilationSuccess && isArtifactRequested(_inputsAndSettings.outputSelection, file, name, "irOptimizedAst", wildcardMatchesExperimental))
+			contractData["irOptimizedAst"] = compilerStack.yulIROptimizedAst(contractName);
 
 		// EVM
 		Json::Value evmData(Json::objectValue);
@@ -1540,6 +1550,13 @@ Json::Value StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 	if (isArtifactRequested(_inputsAndSettings.outputSelection, sourceName, contractName, "ir", wildcardMatchesExperimental))
 		output["contracts"][sourceName][contractName]["ir"] = stack.print();
 
+	if (isArtifactRequested(_inputsAndSettings.outputSelection, sourceName, contractName, "ast", wildcardMatchesExperimental))
+	{
+		Json::Value sourceResult = Json::objectValue;
+		sourceResult["id"] = 1;
+		sourceResult["ast"] = stack.astJson();
+		output["sources"][sourceName] = sourceResult;
+	}
 	stack.optimize();
 
 	MachineAssemblyObject object;

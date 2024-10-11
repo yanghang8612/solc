@@ -3272,6 +3272,12 @@ BoolResult FunctionType::isImplicitlyConvertibleTo(Type const& _convertTo) const
 	if (convertTo.kind() != kind())
 		return BoolResult::err("Special functions cannot be converted to function types.");
 
+	if (
+		kind() == FunctionType::Kind::Declaration &&
+		m_declaration != convertTo.m_declaration
+	)
+		return BoolResult::err("Function declaration types referring to different functions cannot be converted to each other.");
+
 	if (!equalExcludingStateMutability(convertTo))
 		return false;
 
@@ -3562,12 +3568,10 @@ MemberList::MemberMap FunctionType::nativeMembers(ASTNode const* _scope) const
 	}
 	case Kind::DelegateCall:
 	{
-		auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(m_declaration);
-		solAssert(functionDefinition, "");
-		solAssert(functionDefinition->visibility() != Visibility::Private, "");
-		if (functionDefinition->visibility() != Visibility::Internal)
+		if (auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(m_declaration))
 		{
-			auto const* contract = dynamic_cast<ContractDefinition const*>(m_declaration->scope());
+			solAssert(functionDefinition->visibility() > Visibility::Internal, "");
+			auto const *contract = dynamic_cast<ContractDefinition const*>(m_declaration->scope());
 			solAssert(contract, "");
 			solAssert(contract->isLibrary(), "");
 			return {{"selector", TypeProvider::fixedBytes(4)}};
@@ -3611,7 +3615,11 @@ Type const* FunctionType::mobileType() const
 	if (valueSet() || gasSet() || saltSet() || hasBoundFirstArgument())
 		return nullptr;
 
-	// return function without parameter names
+	// Special function types do not get a mobile type, such that they cannot be used in complex expressions.
+	if (m_kind != FunctionType::Kind::Internal && m_kind != FunctionType::Kind::External && m_kind != FunctionType::Kind::DelegateCall)
+		return nullptr;
+
+	// return function without parameter names and without declaration
 	return TypeProvider::function(
 		m_parameterTypes,
 		m_returnParameterTypes,
@@ -3619,7 +3627,7 @@ Type const* FunctionType::mobileType() const
 		strings(m_returnParameterNames.size()),
 		m_kind,
 		m_stateMutability,
-		m_declaration,
+		nullptr,
 		Options::fromFunctionType(*this)
 	);
 }

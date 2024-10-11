@@ -223,6 +223,31 @@ void CommandLineInterface::handleIR(string const& _contractName)
 	}
 }
 
+void CommandLineInterface::handleIRAst(string const& _contractName)
+{
+	solAssert(CompilerInputModes.count(m_options.input.mode) == 1);
+
+	if (!m_options.compiler.outputs.irAstJson)
+		return;
+
+	if (!m_options.output.dir.empty())
+		createFile(
+			m_compiler->filesystemFriendlyName(_contractName) + "_yul_ast.json",
+			util::jsonPrint(
+				m_compiler->yulIRAst(_contractName),
+				m_options.formatting.json
+			)
+		);
+	else
+	{
+		sout() << "IR AST:" << endl;
+		sout() << util::jsonPrint(
+			m_compiler->yulIRAst(_contractName),
+			m_options.formatting.json
+		) << endl;
+	}
+}
+
 void CommandLineInterface::handleIROptimized(string const& _contractName)
 {
 	solAssert(CompilerInputModes.count(m_options.input.mode) == 1);
@@ -231,7 +256,10 @@ void CommandLineInterface::handleIROptimized(string const& _contractName)
 		return;
 
 	if (!m_options.output.dir.empty())
-		createFile(m_compiler->filesystemFriendlyName(_contractName) + "_opt.yul", m_compiler->yulIROptimized(_contractName));
+		createFile(
+			m_compiler->filesystemFriendlyName(_contractName) + "_opt.yul",
+			m_compiler->yulIROptimized(_contractName)
+		);
 	else
 	{
 		sout() << "Optimized IR:" << endl;
@@ -239,26 +267,28 @@ void CommandLineInterface::handleIROptimized(string const& _contractName)
 	}
 }
 
-void CommandLineInterface::handleEwasm(string const& _contractName)
+void CommandLineInterface::handleIROptimizedAst(string const& _contractName)
 {
 	solAssert(CompilerInputModes.count(m_options.input.mode) == 1);
 
-	if (!m_options.compiler.outputs.ewasm)
+	if (!m_options.compiler.outputs.irOptimizedAstJson)
 		return;
 
 	if (!m_options.output.dir.empty())
-	{
-		createFile(m_compiler->filesystemFriendlyName(_contractName) + ".wast", m_compiler->ewasm(_contractName));
 		createFile(
-			m_compiler->filesystemFriendlyName(_contractName) + ".wasm",
-			asString(m_compiler->ewasmObject(_contractName).bytecode)
+			m_compiler->filesystemFriendlyName(_contractName) + "_opt_yul_ast.json",
+			util::jsonPrint(
+				m_compiler->yulIROptimizedAst(_contractName),
+				m_options.formatting.json
+			)
 		);
-	}
 	else
 	{
-		sout() << "Ewasm text:" << endl;
-		sout() << m_compiler->ewasm(_contractName) << endl;
-		sout() << "Ewasm binary (hex): " << m_compiler->ewasmObject(_contractName).toHex() << endl;
+		sout() << "Optimized IR AST:" << endl;
+		sout() << util::jsonPrint(
+			m_compiler->yulIROptimizedAst(_contractName),
+			m_options.formatting.json
+		) << endl;
 	}
 }
 
@@ -713,9 +743,12 @@ void CommandLineInterface::compile()
 		if (m_options.output.debugInfoSelection.has_value())
 			m_compiler->selectDebugInfo(m_options.output.debugInfoSelection.value());
 		// TODO: Perhaps we should not compile unless requested
-
-		m_compiler->enableIRGeneration(m_options.compiler.outputs.ir || m_options.compiler.outputs.irOptimized);
-		m_compiler->enableEwasmGeneration(m_options.compiler.outputs.ewasm);
+		m_compiler->enableIRGeneration(
+			m_options.compiler.outputs.ir ||
+			m_options.compiler.outputs.irOptimized ||
+			m_options.compiler.outputs.irAstJson ||
+			m_options.compiler.outputs.irOptimizedAstJson
+		);
 		m_compiler->enableEvmBytecodeGeneration(
 			m_options.compiler.estimateGas ||
 			m_options.compiler.outputs.asm_ ||
@@ -881,9 +914,9 @@ void CommandLineInterface::handleCombinedJSON()
 		{
 			output[g_strSources][sourceCode.first] = Json::Value(Json::objectValue);
 			output[g_strSources][sourceCode.first]["AST"] = ASTJsonExporter(
-																m_compiler->state(),
-																m_compiler->sourceIndices()
-															).toJson(m_compiler->ast(sourceCode.first));
+				m_compiler->state(),
+				m_compiler->sourceIndices()
+			).toJson(m_compiler->ast(sourceCode.first));
 			output[g_strSources][sourceCode.first]["id"] = m_compiler->sourceIndices().at(sourceCode.first);
 		}
 	}
@@ -1041,9 +1074,6 @@ void CommandLineInterface::assembleYul(yul::YulStack::Language _language, yul::Y
 	map<string, yul::YulStack> yulStacks;
 	for (auto const& src: m_fileReader.sourceUnits())
 	{
-		// --no-optimize-yul option is not accepted in assembly mode.
-		solAssert(!m_options.optimizer.noOptimizeYul);
-
 		auto& stack = yulStacks[src.first] = yul::YulStack(
 			m_options.output.evmVersion,
 			m_options.output.eofVersion,
@@ -1082,9 +1112,8 @@ void CommandLineInterface::assembleYul(yul::YulStack::Language _language, yul::Y
 
 	for (auto const& src: m_fileReader.sourceUnits())
 	{
-		string machine =
-			_targetMachine == yul::YulStack::Machine::EVM ? "EVM" :
-			"Ewasm";
+		solAssert(_targetMachine == yul::YulStack::Machine::EVM);
+		string machine = "EVM";
 		sout() << endl << "======= " << src.first << " (" << machine << ") =======" << endl;
 
 		yul::YulStack& stack = yulStacks[src.first];
@@ -1095,19 +1124,6 @@ void CommandLineInterface::assembleYul(yul::YulStack::Language _language, yul::Y
 			// 'ir' output in StandardCompiler works the same way.
 			sout() << endl << "Pretty printed source:" << endl;
 			sout() << stack.print() << endl;
-		}
-
-		if (_language != yul::YulStack::Language::Ewasm && _targetMachine == yul::YulStack::Machine::Ewasm)
-		{
-			stack.translate(yul::YulStack::Language::Ewasm);
-			stack.optimize();
-
-			if (m_options.compiler.outputs.ewasmIR)
-			{
-				sout() << endl << "==========================" << endl;
-				sout() << endl << "Translated source:" << endl;
-				sout() << stack.print() << endl;
-			}
 		}
 
 		yul::MachineAssemblyObject object;
@@ -1122,12 +1138,13 @@ void CommandLineInterface::assembleYul(yul::YulStack::Language _language, yul::Y
 			else
 				serr() << "No binary representation found." << endl;
 		}
-
-		solAssert(_targetMachine == yul::YulStack::Machine::Ewasm || _targetMachine == yul::YulStack::Machine::EVM, "");
-		if (
-			(_targetMachine == yul::YulStack::Machine::EVM && m_options.compiler.outputs.asm_) ||
-			(_targetMachine == yul::YulStack::Machine::Ewasm && m_options.compiler.outputs.ewasm)
-		)
+		if (m_options.compiler.outputs.astCompactJson)
+		{
+			sout() << "AST:" <<  endl <<  endl;
+			sout() << util::jsonPrint(stack.astJson(), m_options.formatting.json) << endl;
+		}
+		solAssert(_targetMachine == yul::YulStack::Machine::EVM, "");
+		if (m_options.compiler.outputs.asm_)
 		{
 			sout() << endl << "Text representation:" << endl;
 			if (!object.assembly.empty())
@@ -1182,8 +1199,9 @@ void CommandLineInterface::outputCompilationResults()
 
 		handleBytecode(contract);
 		handleIR(contract);
+		handleIRAst(contract);
 		handleIROptimized(contract);
-		handleEwasm(contract);
+		handleIROptimizedAst(contract);
 		handleSignatureHashes(contract);
 		handleMetadata(contract);
 		handleABI(contract);

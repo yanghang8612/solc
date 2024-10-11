@@ -94,14 +94,18 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 		m_recursionDepth = 0;
 		m_scanner = make_shared<Scanner>(_charStream);
 		ASTNodeFactory nodeFactory(*this);
+		m_experimentalSolidityEnabledInCurrentSourceUnit = false;
 
 		vector<ASTPointer<ASTNode>> nodes;
+		while (m_scanner->currentToken() == Token::Pragma)
+			nodes.push_back(parsePragmaDirective(false));
+
 		while (m_scanner->currentToken() != Token::EOS)
 		{
 			switch (m_scanner->currentToken())
 			{
 			case Token::Pragma:
-				nodes.push_back(parsePragmaDirective());
+				nodes.push_back(parsePragmaDirective(true));
 				break;
 			case Token::Import:
 				nodes.push_back(parseImportDirective());
@@ -150,7 +154,7 @@ ASTPointer<SourceUnit> Parser::parse(CharStream& _charStream)
 			}
 		}
 		solAssert(m_recursionDepth == 0, "");
-		return nodeFactory.createNode<SourceUnit>(findLicenseString(nodes), nodes);
+		return nodeFactory.createNode<SourceUnit>(findLicenseString(nodes), nodes, m_experimentalSolidityEnabledInCurrentSourceUnit);
 	}
 	catch (FatalError const&)
 	{
@@ -203,7 +207,7 @@ ASTPointer<StructuredDocumentation> Parser::parseStructuredDocumentation()
 	return nullptr;
 }
 
-ASTPointer<PragmaDirective> Parser::parsePragmaDirective()
+ASTPointer<PragmaDirective> Parser::parsePragmaDirective(bool const _finishedParsingTopLevelPragmas)
 {
 	RecursionGuard recursionGuard(*this);
 	// pragma anything* ;
@@ -213,6 +217,7 @@ ASTPointer<PragmaDirective> Parser::parsePragmaDirective()
 	expectToken(Token::Pragma);
 	vector<string> literals;
 	vector<Token> tokens;
+
 	do
 	{
 		Token token = m_scanner->currentToken();
@@ -241,6 +246,15 @@ ASTPointer<PragmaDirective> Parser::parsePragmaDirective()
 		);
 	}
 
+	if (literals.size() >= 2 && literals[0] == "experimental" && literals[1] == "solidity")
+	{
+		if (m_evmVersion < EVMVersion::constantinople())
+			fatalParserError(7637_error, "Experimental solidity requires Constantinople EVM version at the minimum.");
+		if (_finishedParsingTopLevelPragmas)
+			fatalParserError(8185_error, "Experimental pragma \"solidity\" can only be set at the beginning of the source unit.");
+		m_experimentalSolidityEnabledInCurrentSourceUnit = true;
+	}
+
 	return nodeFactory.createNode<PragmaDirective>(tokens, literals);
 }
 
@@ -257,9 +271,9 @@ ASTPointer<ImportDirective> Parser::parseImportDirective()
 	SourceLocation unitAliasLocation{};
 	ImportDirective::SymbolAliasList symbolAliases;
 
-	if (m_scanner->currentToken() == Token::StringLiteral)
+	if (isQuotedPath() || isStdlibPath())
 	{
-		path = getLiteralAndAdvance();
+		path = isQuotedPath() ? getLiteralAndAdvance() : getStdlibImportPathAndAdvance();
 		if (m_scanner->currentToken() == Token::As)
 		{
 			advance();
@@ -301,9 +315,9 @@ ASTPointer<ImportDirective> Parser::parseImportDirective()
 		if (m_scanner->currentToken() != Token::Identifier || m_scanner->currentLiteral() != "from")
 			fatalParserError(8208_error, "Expected \"from\".");
 		advance();
-		if (m_scanner->currentToken() != Token::StringLiteral)
+		if (!isQuotedPath() && !isStdlibPath())
 			fatalParserError(6845_error, "Expected import path.");
-		path = getLiteralAndAdvance();
+		path = isQuotedPath() ? getLiteralAndAdvance() : getStdlibImportPathAndAdvance();
 	}
 	if (path->empty())
 		fatalParserError(6326_error, "Import path cannot be empty.");
@@ -2474,6 +2488,27 @@ ASTPointer<ASTString> Parser::getLiteralAndAdvance()
 	ASTPointer<ASTString> identifier = make_shared<ASTString>(m_scanner->currentLiteral());
 	advance();
 	return identifier;
+}
+
+bool Parser::isQuotedPath() const
+{
+	return m_scanner->currentToken() == Token::StringLiteral;
+}
+
+bool Parser::isStdlibPath() const
+{
+	return m_experimentalSolidityEnabledInCurrentSourceUnit
+		&& m_scanner->currentToken() == Token::Identifier
+		&& m_scanner->currentLiteral() == "std";
+}
+
+ASTPointer<ASTString> Parser::getStdlibImportPathAndAdvance()
+{
+	ASTPointer<ASTString> std = expectIdentifierToken();
+	if (m_scanner->currentToken() == Token::Period)
+		advance();
+	ASTPointer<ASTString> library = expectIdentifierToken();
+	return make_shared<ASTString>(*std + "." + *library);
 }
 
 }
