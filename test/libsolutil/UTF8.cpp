@@ -26,7 +26,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-using namespace std;
 
 namespace solidity::util::test
 {
@@ -35,13 +34,13 @@ BOOST_AUTO_TEST_SUITE(UTF8, *boost::unit_test::label("nooptions"))
 
 namespace {
 
-bool isValidUTF8(string const& _value)
+bool isValidUTF8(std::string const& _value)
 {
 	size_t pos;
 	return validateUTF8(asString(fromHex(_value)), pos);
 }
 
-bool isInvalidUTF8(string const& _value, size_t _expectedPos)
+bool isInvalidUTF8(std::string const& _value, size_t _expectedPos)
 {
 	size_t pos;
 	if (validateUTF8(asString(fromHex(_value)), pos))
@@ -94,8 +93,118 @@ BOOST_AUTO_TEST_CASE(invalid)
 
 BOOST_AUTO_TEST_CASE(corpus)
 {
-	string source = R"(
+	std::string source = R"(
+κόσμε
 
+hélló
+
+Ā ā Ă ă Ą ą
+
+ƀ Ɓ Ƃ ƃ Ƅ ƅ
+
+ɐ ɑ ɒ ɓ ɔ ɕ
+
+ʰ ʱ ʲ ʳ ʴ ʵ
+
+̀ ́ ̂ ̃ ̄ ̅
+
+ϩ Ϫ ϫ Ϭ ϭ Ϯ
+
+Ё Ђ Ѓ Є Ѕ І
+
+Ա Բ Գ Դ Ե Զ
+
+ ק ר ש ת װ ױ
+
+ځ ڂ ڃ ڄ څ چ
+
+ऑ ऒ ओ औ क ख
+
+ও ঔ ক খ গ ঘ
+
+ਘ ਙ ਚ ਛ ਜ ਝ
+
+ઓ ઔ ક ખ ગ ઘ
+
+ଗ ଘ ଙ ଚ ଛ ଜ
+
+ஔ க ங ச ஜ ஞ
+
+ఎ ఏ ఐ ఒ ఓ ఔ
+
+ಓ ಔ ಕ ಖ ಗ ಘ
+
+ഐ ഒ ഓ ഔ ക
+
+ฒ ณ ด ต ถ ท
+
+ມ ຢ ຣ ລ ວ ສ
+
+༄ ༅ ༆ ༇ ༈ ༉
+
+Ⴑ Ⴒ Ⴓ Ⴔ Ⴕ Ⴖ
+
+ᄌ ᄍ ᄎ ᄏ ᄐ
+
+Ḕ ḕ Ḗ ḗ Ḙ ḙ Ḛ
+
+ἐ ἑ ἒ ἓ ἔ ἕ
+
+₠ ₡ ₢ ₣ ₤ ₥
+
+⃐ ⃑ ⃒ ⃓ ⃔ ⃕ ⃖ ⃗ ⃘ ⃙ ⃚
+
+ℋ ℌ ℍ ℎ ℏ ℐ ℑ
+
+⅓ ⅔ ⅕ ⅖ ⅗
+
+∬ ∭ ∮ ∯ ∰
+
+⌖ ⌗ ⌘ ⌙ ⌚ ⌛
+
+␀ ␁ ␂ ␃ ␄ ␅
+
+⑀ ⑁ ⑂ ⑃ ⑄
+
+① ② ③ ④ ⑤
+
+╘ ╙ ╚ ╛ ╜ ╝
+
+▁ ▂ ▃ ▄ ▅ ▆
+
+▤ ▥ ▦ ▧ ▨
+
+♔ ♕ ♖ ♗ ♘ ♙
+
+✈ ✉ ✌ ✍ ✎
+
+ぁ あ ぃ い ぅ
+
+ァ ア ィ イ ゥ
+
+ㄅ ㄆ ㄇ ㄈ ㄉ
+
+ㄱ ㄲ ㄳ ㄴ ㄵ
+
+㆚ ㆛ ㆜ ㆝ ㆞
+
+㈀ ㈁ ㈂ ㈃ ㈄
+
+㌀ ㌁ ㌂ ㌃ ㌄
+
+乺 乻 乼 乽 乾
+
+걺 걻 걼 걽 걾
+
+豈 更 車 賈 滑
+
+שּׁ שּׂ אַ אָ אּ
+
+ﮄ ﮅ ﮆ ﮇ ﮈ ﮉ
+
+ ﺵ ﺶ ﺷ ﺸ
+
+｢ ｣ ､ ･ ｦ ｧ ｨ ｩ
 	)";
 	size_t pos;
 	BOOST_CHECK(validateUTF8(source, pos));

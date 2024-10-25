@@ -27,7 +27,6 @@
 #include <utility>
 #include <variant>
 
-using namespace std;
 using namespace solidity;
 using namespace solidity::langutil;
 using namespace solidity::frontend;
@@ -312,13 +311,13 @@ ViewPureChecker::MutabilityAndLocation const& ViewPureChecker::modifierMutabilit
 	{
 		MutabilityAndLocation bestMutabilityAndLocation{};
 		FunctionDefinition const* currentFunction = nullptr;
-		swap(bestMutabilityAndLocation, m_bestMutabilityAndLocation);
-		swap(currentFunction, m_currentFunction);
+		std::swap(bestMutabilityAndLocation, m_bestMutabilityAndLocation);
+		std::swap(currentFunction, m_currentFunction);
 
 		_modifier.accept(*this);
 
-		swap(bestMutabilityAndLocation, m_bestMutabilityAndLocation);
-		swap(currentFunction, m_currentFunction);
+		std::swap(bestMutabilityAndLocation, m_bestMutabilityAndLocation);
+		std::swap(currentFunction, m_currentFunction);
 	}
 	return m_inferredMutability.at(&_modifier);
 }
@@ -386,8 +385,8 @@ void ViewPureChecker::endVisit(MemberAccess const& _memberAccess)
 		break;
 	case Type::Category::Magic:
 	{
-		using MagicMember = pair<MagicType::Kind, string>;
-		set<MagicMember> static const pureMembers{
+		using MagicMember = std::pair<MagicType::Kind, std::string>;
+		std::set<MagicMember> static const pureMembers{
 			{MagicType::Kind::ABI, "decode"},
 			{MagicType::Kind::ABI, "encode"},
 			{MagicType::Kind::ABI, "encodePacked"},
@@ -403,7 +402,7 @@ void ViewPureChecker::endVisit(MemberAccess const& _memberAccess)
 			{MagicType::Kind::MetaType, "min"},
 			{MagicType::Kind::MetaType, "max"},
 		};
-		set<MagicMember> static const payableMembers{
+		std::set<MagicMember> static const payableMembers{
 			{MagicType::Kind::Message, "value"},
 			{MagicType::Kind::Message, "tokenvalue"},
 			{MagicType::Kind::Message, "tokenid"}
